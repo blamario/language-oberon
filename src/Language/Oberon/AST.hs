@@ -37,10 +37,11 @@ data Expression = Relation RelOp Expression Expression
                 | CharCode Int
                 | String Text
                 | Nil 
+                | BooleanConstant Bool
                 | Set [Element]
                 | Read Designator
                 | FunctionCall Designator ActualParameters
-                | Negate Expression
+                | Not Expression
 
 data RelOp = Equal | Unequal | Less | LessOrEqual | Greater | GreaterOrEqual | In | Is
 

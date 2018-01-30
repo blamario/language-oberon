@@ -1,4 +1,4 @@
-{-# Language OverloadedStrings, Rank2Types, RecordWildCards #-}
+{-# Language OverloadedStrings, Rank2Types, RecordWildCards, TemplateHaskell #-}
 
 -- * From http://www.ethoberon.ethz.ch/EBNF.html
 --   Extracted from the book Programmieren in Oberon - Das neue Pascal by N. Wirth and M. Reiser and translated by J. Templ.
@@ -14,6 +14,9 @@ import Data.Text (Text, unpack)
 import Text.Grampa
 import Text.Grampa.ContextFree.LeftRecursive (Parser)
 import Text.Parser.Combinators (sepBy, sepBy1)
+
+import qualified Rank2
+import qualified Rank2.TH
 
 import Language.Oberon.AST
 
@@ -83,12 +86,17 @@ data OberonGrammar f = OberonGrammar {
    loopStatement :: f Statement,
    withStatement :: f Statement}
 
+$(Rank2.TH.deriveAll ''OberonGrammar)
+
+oberonGrammar :: Grammar OberonGrammar Parser Text
+oberonGrammar = fixGrammar grammar
+
 grammar :: GrammarBuilder OberonGrammar OberonGrammar Parser Text
 grammar OberonGrammar{..} = OberonGrammar{
-   module_prod = Module <$ keyword "MODULE" <*> ident <* delimiter ";"
+   module_prod = Module <$ (ignorable *> keyword "MODULE") <*> ident <* delimiter ";"
                  <*> moptional importList <*> declarationSequence
                  <*> optional (keyword "BEGIN" *> statementSequence) <* keyword "END" <*> ident <* delimiter ".",
-   ident = letter <> takeCharsWhile isAlphaNum,
+   ident = letter <> takeCharsWhile isAlphaNum <* ignorable,
    letter = satisfyCharInput isLetter,
    digit = satisfyCharInput isDigit,
    importList = keyword "IMPORT" *> sepBy1 import_prod (delimiter ",") <* delimiter ";",
@@ -109,24 +117,27 @@ grammar OberonGrammar{..} = OberonGrammar{
               <|> charConstant
               <|> String <$> string_prod
               <|> Nil <$ keyword "NIL"
+              <|> BooleanConstant <$> (True <$ keyword "TRUE" <|> False <$ keyword "FALSE")
               <|> set
               <|> Read <$> designator
               <|> FunctionCall <$> designator <*> actualParameters
               <|> delimiter "(" *> expression <* delimiter ")"
-              <|> Negate <$ operator "~" <*> factor,
+              <|> Not <$ operator "~" <*> factor,
    number  =  integer <|> real,
-   integer = Integer <$> (digit <> (takeCharsWhile isDigit <|> takeCharsWhile isHexDigit <> string "H")),
+   integer = Integer <$> (digit <> (takeCharsWhile isDigit <|> takeCharsWhile isHexDigit <> string "H") <* ignorable),
    hexDigit = satisfyCharInput isHexDigit,
-   real = Real <$> (digit <> takeCharsWhile isDigit <> string "." *> takeCharsWhile isDigit <> moptional scaleFactor),
+   real = Real <$> (digit <> takeCharsWhile isDigit <> string "." *> takeCharsWhile isDigit <> moptional scaleFactor
+                    <* ignorable),
    scaleFactor = (string "E" <|> string "D") <> moptional (string "+" <|> string "-") <> digit <> takeCharsWhile isDigit,
-   charConstant = CharConstant <$ char '"' <*> anyChar <* char '"'
-                  <|> (CharCode . fst . head . readHex . unpack) <$> (digit <> takeCharsWhile isHexDigit) <* string "X",
-   string_prod = char '"' *> takeWhile (/= "\"") <* char '"',
+   charConstant = (CharConstant <$ char '"' <*> anyChar <* char '"'
+                   <|> (CharCode . fst . head . readHex . unpack) <$> (digit <> takeCharsWhile isHexDigit)
+                   <* string "X") <* ignorable,
+   string_prod = char '"' *> takeWhile (/= "\"") <* char '"' <* ignorable,
    set = Set <$ delimiter "{" <*> sepBy element (delimiter ",") <* delimiter "}",
    element = Element <$> expression 
              <|> Range <$> expression <* delimiter ".." <*> expression,
    designator = Variable <$> qualident 
-                <|> Field <$> designator <*> ident
+                <|> Field <$> designator <* delimiter "." <*> ident
                 <|> Index <$> designator <* delimiter "[" <*> expList <* delimiter "]"
                 <|> TypeGuard <$> designator <* delimiter "(" <*> qualident <* delimiter ")"
                 <|> Dereference <$> designator <* operator "^",
