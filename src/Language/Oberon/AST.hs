@@ -1,22 +1,28 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 
 module Language.Oberon.AST where
 
+import Data.Data (Data)
 import Data.List.NonEmpty
 import Data.Text
 
 data Module = Module Ident [Import] [Declaration] (Maybe StatementSequence) Ident
+   deriving (Data, Show)
 
 type Ident = Text
 
 data Import = Import Ident (Maybe Ident)
+   deriving (Data, Show)
 
 data Declaration  = ConstantDeclaration IdentDef ConstExpression
                   | TypeDeclaration IdentDef Type
                   | VariableDeclaration IdentList Type
                   | ProcedureDeclaration ProcedureHeading ProcedureBody Ident
                   | ForwardDeclaration Ident Bool (Maybe FormalParameters) 
+   deriving (Data, Show)
 
 data IdentDef = IdentDef Ident Bool
+   deriving (Data, Show)
 
 type ConstExpression = Expression
 
@@ -42,17 +48,21 @@ data Expression = Relation RelOp Expression Expression
                 | Read Designator
                 | FunctionCall Designator ActualParameters
                 | Not Expression
+   deriving (Data, Show)
 
 data RelOp = Equal | Unequal | Less | LessOrEqual | Greater | GreaterOrEqual | In | Is
+   deriving (Data, Show)
 
 data Element = Element Expression
              | Range Expression Expression
+   deriving (Data, Show)
 
 data Designator = Variable QualIdent
                 | Field Designator Ident 
                 | Index Designator (NonEmpty Expression) 
                 | TypeGuard Designator QualIdent 
                 | Dereference Designator
+   deriving (Data, Show)
 
 type ActualParameters = [Expression]
 
@@ -61,9 +71,11 @@ data Type = TypeReference QualIdent
           | RecordType (Maybe BaseType) FieldListSequence
           | PointerType Type
           | ProcedureType (Maybe FormalParameters)
+   deriving (Data, Show)
 
 data QualIdent = QualIdent Ident Ident 
                | NonQualIdent Ident
+   deriving (Data, Show)
 
 type Length  =  ConstExpression
 
@@ -72,19 +84,25 @@ type BaseType  =  QualIdent
 type FieldListSequence = [FieldList]
 
 data FieldList = FieldList IdentList Type
+   deriving (Data, Show)
 
 type IdentList = NonEmpty IdentDef
 
 data ProcedureHeading  =  ProcedureHeading Bool IdentDef (Maybe FormalParameters)
+   deriving (Data, Show)
 
 data FormalParameters  = FormalParameters [FPSection] (Maybe QualIdent)
+   deriving (Data, Show)
 data FPSection  =  FPSection Bool (NonEmpty Ident) FormalType
+   deriving (Data, Show)
 
 data FormalType  = ArrayOf FormalType
                  | FormalTypeReference QualIdent 
                  | FormalProcedureType (Maybe FormalParameters)
+   deriving (Data, Show)
 
 data ProcedureBody  =  ProcedureBody [Declaration] (Maybe StatementSequence)
+   deriving (Data, Show)
 
 type StatementSequence  =  [Statement]
 
@@ -98,7 +116,10 @@ data Statement = Assignment Designator Expression
                | With QualIdent QualIdent StatementSequence
                | Exit 
                | Return (Maybe Expression)
+   deriving (Data, Show)
 
 data Case = Case (NonEmpty CaseLabels) StatementSequence
+   deriving (Data, Show)
 data CaseLabels = SingleLabel ConstExpression 
                 | LabelRange ConstExpression  ConstExpression
+   deriving (Data, Show)
