@@ -106,7 +106,8 @@ data ProcedureBody  =  ProcedureBody [Declaration] (Maybe StatementSequence)
 
 type StatementSequence  =  [Statement]
 
-data Statement = Assignment Designator Expression 
+data Statement = EmptyStatement
+               | Assignment Designator Expression 
                | ProcedureCall Designator (Maybe ActualParameters)
                | If Expression StatementSequence [(Expression, StatementSequence)] (Maybe StatementSequence)
                | CaseStatement Expression (NonEmpty (Maybe Case)) (Maybe StatementSequence)
