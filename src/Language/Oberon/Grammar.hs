@@ -83,6 +83,7 @@ data OberonGrammar f = OberonGrammar {
    caseLabels :: f CaseLabels,
    whileStatement :: f Statement,
    repeatStatement :: f Statement,
+   forStatement :: f Statement,
    loopStatement :: f Statement,
    withStatement :: f Statement}
 
@@ -185,7 +186,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                         <*> (True <$ delimiter "*" <|> pure False) <*> optional formalParameters,
    statementSequence = sepBy statement (delimiter ";"),
    statement = assignment <|> procedureCall <|> ifStatement <|> caseStatement 
-               <|> whileStatement <|> repeatStatement <|> loopStatement <|> withStatement 
+               <|> whileStatement <|> repeatStatement <|> forStatement <|> loopStatement <|> withStatement 
                <|> Exit <$ keyword "EXIT" 
                <|> Return <$ keyword "RETURN" <*> optional expression,
    assignment  =  Assignment <$> designator <* delimiter ":=" <*> expression,
@@ -201,6 +202,9 @@ grammar OberonGrammar{..} = OberonGrammar{
                 <|> LabelRange <$> constExpression <* delimiter ".." <*> constExpression,
    whileStatement = While <$ keyword "WHILE" <*> expression <* keyword "DO" <*> statementSequence <* keyword "END",
    repeatStatement = Repeat <$ keyword "REPEAT" <*> statementSequence <* keyword "UNTIL" <*> expression,
+   forStatement = For <$ keyword "FOR" <*> ident <* delimiter ":=" <*> expression <* keyword "TO" <*> expression 
+                  <*> optional (keyword "BY" *> constExpression) <* keyword "DO"
+                  <*> statementSequence <* keyword "END", -- Oberon2
    loopStatement = Loop <$ keyword "LOOP" <*> statementSequence <* keyword "END",
    withStatement = With <$ keyword "WITH" <*> qualident <* delimiter ":" <*> qualident
                    <* keyword "DO" <*> statementSequence <* keyword "END"}

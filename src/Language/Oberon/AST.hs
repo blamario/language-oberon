@@ -112,6 +112,7 @@ data Statement = Assignment Designator Expression
                | CaseStatement Expression (NonEmpty (Maybe Case)) (Maybe StatementSequence)
                | While Expression StatementSequence
                | Repeat StatementSequence Expression
+               | For Ident Expression Expression (Maybe Expression) StatementSequence  -- Oberon2
                | Loop StatementSequence
                | With QualIdent QualIdent StatementSequence
                | Exit 
