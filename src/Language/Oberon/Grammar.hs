@@ -73,7 +73,7 @@ data OberonGrammar f = OberonGrammar {
    formalType :: f FormalType,
    procedureBody :: f ProcedureBody,
    forwardDeclaration :: f Declaration,
-   statementSequence :: f [Statement],
+   statementSequence :: f [Ambiguous Statement],
    statement :: f Statement,
    assignment :: f Statement,
    procedureCall :: f Statement,
@@ -188,7 +188,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                    <*> optional (keyword "BEGIN" *> statementSequence) <* keyword "END",
    forwardDeclaration = ForwardDeclaration <$ keyword "PROCEDURE" <* delimiter "^" <*> ident 
                         <*> (True <$ delimiter "*" <|> pure False) <*> optional formalParameters,
-   statementSequence = sepBy statement (delimiter ";"),
+   statementSequence = sepBy (ambiguous statement) (delimiter ";"),
    statement = assignment <|> procedureCall <|> ifStatement <|> caseStatement 
                <|> whileStatement <|> repeatStatement <|> forStatement <|> loopStatement <|> withStatement 
                <|> Exit <$ keyword "EXIT" 

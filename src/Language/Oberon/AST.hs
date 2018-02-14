@@ -5,6 +5,7 @@ module Language.Oberon.AST where
 import Data.Data (Data)
 import Data.List.NonEmpty
 import Data.Text
+import Text.Grampa (Ambiguous)
 
 data Module = Module Ident [Import] [Declaration] (Maybe StatementSequence) Ident
    deriving (Data, Show)
@@ -104,7 +105,7 @@ data FormalType  = ArrayOf FormalType
 data ProcedureBody  =  ProcedureBody [Declaration] (Maybe StatementSequence)
    deriving (Data, Show)
 
-type StatementSequence  =  [Statement]
+type StatementSequence  = [Ambiguous Statement]
 
 data Statement = EmptyStatement
                | Assignment Designator Expression 
