@@ -50,8 +50,8 @@ data OberonGrammar f = OberonGrammar {
    designator :: f Designator,
    expList :: f (NonEmpty Expression),
    actualParameters :: f [Expression],
-   mulOperator :: f (Expression -> Expression -> Expression),
-   addOperator :: f (Expression -> Expression -> Expression),
+   mulOperator :: f BinOp,
+   addOperator :: f BinOp,
    relation :: f RelOp,
    typeDeclaration :: f Declaration,
    type_prod :: f Type,
@@ -88,6 +88,11 @@ data OberonGrammar f = OberonGrammar {
    loopStatement :: f Statement,
    withStatement :: f Statement}
 
+newtype BinOp = BinOp {applyBinOp :: (Expression -> Expression -> Expression)}
+
+instance Show BinOp where
+   show = const "BinOp{}"
+
 $(Rank2.TH.deriveAll ''OberonGrammar)
 
 oberonGrammar :: Grammar OberonGrammar Parser Text
@@ -116,8 +121,8 @@ grammar OberonGrammar{..} = OberonGrammar{
    constExpression = expression,
    expression = simpleExpression <**> (pure id <|> (flip . Relation) <$> relation <*> simpleExpression),
    simpleExpression = (Positive <$ operator "+" <|> Negative <$ operator "-" <|> pure id)
-                      <*> (term <**> (pure id <|> flip <$> addOperator <*> term)),
-   term = factor <**> (pure id <|> flip <$> mulOperator <*> term),
+                      <*> (term <**> (pure id <|> flip . applyBinOp <$> addOperator <*> term)),
+   term = factor <**> (pure id <|> flip . applyBinOp <$> mulOperator <*> term),
    factor  =  number
               <|> charConstant
               <|> String <$> string_prod
@@ -148,9 +153,9 @@ grammar OberonGrammar{..} = OberonGrammar{
                 <|> Dereference <$> designator <* operator "^",
    expList = sepBy1' expression (delimiter ","),
    actualParameters = delimiter "(" *> sepBy expression (delimiter ",") <* delimiter ")",
-   mulOperator = Multiply <$ operator "*" <|> Divide <$ operator "/" 
-                 <|> IntegerDivide <$ keyword "DIV" <|> Modulo <$ keyword "MOD" <|> And <$ operator "&",
-   addOperator = Add <$ operator "+" <|> Subtract <$ operator "-" <|> Or <$ keyword "OR",
+   mulOperator = BinOp <$> (Multiply <$ operator "*" <|> Divide <$ operator "/"
+                            <|> IntegerDivide <$ keyword "DIV" <|> Modulo <$ keyword "MOD" <|> And <$ operator "&"),
+   addOperator = BinOp <$> (Add <$ operator "+" <|> Subtract <$ operator "-" <|> Or <$ keyword "OR"),
    relation = Equal <$ operator "=" <|> Unequal <$ operator "#" 
               <|> Less <$ operator "<" <|> LessOrEqual <$ operator "<=" 
               <|> Greater <$ operator ">" <|> GreaterOrEqual <$ operator ">=" 
