@@ -20,7 +20,7 @@ import ReprTree
 
 import Prelude hiding (getLine, readFile)
 
-data GrammarMode = ModuleMode | StatementMode | ExpressionMode
+data GrammarMode = ModuleMode | StatementsMode | StatementMode | ExpressionMode
     deriving Show
 
 data Opts = Opts
@@ -50,8 +50,9 @@ main = execParser opts >>= main'
               <> help "Oberon file to parse"))
 
     mode :: Parser GrammarMode
-    mode = ModuleMode      <$ switch (long "module")
+    mode = ModuleMode     <$ switch (long "module")
        <|> StatementMode  <$ switch (long "statement")
+       <|> StatementsMode <$ switch (long "statements")
        <|> ExpressionMode <$ switch (long "expression")
 
 main' :: Opts -> IO ()
@@ -62,6 +63,7 @@ main' Opts{..} =
             case optsInteractive of
                 ModuleMode      -> forever $ getLine >>= go Grammar.module_prod "<stdin>"
                 StatementMode  -> forever $ getLine >>= go Grammar.statement "<stdin>"
+                StatementsMode  -> forever $ getLine >>= go Grammar.statementSequence "<stdin>"
                 ExpressionMode -> forever $ getLine >>= go Grammar.expression "<stdin>"
   where
     go :: (Show f, Data f) => 
