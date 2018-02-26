@@ -9,7 +9,7 @@ import Control.Applicative
 import Control.Monad (guard)
 import Data.Char
 import Data.List.NonEmpty (NonEmpty((:|)), fromList, toList)
-import Data.Monoid ((<>))
+import Data.Monoid ((<>), Endo(Endo, appEndo))
 import Numeric (readHex)
 import Data.Text (Text, unpack)
 import Text.Grampa
@@ -121,8 +121,8 @@ grammar OberonGrammar{..} = OberonGrammar{
    constExpression = expression,
    expression = simpleExpression <**> (pure id <|> (flip . Relation) <$> relation <*> simpleExpression),
    simpleExpression = (Positive <$ operator "+" <|> Negative <$ operator "-" <|> pure id)
-                      <*> (term <**> (pure id <|> flip . applyBinOp <$> addOperator <*> term)),
-   term = factor <**> (pure id <|> flip . applyBinOp <$> mulOperator <*> term),
+                      <*> (term <**> (appEndo <$> concatMany (Endo <$> (flip . applyBinOp <$> addOperator <*> term)))),
+   term = factor <**> (appEndo <$> concatMany (Endo <$> (flip . applyBinOp <$> mulOperator <*> factor))),
    factor  =  number
               <|> charConstant
               <|> String <$> string_prod
