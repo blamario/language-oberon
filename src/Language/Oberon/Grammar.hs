@@ -129,8 +129,8 @@ grammar OberonGrammar{..} = OberonGrammar{
               <|> Nil <$ keyword "NIL"
               <|> BooleanConstant <$> (True <$ keyword "TRUE" <|> False <$ keyword "FALSE")
               <|> set
-              <|> Read <$> designator
-              <|> FunctionCall <$> designator <*> actualParameters
+              <|> Read <$> ambiguous designator
+              <|> FunctionCall <$> ambiguous designator <*> actualParameters
               <|> delimiter "(" *> expression <* delimiter ")"
               <|> Not <$ operator "~" <*> factor,
    number  =  integer <|> real,
@@ -142,7 +142,8 @@ grammar OberonGrammar{..} = OberonGrammar{
    charConstant = (CharConstant <$ char '"' <*> anyChar <* char '"'
                    <|> (CharCode . fst . head . readHex . unpack) <$> (digit <> takeCharsWhile isHexDigit)
                    <* string "X") <* ignorable,
-   string_prod = char '"' *> takeWhile (/= "\"") <* char '"' <* ignorable,
+   string_prod = char '"' *> takeWhile (/= "\"") <* char '"' <* ignorable
+                 <|> char '\'' *> takeWhile (/= "'") <* char '\'' <* ignorable,   -- Oberon2
    set = Set <$ delimiter "{" <*> sepBy element (delimiter ",") <* delimiter "}",
    element = Element <$> expression 
              <|> Range <$> expression <* delimiter ".." <*> expression,

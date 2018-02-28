@@ -46,8 +46,8 @@ data Expression = Relation RelOp Expression Expression
                 | Nil 
                 | BooleanConstant Bool
                 | Set [Element]
-                | Read Designator
-                | FunctionCall Designator ActualParameters
+                | Read AmbDesignator
+                | FunctionCall AmbDesignator ActualParameters
                 | Not Expression
    deriving (Data, Show)
 
@@ -57,6 +57,8 @@ data RelOp = Equal | Unequal | Less | LessOrEqual | Greater | GreaterOrEqual | I
 data Element = Element Expression
              | Range Expression Expression
    deriving (Data, Show)
+
+type AmbDesignator = Ambiguous Designator
 
 data Designator = Variable QualIdent
                 | Field Designator Ident 
