@@ -109,8 +109,8 @@ data ProcedureBody  =  ProcedureBody [Declaration] (Maybe StatementSequence)
 type StatementSequence  = [Ambiguous Statement]
 
 data Statement = EmptyStatement
-               | Assignment Designator Expression 
-               | ProcedureCall Designator (Maybe ActualParameters)
+               | Assignment AmbDesignator Expression
+               | ProcedureCall AmbDesignator (Maybe ActualParameters)
                | If Expression StatementSequence [(Expression, StatementSequence)] (Maybe StatementSequence)
                | CaseStatement Expression (NonEmpty (Maybe Case)) (Maybe StatementSequence)
                | While Expression StatementSequence

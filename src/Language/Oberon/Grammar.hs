@@ -199,8 +199,8 @@ grammar OberonGrammar{..} = OberonGrammar{
                <|> Exit <$ keyword "EXIT" 
                <|> Return <$ keyword "RETURN" <*> optional expression
                <|> pure EmptyStatement,
-   assignment  =  Assignment <$> designator <* delimiter ":=" <*> expression,
-   procedureCall = ProcedureCall <$> designator <*> optional actualParameters,
+   assignment  =  Assignment <$> ambiguous designator <* delimiter ":=" <*> expression,
+   procedureCall = ProcedureCall <$> ambiguous designator <*> optional actualParameters,
    ifStatement = If <$ keyword "IF" <*> expression <* keyword "THEN" <*> statementSequence
        <*> many ((,) <$ keyword "ELSIF" <*> expression <* keyword "THEN" <*> statementSequence)
        <*> optional (keyword "ELSE" *> statementSequence) <* keyword "END",
