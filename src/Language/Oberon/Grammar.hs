@@ -127,7 +127,6 @@ grammar OberonGrammar{..} = OberonGrammar{
               <|> charConstant
               <|> String <$> string_prod
               <|> Nil <$ keyword "NIL"
-              <|> BooleanConstant <$> (True <$ keyword "TRUE" <|> False <$ keyword "FALSE")
               <|> set
               <|> Read <$> ambiguous designator
               <|> FunctionCall <$> ambiguous designator <*> actualParameters

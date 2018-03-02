@@ -44,7 +44,6 @@ data Expression = Relation RelOp Expression Expression
                 | CharCode Int
                 | String Text
                 | Nil 
-                | BooleanConstant Bool
                 | Set [Element]
                 | Read AmbDesignator
                 | FunctionCall AmbDesignator ActualParameters
