@@ -14,7 +14,7 @@ import Data.Text (Text)
 import Data.Text.IO (getLine, readFile)
 import Data.Typeable (Typeable)
 import Options.Applicative
-import Text.Grampa (parseComplete)
+import Text.Grampa (Ambiguous, parseComplete)
 --import Language.Oberon.PrettyPrinter (LPretty(..), displayS, renderPretty)
 import ReprTree
 
@@ -67,7 +67,7 @@ main' Opts{..} =
                 ExpressionMode -> forever $ getLine >>= go Grammar.expression "<stdin>"
   where
     go :: (Show f, Data f) => 
-          (forall x. Grammar.OberonGrammar x -> x f) -> String -> Text -> IO ()
+          (forall p. (Grammar.OberonGrammar Ambiguous) p -> p f) -> String -> Text -> IO ()
     go f filename contents = case getCompose (f $ parseComplete Grammar.oberonGrammar contents)
                              of Right [x] -> succeed x
                                 Right l -> putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses") >> succeed (l !! optsIndex)

@@ -23,82 +23,82 @@ import Language.Oberon.AST
 
 import Prelude hiding (length, takeWhile)
 
-data OberonGrammar f = OberonGrammar {
-   module_prod :: f Module,
-   ident :: f Ident,
-   letter :: f Text,
-   digit :: f Text,
-   importList :: f [Import],
-   import_prod :: f Import,
-   declarationSequence :: f [Declaration],
-   constantDeclaration :: f Declaration,
-   identdef :: f IdentDef,
-   constExpression :: f Expression,
-   expression :: f Expression,
-   simpleExpression :: f Expression,
-   term :: f Expression,
-   factor :: f Expression,
-   number :: f Expression,
-   integer :: f Expression,
-   hexDigit :: f Text,
-   real :: f Expression,
-   scaleFactor :: f Text,
-   charConstant :: f Expression,
-   string_prod :: f Text,
-   set :: f Expression,
-   element :: f Element,
-   designator :: f Designator,
-   expList :: f (NonEmpty Expression),
-   actualParameters :: f [Expression],
-   mulOperator :: f BinOp,
-   addOperator :: f BinOp,
-   relation :: f RelOp,
-   typeDeclaration :: f Declaration,
-   type_prod :: f Type,
-   qualident :: f QualIdent,
-   arrayType :: f Type,
-   length :: f Expression,
-   recordType :: f Type,
-   baseType :: f QualIdent,
-   fieldListSequence :: f FieldListSequence,
-   fieldList :: f FieldList,
-   identList :: f IdentList,
-   pointerType :: f Type,
-   procedureType :: f Type,
-   variableDeclaration :: f Declaration,
-   procedureDeclaration :: f Declaration,
-   procedureHeading :: f ProcedureHeading,
-   formalParameters :: f FormalParameters,
-   fPSection :: f FPSection,
-   formalType :: f FormalType,
-   procedureBody :: f ProcedureBody,
-   forwardDeclaration :: f Declaration,
-   statementSequence :: f [Ambiguous Statement],
-   statement :: f Statement,
-   assignment :: f Statement,
-   procedureCall :: f Statement,
-   ifStatement :: f Statement,
-   caseStatement :: f Statement,
-   case_prod :: f (Maybe Case),
-   caseLabelList :: f (NonEmpty CaseLabels),
-   caseLabels :: f CaseLabels,
-   whileStatement :: f Statement,
-   repeatStatement :: f Statement,
-   forStatement :: f Statement,
-   loopStatement :: f Statement,
-   withStatement :: f Statement}
+data OberonGrammar f p = OberonGrammar {
+   module_prod :: p (Module f),
+   ident :: p Ident,
+   letter :: p Text,
+   digit :: p Text,
+   importList :: p [Import],
+   import_prod :: p Import,
+   declarationSequence :: p [Declaration f],
+   constantDeclaration :: p (Declaration f),
+   identdef :: p IdentDef,
+   constExpression :: p (Expression f),
+   expression :: p (Expression f),
+   simpleExpression :: p (Expression f),
+   term :: p (Expression f),
+   factor :: p (Expression f),
+   number :: p (Expression f),
+   integer :: p (Expression f),
+   hexDigit :: p Text,
+   real :: p (Expression f),
+   scaleFactor :: p Text,
+   charConstant :: p (Expression f),
+   string_prod :: p Text,
+   set :: p (Expression f),
+   element :: p (Element f),
+   designator :: p (Designator f),
+   expList :: p (NonEmpty (Expression f)),
+   actualParameters :: p [(Expression f)],
+   mulOperator :: p (BinOp f),
+   addOperator :: p (BinOp f),
+   relation :: p RelOp,
+   typeDeclaration :: p (Declaration f),
+   type_prod :: p (Type f),
+   qualident :: p QualIdent,
+   arrayType :: p (Type f),
+   length :: p (Expression f),
+   recordType :: p (Type f),
+   baseType :: p QualIdent,
+   fieldListSequence :: p (FieldListSequence f),
+   fieldList :: p (FieldList f),
+   identList :: p IdentList,
+   pointerType :: p (Type f),
+   procedureType :: p (Type f),
+   variableDeclaration :: p (Declaration f),
+   procedureDeclaration :: p (Declaration f),
+   procedureHeading :: p ProcedureHeading,
+   formalParameters :: p FormalParameters,
+   fPSection :: p FPSection,
+   formalType :: p FormalType,
+   procedureBody :: p (ProcedureBody f),
+   forwardDeclaration :: p (Declaration f),
+   statementSequence :: p [Ambiguous (Statement f)],
+   statement :: p (Statement f),
+   assignment :: p (Statement f),
+   procedureCall :: p (Statement f),
+   ifStatement :: p (Statement f),
+   caseStatement :: p (Statement f),
+   case_prod :: p (Maybe (Case f)),
+   caseLabelList :: p (NonEmpty (CaseLabels f)),
+   caseLabels :: p (CaseLabels f),
+   whileStatement :: p (Statement f),
+   repeatStatement :: p (Statement f),
+   forStatement :: p (Statement f),
+   loopStatement :: p (Statement f),
+   withStatement :: p (Statement f)}
 
-newtype BinOp = BinOp {applyBinOp :: (Expression -> Expression -> Expression)}
+newtype BinOp f = BinOp {applyBinOp :: (Expression f -> Expression f -> Expression f)}
 
-instance Show BinOp where
+instance Show (BinOp f) where
    show = const "BinOp{}"
 
 $(Rank2.TH.deriveAll ''OberonGrammar)
 
-oberonGrammar :: Grammar OberonGrammar Parser Text
+oberonGrammar :: Grammar (OberonGrammar Ambiguous) Parser Text
 oberonGrammar = fixGrammar grammar
 
-grammar :: GrammarBuilder OberonGrammar OberonGrammar Parser Text
+grammar :: GrammarBuilder (OberonGrammar Ambiguous) (OberonGrammar Ambiguous) Parser Text
 grammar OberonGrammar{..} = OberonGrammar{
    module_prod = Module <$ (ignorable *> keyword "MODULE") <*> ident <* delimiter ";"
                  <*> moptional importList <*> declarationSequence
@@ -223,7 +223,7 @@ sepBy1' p q = fromList <$> sepBy1 p q
 
 moptional p = p <|> mempty
 
-keyword, delimiter, operator :: Text -> Parser OberonGrammar Text Text
+keyword, delimiter, operator :: Text -> Parser (OberonGrammar f) Text Text
 
 keyword s = string s <* notSatisfyChar isAlphaNum <* ignorable
 delimiter s = string s <* ignorable
@@ -242,7 +242,7 @@ reservedWords = ["ARRAY", "IMPORT", "RETURN",
                  "FOR", "RECORD",
                  "IF", "REPEAT"]
 
-ignorable :: Parser OberonGrammar Text ()
+ignorable :: Parser (OberonGrammar f) Text ()
 ignorable = whiteSpace
             *> skipMany (string "(*" *> skipMany (notFollowedBy (string "*)") *> anyToken *> takeCharsWhile (/= '*'))
                          *> string "*)" *> whiteSpace)
