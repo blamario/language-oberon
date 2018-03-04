@@ -24,7 +24,7 @@ data Declaration f  = ConstantDeclaration IdentDef (ConstExpression f)
                     | TypeDeclaration IdentDef (Type f)
                     | VariableDeclaration IdentList (Type f)
                     | ProcedureDeclaration ProcedureHeading (ProcedureBody f) Ident
-                    | ForwardDeclaration Ident Bool (Maybe FormalParameters) 
+                    | ForwardDeclaration Ident Bool (Maybe FormalParameters)
 
 deriving instance Data (Declaration Identity)
 deriving instance Data (Declaration Ambiguous)
