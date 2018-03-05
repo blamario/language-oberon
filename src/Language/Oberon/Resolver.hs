@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Language.Oberon.Resolver where
 
 import Control.Applicative (Alternative)
@@ -29,6 +31,7 @@ data Error = UnknownModule Ident
            | InvalidStatement (NonEmpty Error)
            | AmbiguousDesignator [Designator Identity]
            | InvalidDesignator (NonEmpty Error)
+           | NotAVariable QualIdent
 
 resolveModules :: Map Ident (Module Ambiguous) 
                        -> Validation (NonEmpty (Ident, NonEmpty Error)) (Map Ident (Module Identity))
@@ -42,42 +45,58 @@ resolveModule modules (Module name imports declarations body name') = module'
    where moduleExports      :: Map Ident (Map Ident DeclarationRHS)
          moduleGlobals      :: Map Ident (Bool, DeclarationRHS)
          resolveDeclaration :: Declaration Ambiguous -> Validation (NonEmpty Error) (Declaration Identity)
-         resolveStatements  :: StatementSequence Ambiguous -> Validation (NonEmpty Error) (StatementSequence Identity)
-         resolveStatement   :: Statement Ambiguous -> Validation (NonEmpty Error) (Statement Identity)
-         resolveExpression  :: Expression Ambiguous -> Validation (NonEmpty Error) (Expression Identity)
-         resolveDesignator  :: Designator Ambiguous -> Validation (NonEmpty Error) (Designator Identity)
-         validateVariable   :: Designator Identity -> Validation (NonEmpty Error) (Designator Identity)
+         resolveStatements  :: Map Ident DeclarationRHS -> StatementSequence Ambiguous
+                            -> Validation (NonEmpty Error) (StatementSequence Identity)
+         resolveStatement   :: Map Ident DeclarationRHS -> Statement Ambiguous
+                            -> Validation (NonEmpty Error) (Statement Identity)
+         resolveExpression  :: Map Ident DeclarationRHS -> Expression Ambiguous
+                            -> Validation (NonEmpty Error) (Expression Identity)
+         resolveDesignator  :: Map Ident DeclarationRHS -> Designator Ambiguous
+                            -> Validation (NonEmpty Error) (Designator Identity)
+         validateVariable   :: Map Ident DeclarationRHS -> Designator Identity
+                            -> Validation (NonEmpty Error) (Designator Identity)
 
          module' = Module name imports 
                    <$> traverse resolveDeclaration declarations 
-                   <*> traverse resolveStatements body 
+                   <*> traverse (resolveStatements moduleGlobalScope) body 
                    <*> pure name'
 
          moduleExports = foldMap exportsOfModule <$> modules
          moduleGlobals = foldMap globalsOfModule module'
+         moduleGlobalScope = Map.union (snd <$> moduleGlobals) predefined
 
          resolveDeclaration = undefined
 
-         resolveStatements =  traverse (fmap Identity . resolveOne)
+         resolveStatements scope = traverse (fmap Identity . resolveOne)
             where resolveOne :: Ambiguous (Statement Ambiguous) -> Validation (NonEmpty Error) (Statement Identity)
-                  resolveOne (Ambiguous statements) = uniqueStatement (resolveStatement <$> statements)
+                  resolveOne (Ambiguous statements) = uniqueStatement (resolveStatement scope <$> statements)
 
-         resolveStatement EmptyStatement = pure EmptyStatement
-         resolveStatement (Assignment (Ambiguous designators) exp) =
-            Assignment <$> (Identity <$> uniqueDesignator ((resolveDesignator >=> validateVariable) <$> designators))
-                       <*> resolveExpression exp
-         resolveStatement (ProcedureCall (Ambiguous designators) Nothing) = undefined
+         resolveStatement _ EmptyStatement = pure EmptyStatement
+         resolveStatement scope (Assignment (Ambiguous designators) exp) =
+            Assignment <$> (Identity <$> uniqueDesignator ((resolveDesignator scope >=> validateVariable scope)
+                                                           <$> designators))
+                       <*> resolveExpression scope exp
+         resolveStatement scope (ProcedureCall (Ambiguous designators) Nothing) = undefined
 
-         resolveExpression = undefined
-         resolveDesignator = undefined
+         resolveExpression scope = undefined
+         resolveDesignator scope = undefined
          
-         validateVariable d@(Variable q@(QualIdent moduleName name)) =
+         validateVariable _ d@(Variable q@(QualIdent moduleName name)) =
             case Map.lookup moduleName moduleExports
             of Nothing -> Failure (UnknownModule moduleName :| [])
                Just exports -> case Map.lookup name exports
                                of Nothing -> Failure (UnknownImport q :| [])
                                   Just (DeclaredVariable t) -> Success d
+                                  Just _ -> Failure (NotAVariable q :| [])
+         validateVariable scope d@(Variable q@(NonQualIdent name)) =
+            case Map.lookup name scope
+            of Nothing -> Failure (UnknownImport q :| [])
+               Just (DeclaredVariable t) -> Success d
+               Just _ -> Failure (NotAVariable q :| [])
 
+predefined :: Map Ident DeclarationRHS
+predefined = Map.fromList [("ABS", DeclaredProcedure (Just $ FormalParameters [FPSection False (pure "n") $ FormalTypeReference $ NonQualIdent "INTEGER"] $ Just $ NonQualIdent "INTEGER"))]
+   
 exportsOfModule :: Module Identity -> Map Ident DeclarationRHS
 exportsOfModule = Map.mapMaybe isExported . globalsOfModule
    where isExported (True, binding) = Just binding
