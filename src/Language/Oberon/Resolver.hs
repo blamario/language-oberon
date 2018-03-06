@@ -95,8 +95,74 @@ resolveModule modules (Module name imports declarations body name') = module'
                Just _ -> Failure (NotAVariable q :| [])
 
 predefined :: Map Ident DeclarationRHS
-predefined = Map.fromList [("ABS", DeclaredProcedure (Just $ FormalParameters [FPSection False (pure "n") $ FormalTypeReference $ NonQualIdent "INTEGER"] $ Just $ NonQualIdent "INTEGER"))]
-   
+predefined = Map.fromList
+   [("BOOLEAN", DeclaredType (TypeReference $ NonQualIdent "BOOLEAN")),
+    ("CHAR", DeclaredType (TypeReference $ NonQualIdent "CHAR")),
+    ("SHORTINT", DeclaredType (TypeReference $ NonQualIdent "SHORTINT")),
+    ("INTEGER", DeclaredType (TypeReference $ NonQualIdent "INTEGER")),
+    ("LONGINT", DeclaredType (TypeReference $ NonQualIdent "LONGINT")),
+    ("REAL", DeclaredType (TypeReference $ NonQualIdent "REAL")),
+    ("LONGREAL", DeclaredType (TypeReference $ NonQualIdent "LONGREAL")),
+    ("SET", DeclaredType (TypeReference $ NonQualIdent "SET")),
+    ("TRUE", DeclaredConstant (Read $ Identity $ Variable $ NonQualIdent "TRUE")),
+    ("FALSE", DeclaredConstant (Read $ Identity $ Variable $ NonQualIdent "FALSE")),
+    ("ABS", DeclaredProcedure $ Just $
+            FormalParameters [FPSection False (pure "n") $ FormalTypeReference $ NonQualIdent "INTEGER"] $
+            Just $ NonQualIdent "INTEGER"),
+    ("ASH", DeclaredProcedure $ Just $
+            FormalParameters [FPSection False (pure "n") $ FormalTypeReference $ NonQualIdent "INTEGER"] $
+            Just $ NonQualIdent "INTEGER"),
+    ("CAP", DeclaredProcedure $ Just $
+            FormalParameters [FPSection False (pure "c") $ FormalTypeReference $ NonQualIdent "INTEGER"] $
+            Just $ NonQualIdent "CAP"),
+    ("LEN", DeclaredProcedure $ Just $
+            FormalParameters [FPSection False (pure "c") $ FormalTypeReference $ NonQualIdent "ARRAY"] $
+            Just $ NonQualIdent "LONGINT"),
+    ("MAX", DeclaredProcedure $ Just $
+            FormalParameters [FPSection False (pure "c") $ FormalTypeReference $ NonQualIdent "SET"] $
+            Just $ NonQualIdent "INTEGER"),
+    ("MIN", DeclaredProcedure $ Just $
+            FormalParameters [FPSection False (pure "c") $ FormalTypeReference $ NonQualIdent "SET"] $
+            Just $ NonQualIdent "INTEGER"),
+    ("ODD", DeclaredProcedure $ Just $
+            FormalParameters [FPSection False (pure "n") $ FormalTypeReference $ NonQualIdent "CHAR"] $
+            Just $ NonQualIdent "BOOLEAN"),
+    ("SIZE", DeclaredProcedure $ Just $
+             FormalParameters [FPSection False (pure "n") $ FormalTypeReference $ NonQualIdent "CHAR"] $
+             Just $ NonQualIdent "INTEGER"),
+    ("ORD", DeclaredProcedure $ Just $
+            FormalParameters [FPSection False (pure "n") $ FormalTypeReference $ NonQualIdent "CHAR"] $
+            Just $ NonQualIdent "INTEGER"),
+    ("CHR", DeclaredProcedure $ Just $
+            FormalParameters [FPSection False (pure "n") $ FormalTypeReference $ NonQualIdent "INTEGER"] $
+            Just $ NonQualIdent "CHAR"),
+    ("SHORT", DeclaredProcedure $ Just $
+              FormalParameters [FPSection False (pure "n") $ FormalTypeReference $ NonQualIdent "INTEGER"] $
+              Just $ NonQualIdent "INTEGER"),
+    ("LONG", DeclaredProcedure $ Just $
+             FormalParameters [FPSection False (pure "n") $ FormalTypeReference $ NonQualIdent "INTEGER"] $
+             Just $ NonQualIdent "INTEGER"),
+    ("ENTIER", DeclaredProcedure $ Just $
+               FormalParameters [FPSection False (pure "n") $ FormalTypeReference $ NonQualIdent "REAL"] $
+               Just $ NonQualIdent "INTEGER"),
+    ("INC", DeclaredProcedure $ Just $
+            FormalParameters [FPSection False (pure "n") $ FormalTypeReference $ NonQualIdent "INTEGER"] Nothing),
+    ("DEC", DeclaredProcedure $ Just $
+            FormalParameters [FPSection False (pure "n") $ FormalTypeReference $ NonQualIdent "INTEGER"] Nothing),
+    ("INCL", DeclaredProcedure $ Just $
+             FormalParameters [FPSection False (pure "s") $ FormalTypeReference $ NonQualIdent "SET",
+                               FPSection False (pure "n") $ FormalTypeReference $ NonQualIdent "INTEGER"] Nothing),
+    ("EXCL", DeclaredProcedure $ Just $
+             FormalParameters [FPSection False (pure "s") $ FormalTypeReference $ NonQualIdent "SET",
+                               FPSection False (pure "n") $ FormalTypeReference $ NonQualIdent "INTEGER"] Nothing),
+    ("COPY", DeclaredProcedure $ Just $
+             FormalParameters [FPSection False (pure "s") $ FormalTypeReference $ NonQualIdent "ARRAY",
+                               FPSection False (pure "n") $ FormalTypeReference $ NonQualIdent "ARRAY"] Nothing),
+    ("NEW", DeclaredProcedure $ Just $
+            FormalParameters [FPSection False (pure "n") $ FormalTypeReference $ NonQualIdent "POINTER"] Nothing),
+    ("HALT", DeclaredProcedure $ Just $
+             FormalParameters [FPSection False (pure "n") $ FormalTypeReference $ NonQualIdent "INTEGER"] Nothing)]
+
 exportsOfModule :: Module Identity -> Map Ident DeclarationRHS
 exportsOfModule = Map.mapMaybe isExported . globalsOfModule
    where isExported (True, binding) = Just binding
