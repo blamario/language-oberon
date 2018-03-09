@@ -191,8 +191,8 @@ grammar OberonGrammar{..} = OberonGrammar{
                 <|> FormalProcedureType <$ keyword "PROCEDURE" <*> optional formalParameters,
    procedureBody = ProcedureBody <$> declarationSequence 
                    <*> optional (keyword "BEGIN" *> statementSequence) <* keyword "END",
-   forwardDeclaration = ForwardDeclaration <$ keyword "PROCEDURE" <* delimiter "^" <*> ident 
-                        <*> (True <$ delimiter "*" <|> pure False) <*> optional formalParameters,
+   forwardDeclaration = ForwardDeclaration <$ keyword "PROCEDURE" <* delimiter "^"
+                        <*> identdef <*> optional formalParameters,
    statementSequence = sepBy (ambiguous statement) (delimiter ";"),
    statement = assignment <|> procedureCall <|> ifStatement <|> caseStatement 
                <|> whileStatement <|> repeatStatement <|> forStatement <|> loopStatement <|> withStatement 
