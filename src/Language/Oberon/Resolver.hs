@@ -157,17 +157,6 @@ resolveModule modules (Module name imports declarations body name') = module'
                                                                   <*> validateType subtype
          resolveDesignator scope (Dereference pointer) = Dereference <$> resolveDesignator scope pointer
 
-         declarationBinding (ConstantDeclaration (IdentDef name export) expr) =
-            Map.singleton name (export, DeclaredConstant expr)
-         declarationBinding (TypeDeclaration (IdentDef name export) typeDef) =
-            Map.singleton name (export, DeclaredType typeDef)
-         declarationBinding (VariableDeclaration names typeDef) =
-            foldMap (\(IdentDef name export)-> Map.singleton name (export, DeclaredVariable typeDef)) names
-         declarationBinding (ProcedureDeclaration (ProcedureHeading _ (IdentDef name export) parameters) _ _) =
-            Map.singleton name (export, DeclaredProcedure parameters)
-         declarationBinding (ForwardDeclaration (IdentDef name export) parameters) =
-            Map.singleton name (export, DeclaredProcedure parameters)
-
          validateType q@(QualIdent moduleName name) =
             case Map.lookup moduleName moduleExports
             of Nothing -> Failure (UnknownModule moduleName :| [])
@@ -215,6 +204,17 @@ resolveModule modules (Module name imports declarations body name') = module'
          validateRecord = validateVariable
          validateArray = validateVariable
          validatePointer = validateVariable
+
+declarationBinding (ConstantDeclaration (IdentDef name export) expr) =
+   Map.singleton name (export, DeclaredConstant expr)
+declarationBinding (TypeDeclaration (IdentDef name export) typeDef) =
+   Map.singleton name (export, DeclaredType typeDef)
+declarationBinding (VariableDeclaration names typeDef) =
+   foldMap (\(IdentDef name export)-> Map.singleton name (export, DeclaredVariable typeDef)) names
+declarationBinding (ProcedureDeclaration (ProcedureHeading _ (IdentDef name export) parameters) _ _) =
+   Map.singleton name (export, DeclaredProcedure parameters)
+declarationBinding (ForwardDeclaration (IdentDef name export) parameters) =
+   Map.singleton name (export, DeclaredProcedure parameters)
 
 predefined :: Map Ident DeclarationRHS
 predefined = Map.fromList
@@ -291,7 +291,7 @@ exportsOfModule = Map.mapMaybe isExported . globalsOfModule
          isExported (False, _) = Nothing
 
 globalsOfModule :: Module Identity -> Map Ident (Bool, DeclarationRHS)
-globalsOfModule (Module _ imports declarations _ _) = undefined
+globalsOfModule (Module _ imports declarations _ _) = foldMap declarationBinding declarations
 
 uniqueDesignator = unique InvalidDesignator AmbiguousDesignator
 uniqueStatement = unique InvalidStatement AmbiguousStatement
