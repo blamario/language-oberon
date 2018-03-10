@@ -79,7 +79,7 @@ data OberonGrammar f p = OberonGrammar {
    procedureCall :: p (Statement f),
    ifStatement :: p (Statement f),
    caseStatement :: p (Statement f),
-   case_prod :: p (Maybe (Case f)),
+   case_prod :: p (Case f),
    caseLabelList :: p (NonEmpty (CaseLabels f)),
    caseLabels :: p (CaseLabels f),
    whileStatement :: p (Statement f),
@@ -204,9 +204,9 @@ grammar OberonGrammar{..} = OberonGrammar{
    ifStatement = If <$ keyword "IF"
        <*> sepBy1' ((,) <$> expression <* keyword "THEN" <*> statementSequence) (keyword "ELSIF")
        <*> optional (keyword "ELSE" *> statementSequence) <* keyword "END",
-   caseStatement = CaseStatement <$ keyword "CASE" <*> expression <* keyword "OF" <*> sepBy1' case_prod (delimiter "|") 
+   caseStatement = CaseStatement <$ keyword "CASE" <*> expression <* keyword "OF" <*> sepBy case_prod (skipSome $ delimiter "|")
        <*> optional (keyword "ELSE" *> statementSequence) <* keyword "END",
-   case_prod  =  optional (Case <$> caseLabelList <* delimiter ":" <*> statementSequence),
+   case_prod  =  Case <$> caseLabelList <* delimiter ":" <*> statementSequence,
    caseLabelList  =  sepBy1' caseLabels (delimiter ","),
    caseLabels = SingleLabel <$> constExpression 
                 <|> LabelRange <$> constExpression <* delimiter ".." <*> constExpression,

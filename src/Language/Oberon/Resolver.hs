@@ -107,8 +107,23 @@ resolveModule modules (Module name imports declarations body name') = module'
             Assignment <$> (Identity <$> uniqueDesignator ((resolveDesignator scope >=> validateVariable scope)
                                                            <$> designators))
                        <*> resolveExpression scope exp
-         resolveStatement scope (ProcedureCall (Ambiguous designators) Nothing) = undefined
-         resolveStatement scope (If branches fallback) = undefined
+         resolveStatement scope (ProcedureCall (Ambiguous designators) parameters) =
+            ProcedureCall <$> (Identity <$> uniqueDesignator ((resolveDesignator scope >=> validateProcedure)
+                                                              <$> designators))
+                          <*> (traverse  . traverse) (resolveExpression scope) parameters
+         resolveStatement scope (If branches fallback) =
+            If <$> traverse resolveBranch branches <*> traverse (resolveStatements scope) fallback
+            where resolveBranch (condition, action) = (,) <$> resolveExpression scope condition
+                                                          <*> resolveStatements scope action
+         resolveStatement scope (CaseStatement expression cases fallback) =
+            CaseStatement <$> resolveExpression scope expression
+                          <*> traverse resolveCase cases
+                          <*> traverse (resolveStatements scope) fallback
+            where resolveCase (Case caseLabels action) =
+                     Case <$> traverse resolveLabels caseLabels <*> resolveStatements scope action
+                  resolveLabels (SingleLabel expression) = SingleLabel <$> resolveExpression scope expression
+                  resolveLabels (LabelRange low high) =
+                     LabelRange <$> resolveExpression scope low <*> resolveExpression scope high
 
          resolveExpression scope (Relation op left right) =
             Relation op <$> resolveExpression scope left <*> resolveExpression scope right

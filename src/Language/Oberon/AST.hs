@@ -144,7 +144,7 @@ data Statement f = EmptyStatement
                  | Assignment (AmbDesignator f) (Expression f)
                  | ProcedureCall (AmbDesignator f) (Maybe (ActualParameters f))
                  | If (NonEmpty (Expression f, StatementSequence f)) (Maybe (StatementSequence f))
-                 | CaseStatement (Expression f) (NonEmpty (Maybe (Case f))) (Maybe (StatementSequence f))
+                 | CaseStatement (Expression f) [Case f] (Maybe (StatementSequence f))
                  | While (Expression f) (StatementSequence f)
                  | Repeat (StatementSequence f) (Expression f)
                  | For Ident (Expression f) (Expression f) (Maybe (Expression f)) (StatementSequence f)  -- Oberon2
