@@ -73,9 +73,9 @@ resolveModule modules (Module name imports declarations body name') = module'
          resolveTypeName    :: Map Ident DeclarationRHS -> QualIdent
                             -> Validation (NonEmpty Error) QualIdent
 
-         module' = Module name imports 
-                   <$> traverse (resolveDeclaration moduleGlobalScope) declarations 
-                   <*> traverse (resolveStatements moduleGlobalScope) body 
+         module' = Module name imports
+                   <$> traverse (resolveDeclaration moduleGlobalScope) declarations
+                   <*> traverse (resolveStatements moduleGlobalScope) body
                    <*> pure name'
          importedModules = Map.delete mempty (Map.mapKeysWith clashingRenames importedAs modules)
             where importedAs moduleName = case List.find ((== moduleName) . snd) imports
@@ -186,7 +186,7 @@ resolveModule modules (Module name imports declarations body name') = module'
          resolveElement scope (Range left right) =
             Range <$> resolveExpression scope left <*> resolveExpression scope right
 
-         resolveDesignator scope (Variable q@(QualIdent moduleName name)) =
+         resolveDesignator scope (Variable q) =
             case resolveName scope q
             of Failure err ->  Failure err
                Success DeclaredType{} -> Failure (NotAValue q :| [])
@@ -211,6 +211,7 @@ resolveModule modules (Module name imports declarations body name') = module'
                Success DeclaredType{} -> Failure (NotAValue q :| [])
                Success DeclaredProcedure{} -> resolveDesignator scope d
                Success _ -> resolveDesignator scope d
+         resolveProcedure scope d = resolveDesignator scope d
 
          resolveWriteable scope d@(Variable q) =
             case resolveName scope q
@@ -219,6 +220,7 @@ resolveModule modules (Module name imports declarations body name') = module'
                Success DeclaredProcedure{} -> Failure (NotWriteable q :| [])
                Success DeclaredConstant{} -> Failure (NotWriteable q :| [])
                Success DeclaredVariable{} -> resolveDesignator scope d
+         resolveWriteable scope d = resolveDesignator scope d
 
          resolveRecord = resolveDesignator
          resolveArray = resolveDesignator
