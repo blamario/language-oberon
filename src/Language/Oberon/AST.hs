@@ -17,8 +17,7 @@ deriving instance (Show1 f, Show (f (Statement f))) => Show (Module f)
 
 type Ident = Text
 
-data Import = Import Ident (Maybe Ident)
-   deriving (Data, Show)
+type Import = (Maybe Ident, Ident)
 
 data Declaration f  = ConstantDeclaration IdentDef (ConstExpression f)
                     | TypeDeclaration IdentDef (Type f)

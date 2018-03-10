@@ -110,7 +110,7 @@ grammar OberonGrammar{..} = OberonGrammar{
    letter = satisfyCharInput isLetter,
    digit = satisfyCharInput isDigit,
    importList = keyword "IMPORT" *> sepBy1 import_prod (delimiter ",") <* delimiter ";",
-   import_prod = Import <$> ident <*> optional (delimiter ":=" *> ident),
+   import_prod = (,) <$> optional (ident <* delimiter ":=") <*> ident,
    declarationSequence = concatMany (keyword "CONST" *> many (constantDeclaration <* delimiter ";")
                                      <|> keyword "TYPE" *> many (typeDeclaration <* delimiter ";")
                                      <|> keyword "VAR" *> many (variableDeclaration <* delimiter ";"))

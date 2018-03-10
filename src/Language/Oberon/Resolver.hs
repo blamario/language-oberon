@@ -9,6 +9,7 @@ import Data.Either.Validation (Validation(..), validationToEither)
 import Data.Functor.Identity (Identity(..))
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
+import qualified Data.List as List
 import Data.Monoid (Alt(..))
 import Data.Map.Lazy (Map, traverseWithKey)
 import qualified Data.Map.Lazy as Map
@@ -34,9 +35,10 @@ data Error = UnknownModule Ident
            | NotAType QualIdent
            | NotAValue QualIdent
            | NotWriteable QualIdent
+           | ClashingImports
 
 resolveModules :: Map Ident (Module Ambiguous) 
-                       -> Validation (NonEmpty (Ident, NonEmpty Error)) (Map Ident (Module Identity))
+                  -> Validation (NonEmpty (Ident, NonEmpty Error)) (Map Ident (Module Identity))
 resolveModules modules = traverseWithKey extractErrors modules'
    where modules' = resolveModule modules' <$> modules
          extractErrors moduleKey (Failure e)   = Failure ((moduleKey, e) :| [])
@@ -47,6 +49,7 @@ resolveModule :: Map Ident (Validation (NonEmpty Error) (Module Identity)) -> Mo
 resolveModule modules (Module name imports declarations body name') = module'
    where moduleExports      :: Map Ident (Map Ident DeclarationRHS)
          moduleGlobals      :: Map Ident (Bool, DeclarationRHS)
+         importedModules    :: Map Ident (Validation (NonEmpty Error) (Module Identity))
          resolveDeclaration :: Map Ident DeclarationRHS -> Declaration Ambiguous
                             -> Validation (NonEmpty Error) (Declaration Identity)
          resolveType        :: Map Ident DeclarationRHS -> Type Ambiguous
@@ -73,8 +76,14 @@ resolveModule modules (Module name imports declarations body name') = module'
                    <$> traverse (resolveDeclaration moduleGlobalScope) declarations 
                    <*> traverse (resolveStatements moduleGlobalScope) body 
                    <*> pure name'
+         importedModules = Map.delete mempty (Map.mapKeysWith clashingRenames importedAs modules)
+            where importedAs moduleName = case List.find ((== moduleName) . snd) imports
+                                          of Just (Nothing, moduleKey) -> moduleKey
+                                             Just (Just innerKey, _) -> innerKey
+                                             Nothing -> mempty
+                  clashingRenames _ _ = Failure (ClashingImports :| [])
 
-         moduleExports = foldMap exportsOfModule <$> modules
+         moduleExports = foldMap exportsOfModule <$> importedModules
          moduleGlobals = foldMap globalsOfModule module'
          moduleGlobalScope = Map.union (snd <$> moduleGlobals) predefined
 
