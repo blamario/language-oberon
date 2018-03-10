@@ -22,7 +22,6 @@ data DeclarationRHS = DeclaredConstant (ConstExpression Identity)
                     | DeclaredType (Type Identity)
                     | DeclaredVariable (Type Identity)
                     | DeclaredProcedure (Maybe FormalParameters)
-                    | DeclaredForward (Maybe FormalParameters)
    
 data Error = UnknownModule Ident
            | UnknownLocal Ident
@@ -31,9 +30,10 @@ data Error = UnknownModule Ident
            | InvalidStatement (NonEmpty Error)
            | AmbiguousDesignator [Designator Identity]
            | InvalidDesignator (NonEmpty Error)
-           | NotAType QualIdent
-           | NotAVariable QualIdent
            | NotAProcedure QualIdent
+           | NotAType QualIdent
+           | NotAValue QualIdent
+           | NotWriteable QualIdent
 
 resolveModules :: Map Ident (Module Ambiguous) 
                        -> Validation (NonEmpty (Ident, NonEmpty Error)) (Map Ident (Module Identity))
@@ -61,10 +61,13 @@ resolveModule modules (Module name imports declarations body name') = module'
                             -> Validation (NonEmpty Error) (Expression Identity)
          resolveElement     :: Map Ident DeclarationRHS -> Element Ambiguous
                             -> Validation (NonEmpty Error) (Element Identity)
-         resolveDesignator  :: Map Ident DeclarationRHS -> Designator Ambiguous
+         resolveDesignator, resolveWriteable, resolveProcedure, resolveRecord, resolvePointer
+                            :: Map Ident DeclarationRHS -> Designator Ambiguous
                             -> Validation (NonEmpty Error) (Designator Identity)
-         validateVariable   :: Map Ident DeclarationRHS -> Designator Identity
-                            -> Validation (NonEmpty Error) (Designator Identity)
+         resolveName        :: Map Ident DeclarationRHS -> QualIdent
+                            -> Validation (NonEmpty Error) DeclarationRHS
+         resolveTypeName    :: Map Ident DeclarationRHS -> QualIdent
+                            -> Validation (NonEmpty Error) QualIdent
 
          module' = Module name imports 
                    <$> traverse (resolveDeclaration moduleGlobalScope) declarations 
@@ -104,12 +107,10 @@ resolveModule modules (Module name imports declarations body name') = module'
 
          resolveStatement _ EmptyStatement = pure EmptyStatement
          resolveStatement scope (Assignment (Ambiguous designators) exp) =
-            Assignment <$> (Identity <$> uniqueDesignator ((resolveDesignator scope >=> validateVariable scope)
-                                                           <$> designators))
+            Assignment <$> (Identity <$> uniqueDesignator (resolveWriteable scope <$> designators))
                        <*> resolveExpression scope exp
          resolveStatement scope (ProcedureCall (Ambiguous designators) parameters) =
-            ProcedureCall <$> (Identity <$> uniqueDesignator ((resolveDesignator scope >=> validateProcedure)
-                                                              <$> designators))
+            ProcedureCall <$> (Identity <$> uniqueDesignator (resolveProcedure scope <$> designators))
                           <*> (traverse  . traverse) (resolveExpression scope) parameters
          resolveStatement scope (If branches fallback) =
             If <$> traverse resolveBranch branches <*> traverse (resolveStatements scope) fallback
@@ -164,10 +165,10 @@ resolveModule modules (Module name imports declarations body name') = module'
          resolveExpression scope Nil = pure Nil
          resolveExpression scope (Set elements) = Set <$> traverse (resolveElement scope) elements
          resolveExpression scope (Read (Ambiguous designators)) =
-            Read . Identity <$> uniqueDesignator ((resolveDesignator scope >=> validateVariable scope) <$> designators)
+            Read . Identity <$> uniqueDesignator (resolveDesignator scope <$> designators)
          resolveExpression scope (FunctionCall (Ambiguous functions) parameters) =
             FunctionCall . Identity
-            <$> uniqueDesignator ((resolveDesignator scope >=> validateProcedure) <$> functions)
+            <$> uniqueDesignator (resolveProcedure scope <$> functions)
             <*> traverse (resolveExpression scope) parameters
          resolveExpression scope (Not e) = Negative <$> resolveExpression scope e
 
@@ -175,61 +176,54 @@ resolveModule modules (Module name imports declarations body name') = module'
          resolveElement scope (Range left right) =
             Range <$> resolveExpression scope left <*> resolveExpression scope right
 
-         resolveDesignator scope (Variable name) = pure (Variable name)
-         resolveDesignator scope (Field record field) = Field <$> resolveDesignator scope record <*> pure field
-         resolveDesignator scope (Index array indexes) = Index <$> resolveDesignator scope array
+         resolveDesignator scope (Variable q@(QualIdent moduleName name)) =
+            case resolveName scope q
+            of Failure err ->  Failure err
+               Success DeclaredType{} -> Failure (NotAValue q :| [])
+               Success _ -> Success (Variable q)
+         resolveDesignator scope (Field record field) = Field <$> resolveRecord scope record <*> pure field
+         resolveDesignator scope (Index array indexes) = Index <$> resolveArray scope array
                                                                <*> traverse (resolveExpression scope) indexes
          resolveDesignator scope (TypeGuard designator subtype) = TypeGuard <$> resolveDesignator scope designator
-                                                                  <*> validateType subtype
-         resolveDesignator scope (Dereference pointer) = Dereference <$> resolveDesignator scope pointer
+                                                                  <*> resolveTypeName scope subtype
+         resolveDesignator scope (Dereference pointer) = Dereference <$> resolvePointer scope pointer
 
-         validateType q@(QualIdent moduleName name) =
+
+         resolveTypeName scope q =
+            case resolveName scope q
+            of Failure err ->  Failure err
+               Success DeclaredType{} -> Success q
+               Success _ -> Failure (NotAType q :| [])
+
+         resolveProcedure scope d@(Variable q) =
+            case resolveName scope q
+            of Failure err ->  Failure err
+               Success DeclaredType{} -> Failure (NotAValue q :| [])
+               Success DeclaredProcedure{} -> resolveDesignator scope d
+               Success _ -> resolveDesignator scope d
+
+         resolveWriteable scope d@(Variable q) =
+            case resolveName scope q
+            of Failure err ->  Failure err
+               Success DeclaredType{} -> Failure (NotAValue q :| [])
+               Success DeclaredProcedure{} -> Failure (NotWriteable q :| [])
+               Success DeclaredConstant{} -> Failure (NotWriteable q :| [])
+               Success DeclaredVariable{} -> resolveDesignator scope d
+
+         resolveRecord = resolveDesignator
+         resolveArray = resolveDesignator
+         resolvePointer = resolveDesignator
+
+         resolveName scope q@(QualIdent moduleName name) =
             case Map.lookup moduleName moduleExports
             of Nothing -> Failure (UnknownModule moduleName :| [])
                Just exports -> case Map.lookup name exports
                                of Nothing -> Failure (UnknownImport q :| [])
-                                  Just (DeclaredType t) -> Success q
-                                  Just _ -> Failure (NotAType q :| [])
-         validateType q@(NonQualIdent name) =
-            case Map.lookup name moduleGlobalScope
-            of Nothing -> Failure (UnknownLocal name :| [])
-               Just (DeclaredType t) -> Success q
-               Just _ -> Failure (NotAVariable q :| [])
-
-         validateProcedure d@(Variable q@(QualIdent moduleName name)) =
-            case Map.lookup moduleName moduleExports
-            of Nothing -> Failure (UnknownModule moduleName :| [])
-               Just exports -> case Map.lookup name exports
-                               of Nothing -> Failure (UnknownImport q :| [])
-                                  Just DeclaredForward{} -> Success d
-                                  Just DeclaredProcedure{} -> Success d
-                                  Just _ -> Failure (NotAProcedure q :| [])
-         validateProcedure d@(Variable q@(NonQualIdent name)) =
-            case Map.lookup name moduleGlobalScope
-            of Nothing -> Failure (UnknownLocal name :| [])
-               Just DeclaredForward{} -> Success d
-               Just DeclaredProcedure{} -> Success d
-               Just _ -> Failure (NotAProcedure q :| [])
-
-         validateVariable _ d@(Variable q@(QualIdent moduleName name)) =
-            case Map.lookup moduleName moduleExports
-            of Nothing -> Failure (UnknownModule moduleName :| [])
-               Just exports -> case Map.lookup name exports
-                               of Nothing -> Failure (UnknownImport q :| [])
-                                  Just (DeclaredVariable t) -> Success d
-                                  Just _ -> Failure (NotAVariable q :| [])
-         validateVariable scope d@(Variable q@(NonQualIdent name)) =
+                                  Just rhs -> Success rhs
+         resolveName scope (NonQualIdent name) =
             case Map.lookup name scope
             of Nothing -> Failure (UnknownLocal name :| [])
-               Just (DeclaredVariable t) -> Success d
-               Just _ -> Failure (NotAVariable q :| [])
-         validateVariable scope (Field record field) = validateRecord scope record
-         validateVariable scope (Index array indexes) = validateArray scope array
-         validateVariable scope (TypeGuard designator subtype) = validateRecord scope designator
-         validateVariable scope (Dereference pointer) = validatePointer scope pointer
-         validateRecord = validateVariable
-         validateArray = validateVariable
-         validatePointer = validateVariable
+               Just rhs -> Success rhs
 
 declarationBinding (ConstantDeclaration (IdentDef name export) expr) =
    Map.singleton name (export, DeclaredConstant expr)
@@ -329,8 +323,3 @@ unique inv amb xs = case partitionEithers (validationToEither <$> NonEmpty.toLis
                      of (_, [x]) -> Success x
                         (errors, []) -> Failure (inv (sconcat $ NonEmpty.fromList errors) :| [])
                         (_, stats) -> Failure (amb stats :| [])
-
-instance Semigroup e => Monad (Validation e) where
-   return = pure
-   Failure e >>= _ = Failure e
-   Success a >>= f = f a
