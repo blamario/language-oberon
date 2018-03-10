@@ -143,8 +143,7 @@ type StatementSequence f  = [f (Statement f)]
 data Statement f = EmptyStatement
                  | Assignment (AmbDesignator f) (Expression f)
                  | ProcedureCall (AmbDesignator f) (Maybe (ActualParameters f))
-                 | If (Expression f) (StatementSequence f) [((Expression f), (StatementSequence f))] 
-                      (Maybe (StatementSequence f))
+                 | If (NonEmpty (Expression f, StatementSequence f)) (Maybe (StatementSequence f))
                  | CaseStatement (Expression f) (NonEmpty (Maybe (Case f))) (Maybe (StatementSequence f))
                  | While (Expression f) (StatementSequence f)
                  | Repeat (StatementSequence f) (Expression f)

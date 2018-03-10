@@ -201,8 +201,8 @@ grammar OberonGrammar{..} = OberonGrammar{
                <|> pure EmptyStatement,
    assignment  =  Assignment <$> ambiguous designator <* delimiter ":=" <*> expression,
    procedureCall = ProcedureCall <$> ambiguous designator <*> optional actualParameters,
-   ifStatement = If <$ keyword "IF" <*> expression <* keyword "THEN" <*> statementSequence
-       <*> many ((,) <$ keyword "ELSIF" <*> expression <* keyword "THEN" <*> statementSequence)
+   ifStatement = If <$ keyword "IF"
+       <*> sepBy1' ((,) <$> expression <* keyword "THEN" <*> statementSequence) (keyword "ELSIF")
        <*> optional (keyword "ELSE" *> statementSequence) <* keyword "END",
    caseStatement = CaseStatement <$ keyword "CASE" <*> expression <* keyword "OF" <*> sepBy1' case_prod (delimiter "|") 
        <*> optional (keyword "ELSE" *> statementSequence) <* keyword "END",
@@ -219,6 +219,7 @@ grammar OberonGrammar{..} = OberonGrammar{
    withStatement = With <$ keyword "WITH" <*> qualident <* delimiter ":" <*> qualident
                    <* keyword "DO" <*> statementSequence <* keyword "END"}
 
+sepBy1' :: Alternative p => p a -> p delimiter -> p (NonEmpty a)
 sepBy1' p q = fromList <$> sepBy1 p q
 
 moptional p = p <|> mempty

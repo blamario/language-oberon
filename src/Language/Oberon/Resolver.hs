@@ -108,6 +108,7 @@ resolveModule modules (Module name imports declarations body name') = module'
                                                            <$> designators))
                        <*> resolveExpression scope exp
          resolveStatement scope (ProcedureCall (Ambiguous designators) Nothing) = undefined
+         resolveStatement scope (If branches fallback) = undefined
 
          resolveExpression scope (Relation op left right) =
             Relation op <$> resolveExpression scope left <*> resolveExpression scope right
