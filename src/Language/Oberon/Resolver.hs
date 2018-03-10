@@ -124,6 +124,17 @@ resolveModule modules (Module name imports declarations body name') = module'
                   resolveLabels (SingleLabel expression) = SingleLabel <$> resolveExpression scope expression
                   resolveLabels (LabelRange low high) =
                      LabelRange <$> resolveExpression scope low <*> resolveExpression scope high
+         resolveStatement scope (While condition body) =
+            While <$> resolveExpression scope condition <*> resolveStatements scope body
+         resolveStatement scope (Repeat body condition) =
+            Repeat <$> resolveStatements scope body <*> resolveExpression scope condition
+         resolveStatement scope (For index from to by body) =
+            For index <$> resolveExpression scope from <*> resolveExpression scope to 
+                      <*> traverse (resolveExpression scope) by <*> resolveStatements scope body
+         resolveStatement scope (Loop body) = Loop <$> resolveStatements scope body
+         resolveStatement scope (With inner outer body) = With inner outer <$> resolveStatements scope body
+         resolveStatement scope Exit = pure Exit
+         resolveStatement scope (Return expression) = Return <$> traverse (resolveExpression scope) expression
 
          resolveExpression scope (Relation op left right) =
             Relation op <$> resolveExpression scope left <*> resolveExpression scope right
