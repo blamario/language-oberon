@@ -5,10 +5,13 @@
 module Main where
 
 import qualified Language.Oberon.Grammar as Grammar
+import qualified Language.Oberon.Resolver as Resolver
 
 import Control.Monad
 import Data.Data (Data)
+import Data.Either.Validation (Validation(..), validationToEither)
 import Data.Functor.Compose (getCompose)
+import Data.List.NonEmpty (NonEmpty)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.IO (getLine, readFile)
@@ -20,11 +23,11 @@ import ReprTree
 
 import Prelude hiding (getLine, readFile)
 
-data GrammarMode = ModuleMode | StatementsMode | StatementMode | ExpressionMode
+data GrammarMode = ModuleMode | AmbiguousModuleMode | StatementsMode | StatementMode | ExpressionMode
     deriving Show
 
 data Opts = Opts
-    { optsInteractive :: GrammarMode
+    { optsMode        :: GrammarMode
     , optsIndex       :: Int
     , optsPretty      :: Bool
     , optsFile        :: Maybe FilePath
@@ -50,28 +53,31 @@ main = execParser opts >>= main'
               <> help "Oberon file to parse"))
 
     mode :: Parser GrammarMode
-    mode = ModuleMode     <$ switch (long "module")
-       <|> StatementMode  <$ switch (long "statement")
-       <|> StatementsMode <$ switch (long "statements")
-       <|> ExpressionMode <$ switch (long "expression")
+    mode = ModuleMode          <$ switch (long "module")
+       <|> AmbiguousModuleMode <$ switch (long "module-ambiguous")
+       <|> StatementMode       <$ switch (long "statement")
+       <|> StatementsMode      <$ switch (long "statements")
+       <|> ExpressionMode      <$ switch (long "expression")
 
 main' :: Opts -> IO ()
 main' Opts{..} =
     case optsFile of
-        Just file -> readFile file >>= go Grammar.module_prod file
+        Just file -> readFile file >>= go (Resolver.resolveModule mempty) Grammar.module_prod file
         Nothing ->
-            case optsInteractive of
-                ModuleMode      -> forever $ getLine >>= go Grammar.module_prod "<stdin>"
-                StatementMode  -> forever $ getLine >>= go Grammar.statement "<stdin>"
-                StatementsMode  -> forever $ getLine >>= go Grammar.statementSequence "<stdin>"
-                ExpressionMode -> forever $ getLine >>= go Grammar.expression "<stdin>"
+            case optsMode of
+                ModuleMode          -> forever $ 
+                                       getLine >>= go (Resolver.resolveModule mempty) Grammar.module_prod "<stdin>"
+                AmbiguousModuleMode -> forever $ getLine >>= go pure Grammar.module_prod "<stdin>"
+                StatementMode       -> forever $ getLine >>= go pure Grammar.statement "<stdin>"
+                StatementsMode      -> forever $ getLine >>= go pure Grammar.statementSequence "<stdin>"
+                ExpressionMode      -> forever $ getLine >>= go pure Grammar.expression "<stdin>"
   where
     go :: (Show f, Data f) => 
-          (forall p. (Grammar.OberonGrammar Ambiguous) p -> p f) -> String -> Text -> IO ()
-    go f filename contents = case getCompose (f $ parseComplete Grammar.oberonGrammar contents)
-                             of Right [x] -> succeed x
-                                Right l -> putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses") >> succeed (l !! optsIndex)
-                                Left err -> error (show err)
+          (f' -> Validation (NonEmpty Resolver.Error) f) -> (forall p. Grammar.OberonGrammar Ambiguous p -> p f') -> String -> Text -> IO ()
+    go resolve f filename contents = case getCompose (f $ parseComplete Grammar.oberonGrammar contents)
+                                     of Right [x] -> succeed (resolve x)
+                                        Right l -> putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses") >> succeed (resolve $ l !! optsIndex)
+                                        Left err -> error (show err)
     succeed x = if optsPretty
-                then putStrLn (reprTreeString x)
+                then either print (putStrLn . reprTreeString) (validationToEither x)
                 else print x

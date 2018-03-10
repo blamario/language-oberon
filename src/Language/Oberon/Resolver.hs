@@ -36,6 +36,7 @@ data Error = UnknownModule Ident
            | NotAValue QualIdent
            | NotWriteable QualIdent
            | ClashingImports
+           deriving (Show)
 
 resolveModules :: Map Ident (Module Ambiguous) 
                   -> Validation (NonEmpty (Ident, NonEmpty Error)) (Map Ident (Module Identity))

@@ -3,7 +3,6 @@
 module Language.Oberon.AST where
 
 import Data.Data (Data)
-import Data.Functor.Classes (Show1, showsPrec1)
 import Data.Functor.Identity (Identity)
 import Data.List.NonEmpty
 import Data.Text
@@ -13,7 +12,7 @@ data Module f = Module Ident [Import] [Declaration f] (Maybe (StatementSequence 
 
 deriving instance Data (Module Identity)
 deriving instance Data (Module Ambiguous)
-deriving instance (Show1 f, Show (f (Statement f))) => Show (Module f)
+deriving instance (Show (f (Designator f)), Show (f (Statement f))) => Show (Module f)
 
 type Ident = Text
 
@@ -27,7 +26,7 @@ data Declaration f  = ConstantDeclaration IdentDef (ConstExpression f)
 
 deriving instance Data (Declaration Identity)
 deriving instance Data (Declaration Ambiguous)
-deriving instance (Show1 f, Show (f (Statement f))) => Show (Declaration f)
+deriving instance (Show (f (Designator f)), Show (f (Statement f))) => Show (Declaration f)
 
 data IdentDef = IdentDef Ident Bool
    deriving (Data, Show)
@@ -58,7 +57,7 @@ data Expression f = Relation RelOp (Expression f) (Expression f)
 
 deriving instance Data (Expression Identity)
 deriving instance Data (Expression Ambiguous)
-deriving instance Show1 f => Show (Expression f)
+deriving instance Show (f (Designator f)) => Show (Expression f)
 
 data RelOp = Equal | Unequal | Less | LessOrEqual | Greater | GreaterOrEqual | In | Is
    deriving (Data, Show)
@@ -68,9 +67,7 @@ data Element f = Element (Expression f)
 
 deriving instance Data (Element Identity)
 deriving instance Data (Element Ambiguous)
-deriving instance Show1 f => Show (Element f)
-instance Show1 f => Show (f (Element f)) where
-   showsPrec = showsPrec1
+deriving instance Show (f (Designator f)) => Show (Element f)
 
 type AmbDesignator f = f (Designator f)
 
@@ -82,9 +79,7 @@ data Designator f = Variable QualIdent
 
 deriving instance Data (Designator Identity)
 deriving instance Data (Designator Ambiguous)
-deriving instance Show1 f => Show (Designator f)
-instance Show1 f => Show (f (Designator f)) where
-   showsPrec = showsPrec1
+deriving instance Show (f (Designator f)) => Show (Designator f)
 
 type ActualParameters f = [Expression f]
 
@@ -96,9 +91,7 @@ data Type f = TypeReference QualIdent
 
 deriving instance Data (Type Identity)
 deriving instance Data (Type Ambiguous)
-deriving instance Show1 f => Show (Type f)
-instance Show1 f => Show (f (Type f)) where
-   showsPrec = showsPrec1
+deriving instance Show (f (Designator f)) => Show (Type f)
 
 data QualIdent = QualIdent Ident Ident 
                | NonQualIdent Ident
@@ -112,9 +105,7 @@ data FieldList f = FieldList IdentList (Type f)
 
 deriving instance Data (FieldList Identity)
 deriving instance Data (FieldList Ambiguous)
-deriving instance Show1 f => Show (FieldList f)
-instance Show1 f => Show (f (FieldList f)) where
-   showsPrec = showsPrec1
+deriving instance Show (f (Designator f)) => Show (FieldList f)
 
 type IdentList = NonEmpty IdentDef
 
@@ -135,7 +126,7 @@ data ProcedureBody f =  ProcedureBody [Declaration f] (Maybe (StatementSequence 
 
 deriving instance Data (ProcedureBody Identity)
 deriving instance Data (ProcedureBody Ambiguous)
-deriving instance (Show1 f, Show (f (Statement f))) => Show (ProcedureBody f)
+deriving instance (Show (f (Designator f)), Show (f (Statement f))) => Show (ProcedureBody f)
 
 type StatementSequence f  = [f (Statement f)]
 
@@ -154,7 +145,7 @@ data Statement f = EmptyStatement
 
 deriving instance Data (Statement Identity)
 deriving instance Data (Statement Ambiguous)
-deriving instance (Show1 f, Show (f (Statement f))) => Show (Statement f)
+deriving instance (Show (f (Designator f)), Show (f (Statement f))) => Show (Statement f)
 
 data Case f = Case (NonEmpty (CaseLabels f)) (StatementSequence f)
 
@@ -163,8 +154,8 @@ data CaseLabels f = SingleLabel (ConstExpression f)
 
 deriving instance Data (Case Identity)
 deriving instance Data (Case Ambiguous)
-deriving instance (Show1 f, Show (f (Statement f))) => Show (Case f)
+deriving instance (Show (f (Designator f)), Show (f (Statement f))) => Show (Case f)
 
 deriving instance Data (CaseLabels Identity)
 deriving instance Data (CaseLabels Ambiguous)
-deriving instance Show1 f => Show (CaseLabels f)
+deriving instance Show (f (Designator f)) => Show (CaseLabels f)
