@@ -19,11 +19,11 @@ import Text.Grampa (Ambiguous(..))
 
 import Language.Oberon.AST
 
-data DeclarationRHS = DeclaredConstant (ConstExpression Identity)
-                    | DeclaredType (Type Identity)
-                    | DeclaredVariable (Type Identity)
-                    | DeclaredProcedure (Maybe FormalParameters)
-   
+data DeclarationRHS f = DeclaredConstant (ConstExpression f)
+                      | DeclaredType (Type f)
+                      | DeclaredVariable (Type f)
+                      | DeclaredProcedure (Maybe FormalParameters)
+
 data Error = UnknownModule Ident
            | UnknownLocal Ident
            | UnknownImport QualIdent
@@ -38,6 +38,8 @@ data Error = UnknownModule Ident
            | ClashingImports
            deriving (Show)
 
+type Scope = Map Ident (Validation (NonEmpty Error) (DeclarationRHS Identity))
+
 resolveModules :: Map Ident (Module Ambiguous) 
                   -> Validation (NonEmpty (Ident, NonEmpty Error)) (Map Ident (Module Identity))
 resolveModules modules = traverseWithKey extractErrors modules'
@@ -48,30 +50,21 @@ resolveModules modules = traverseWithKey extractErrors modules'
 resolveModule :: Map Ident (Validation (NonEmpty Error) (Module Identity)) -> Module Ambiguous
               -> Validation (NonEmpty Error) (Module Identity)
 resolveModule modules (Module name imports declarations body name') = module'
-   where moduleExports      :: Map Ident (Map Ident DeclarationRHS)
-         moduleGlobals      :: Map Ident (Bool, DeclarationRHS)
+   where moduleExports      :: Map Ident Scope
+         moduleGlobals      :: Map Ident (Bool, Validation (NonEmpty Error) (DeclarationRHS Identity))
          importedModules    :: Map Ident (Validation (NonEmpty Error) (Module Identity))
-         resolveDeclaration :: Map Ident DeclarationRHS -> Declaration Ambiguous
-                            -> Validation (NonEmpty Error) (Declaration Identity)
-         resolveType        :: Map Ident DeclarationRHS -> Type Ambiguous
-                            -> Validation (NonEmpty Error) (Type Identity)
-         resolveFields      :: Map Ident DeclarationRHS -> FieldList Ambiguous
-                            -> Validation (NonEmpty Error) (FieldList Identity)
-         resolveStatements  :: Map Ident DeclarationRHS -> StatementSequence Ambiguous
+         resolveDeclaration :: Scope -> Declaration Ambiguous -> Validation (NonEmpty Error) (Declaration Identity)
+         resolveType        :: Scope -> Type Ambiguous -> Validation (NonEmpty Error) (Type Identity)
+         resolveFields      :: Scope -> FieldList Ambiguous -> Validation (NonEmpty Error) (FieldList Identity)
+         resolveStatements  :: Scope -> StatementSequence Ambiguous
                             -> Validation (NonEmpty Error) (StatementSequence Identity)
-         resolveStatement   :: Map Ident DeclarationRHS -> Statement Ambiguous
-                            -> Validation (NonEmpty Error) (Statement Identity)
-         resolveExpression  :: Map Ident DeclarationRHS -> Expression Ambiguous
-                            -> Validation (NonEmpty Error) (Expression Identity)
-         resolveElement     :: Map Ident DeclarationRHS -> Element Ambiguous
-                            -> Validation (NonEmpty Error) (Element Identity)
+         resolveStatement   :: Scope -> Statement Ambiguous -> Validation (NonEmpty Error) (Statement Identity)
+         resolveExpression  :: Scope -> Expression Ambiguous -> Validation (NonEmpty Error) (Expression Identity)
+         resolveElement     :: Scope -> Element Ambiguous -> Validation (NonEmpty Error) (Element Identity)
          resolveDesignator, resolveWriteable, resolveProcedure, resolveRecord, resolvePointer
-                            :: Map Ident DeclarationRHS -> Designator Ambiguous
-                            -> Validation (NonEmpty Error) (Designator Identity)
-         resolveName        :: Map Ident DeclarationRHS -> QualIdent
-                            -> Validation (NonEmpty Error) DeclarationRHS
-         resolveTypeName    :: Map Ident DeclarationRHS -> QualIdent
-                            -> Validation (NonEmpty Error) QualIdent
+                            :: Scope -> Designator Ambiguous -> Validation (NonEmpty Error) (Designator Identity)
+         resolveName        :: Scope -> QualIdent -> Validation (NonEmpty Error) (DeclarationRHS Identity)
+         resolveTypeName    :: Scope -> QualIdent -> Validation (NonEmpty Error) QualIdent
 
          module' = Module name imports
                    <$> traverse (resolveDeclaration moduleGlobalScope) declarations
@@ -85,7 +78,8 @@ resolveModule modules (Module name imports declarations body name') = module'
                   clashingRenames _ _ = Failure (ClashingImports :| [])
 
          moduleExports = foldMap exportsOfModule <$> importedModules
-         moduleGlobals = foldMap globalsOfModule module'
+         moduleGlobals = (resolveBinding moduleGlobalScope <$>)
+                         <$> Map.fromList (concatMap declarationBinding declarations)
          moduleGlobalScope = Map.union (snd <$> moduleGlobals) predefined
 
          resolveDeclaration scope (ConstantDeclaration name expr) =
@@ -98,7 +92,8 @@ resolveModule modules (Module name imports declarations body name') = module'
             ProcedureDeclaration head <$> (ProcedureBody <$> sequenceA declarations'
                                                          <*> (traverse (resolveStatements scope') statements))
                                       <*> pure name
-            where scope' = Map.union (snd <$> foldMap (either mempty declarationBinding . validationToEither) declarations') scope
+            where scope' = Map.union (resolveBinding scope . snd <$> Map.fromList declarationBindings) scope
+                  declarationBindings = concatMap declarationBinding declarations
                   declarations' = resolveDeclaration scope' <$> declarations
          resolveDeclaration scope (ForwardDeclaration name parameters) = pure (ForwardDeclaration name parameters)
 
@@ -198,7 +193,6 @@ resolveModule modules (Module name imports declarations body name') = module'
                                                                   <*> resolveTypeName scope subtype
          resolveDesignator scope (Dereference pointer) = Dereference <$> resolvePointer scope pointer
 
-
          resolveTypeName scope q =
             case resolveName scope q
             of Failure err ->  Failure err
@@ -230,26 +224,33 @@ resolveModule modules (Module name imports declarations body name') = module'
             case Map.lookup moduleName moduleExports
             of Nothing -> Failure (UnknownModule moduleName :| [])
                Just exports -> case Map.lookup name exports
-                               of Nothing -> Failure (UnknownImport q :| [])
-                                  Just rhs -> Success rhs
+                               of Just (Success rhs) -> Success rhs
+                                  Nothing -> Failure (UnknownImport q :| [])
          resolveName scope (NonQualIdent name) =
             case Map.lookup name scope
-            of Nothing -> Failure (UnknownLocal name :| [])
-               Just rhs -> Success rhs
+            of Just (Success rhs) -> Success rhs
+               _ -> Failure (UnknownLocal name :| [])
+               
 
+         resolveBinding scope (DeclaredConstant expression) = DeclaredConstant <$> resolveExpression scope expression
+         resolveBinding scope (DeclaredType typeDef) = DeclaredType <$> resolveType scope typeDef
+         resolveBinding scope (DeclaredVariable typeDef) = DeclaredVariable <$> resolveType scope typeDef
+         resolveBinding scope (DeclaredProcedure parameters) = pure (DeclaredProcedure parameters)
+         
+declarationBinding :: Declaration f -> [(Ident, (Bool, DeclarationRHS f))]
 declarationBinding (ConstantDeclaration (IdentDef name export) expr) =
-   Map.singleton name (export, DeclaredConstant expr)
+   [(name, (export, DeclaredConstant expr))]
 declarationBinding (TypeDeclaration (IdentDef name export) typeDef) =
-   Map.singleton name (export, DeclaredType typeDef)
+   [(name, (export, DeclaredType typeDef))]
 declarationBinding (VariableDeclaration names typeDef) =
-   foldMap (\(IdentDef name export)-> Map.singleton name (export, DeclaredVariable typeDef)) names
+   [(name, (export, DeclaredVariable typeDef)) | (IdentDef name export) <- NonEmpty.toList names]
 declarationBinding (ProcedureDeclaration (ProcedureHeading _ (IdentDef name export) parameters) _ _) =
-   Map.singleton name (export, DeclaredProcedure parameters)
+   [(name, (export, DeclaredProcedure parameters))]
 declarationBinding (ForwardDeclaration (IdentDef name export) parameters) =
-   Map.singleton name (export, DeclaredProcedure parameters)
+   [(name, (export, DeclaredProcedure parameters))]
 
-predefined :: Map Ident DeclarationRHS
-predefined = Map.fromList
+predefined :: Scope
+predefined = Success <$> Map.fromList
    [("BOOLEAN", DeclaredType (TypeReference $ NonQualIdent "BOOLEAN")),
     ("CHAR", DeclaredType (TypeReference $ NonQualIdent "CHAR")),
     ("SHORTINT", DeclaredType (TypeReference $ NonQualIdent "SHORTINT")),
@@ -317,13 +318,15 @@ predefined = Map.fromList
     ("HALT", DeclaredProcedure $ Just $
              FormalParameters [FPSection False (pure "n") $ FormalTypeReference $ NonQualIdent "INTEGER"] Nothing)]
 
-exportsOfModule :: Module Identity -> Map Ident DeclarationRHS
+exportsOfModule :: Module Identity -> Scope
 exportsOfModule = Map.mapMaybe isExported . globalsOfModule
    where isExported (True, binding) = Just binding
          isExported (False, _) = Nothing
 
-globalsOfModule :: Module Identity -> Map Ident (Bool, DeclarationRHS)
-globalsOfModule (Module _ imports declarations _ _) = foldMap declarationBinding declarations
+globalsOfModule :: Module Identity -> Map Ident (Bool, Validation (NonEmpty Error) (DeclarationRHS Identity))
+globalsOfModule (Module _ imports declarations _ _) = scope'
+   where scope' = (Success <$>) <$> Map.fromList declarationBindings
+         declarationBindings = concatMap declarationBinding declarations
 
 uniqueDesignator = unique InvalidDesignator AmbiguousDesignator
 uniqueStatement = unique InvalidStatement AmbiguousStatement

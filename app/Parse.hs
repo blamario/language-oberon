@@ -62,12 +62,7 @@ main = execParser opts >>= main'
 main' :: Opts -> IO ()
 main' Opts{..} =
     case optsFile of
-        Just file -> readFile file
-                     >>= case optsMode
-                         of ModuleMode          -> go (Resolver.resolveModule mempty) Grammar.module_prod file
-                            AmbiguousModuleMode -> go pure Grammar.module_prod file
-                            _                   -> error "A file usually contains a whole module."
-
+        Just file -> readFile file >>= go (Resolver.resolveModule mempty) Grammar.module_prod file
         Nothing ->
             case optsMode of
                 ModuleMode          -> forever $ 
