@@ -4,27 +4,32 @@
 
 module Main where
 
+import Language.Oberon.AST (Module(..))
 import qualified Language.Oberon.Grammar as Grammar
 import qualified Language.Oberon.Resolver as Resolver
 
 import Control.Monad
 import Data.Data (Data)
+import Data.Either (fromRight)
 import Data.Either.Validation (Validation(..), validationToEither)
+import Data.Functor.Identity (Identity)
 import Data.Functor.Compose (getCompose)
 import Data.List.NonEmpty (NonEmpty)
+import qualified Data.Map.Lazy as Map
 import Data.Monoid ((<>))
-import Data.Text (Text)
+import Data.Text (Text, unpack)
 import Data.Text.IO (getLine, readFile)
 import Data.Typeable (Typeable)
 import Options.Applicative
-import Text.Grampa (Ambiguous, Grammar, parseComplete)
+import Text.Grampa (Ambiguous, Grammar, ParseResults, parseComplete)
 import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
 --import Language.Oberon.PrettyPrinter (LPretty(..), displayS, renderPretty)
 import ReprTree
+import System.FilePath (FilePath, replaceFileName)
 
 import Prelude hiding (getLine, readFile)
 
-data GrammarMode = ModuleMode | AmbiguousModuleMode | DefinitionMode | StatementsMode | StatementMode | ExpressionMode
+data GrammarMode = ModuleWithImportsMode | ModuleMode | AmbiguousModuleMode | DefinitionMode | StatementsMode | StatementMode | ExpressionMode
     deriving Show
 
 data Opts = Opts
@@ -44,7 +49,7 @@ main = execParser opts >>= main'
 
     p :: Parser Opts
     p = Opts
-        <$> (mode <|> pure ExpressionMode)
+        <$> (mode <|> pure ModuleWithImportsMode)
         <*> (option auto (long "index" <> help "Index of ambiguous parse" <> showDefault <> value 0 <> metavar "INT"))
         <*> switch
             ( long "pretty"
@@ -54,7 +59,8 @@ main = execParser opts >>= main'
               <> help "Oberon file to parse"))
 
     mode :: Parser GrammarMode
-    mode = ModuleMode          <$ switch (long "module")
+    mode = ModuleWithImportsMode <$ switch (long "module-with-imports")
+       <|> ModuleMode          <$ switch (long "module")
        <|> AmbiguousModuleMode <$ switch (long "module-ambiguous")
        <|> DefinitionMode      <$ switch (long "definition")
        <|> StatementMode       <$ switch (long "statement")
@@ -66,7 +72,8 @@ main' Opts{..} =
     case optsFile of
         Just file -> readFile file
                      >>= case optsMode
-                         of ModuleMode          -> go (Resolver.resolveModule mempty) Grammar.module_prod
+                         of ModuleWithImportsMode -> \_-> resolveModuleFile file >>= print
+                            ModuleMode          -> go (Resolver.resolveModule mempty) Grammar.module_prod
                                                    Grammar.oberonGrammar file
                             DefinitionMode      -> go (Resolver.resolveModule mempty) Grammar.module_prod
                                                    Grammar.oberonDefinitionGrammar file
@@ -99,3 +106,14 @@ main' Opts{..} =
     succeed x = if optsPretty
                 then either print (putStrLn . reprTreeString) (validationToEither x)
                 else print x
+
+resolveModuleFile :: FilePath -> IO (Validation (NonEmpty Resolver.Error) (Module Identity))
+resolveModuleFile path =
+   do let parse :: Grammar (Grammar.OberonGrammar Ambiguous) LeftRecursive.Parser Text -> FilePath -> IO (ParseResults ([Module Ambiguous]))
+          parse g f = getCompose . Grammar.module_prod . parseComplete g <$> readFile f
+      Right [rootModule@(Module _ imports _ _ _)] <- parse Grammar.oberonGrammar path
+      importedModules <- (traverse . traverse) (parse Grammar.oberonDefinitionGrammar)
+                         [(p, replaceFileName path $ unpack p <> ".Def") | (_, p) <- imports]
+      let importMap = Map.fromList $ (head . fromRight undefined <$>) <$> importedModules
+      let resolvedImportMap = Resolver.resolveModule resolvedImportMap <$> importMap
+      return $ Resolver.resolveModule resolvedImportMap rootModule

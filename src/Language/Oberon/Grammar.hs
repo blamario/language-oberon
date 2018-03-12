@@ -106,7 +106,8 @@ definitionGrammar g@OberonGrammar{..} = (grammar g){
                  <*> moptional importList <*> declarationSequence
                  <*> pure Nothing <* keyword "END" <*> ident <* delimiter ".",
    procedureDeclaration = ProcedureDeclaration <$> procedureHeading
-                          <*> (pure $ ProcedureBody [] Nothing) <*> pure mempty}
+                          <*> (pure $ ProcedureBody [] Nothing) <*> pure mempty,
+   identdef = IdentDef <$> ident <*> pure True <* optional (delimiter "*")}
    
 grammar OberonGrammar{..} = OberonGrammar{
    module_prod = Module <$ (ignorable *> keyword "MODULE") <*> ident <* delimiter ";"
