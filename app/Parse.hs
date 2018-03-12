@@ -17,13 +17,14 @@ import Data.Text (Text)
 import Data.Text.IO (getLine, readFile)
 import Data.Typeable (Typeable)
 import Options.Applicative
-import Text.Grampa (Ambiguous, parseComplete)
+import Text.Grampa (Ambiguous, Grammar, parseComplete)
+import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
 --import Language.Oberon.PrettyPrinter (LPretty(..), displayS, renderPretty)
 import ReprTree
 
 import Prelude hiding (getLine, readFile)
 
-data GrammarMode = ModuleMode | AmbiguousModuleMode | StatementsMode | StatementMode | ExpressionMode
+data GrammarMode = ModuleMode | AmbiguousModuleMode | DefinitionMode | StatementsMode | StatementMode | ExpressionMode
     deriving Show
 
 data Opts = Opts
@@ -55,6 +56,7 @@ main = execParser opts >>= main'
     mode :: Parser GrammarMode
     mode = ModuleMode          <$ switch (long "module")
        <|> AmbiguousModuleMode <$ switch (long "module-ambiguous")
+       <|> DefinitionMode      <$ switch (long "definition")
        <|> StatementMode       <$ switch (long "statement")
        <|> StatementsMode      <$ switch (long "statements")
        <|> ExpressionMode      <$ switch (long "expression")
@@ -62,22 +64,38 @@ main = execParser opts >>= main'
 main' :: Opts -> IO ()
 main' Opts{..} =
     case optsFile of
-        Just file -> readFile file >>= go (Resolver.resolveModule mempty) Grammar.module_prod file
+        Just file -> readFile file
+                     >>= case optsMode
+                         of ModuleMode          -> go (Resolver.resolveModule mempty) Grammar.module_prod
+                                                   Grammar.oberonGrammar file
+                            DefinitionMode      -> go (Resolver.resolveModule mempty) Grammar.module_prod
+                                                   Grammar.oberonDefinitionGrammar file
+                            AmbiguousModuleMode -> go pure Grammar.module_prod Grammar.oberonGrammar file
+                            _                   -> error "A file usually contains a whole module."
+
         Nothing ->
+            forever $
+            getLine >>=
             case optsMode of
-                ModuleMode          -> forever $ 
-                                       getLine >>= go (Resolver.resolveModule mempty) Grammar.module_prod "<stdin>"
-                AmbiguousModuleMode -> forever $ getLine >>= go pure Grammar.module_prod "<stdin>"
-                StatementMode       -> forever $ getLine >>= go pure Grammar.statement "<stdin>"
-                StatementsMode      -> forever $ getLine >>= go pure Grammar.statementSequence "<stdin>"
-                ExpressionMode      -> forever $ getLine >>= go pure Grammar.expression "<stdin>"
+                ModuleMode          -> go (Resolver.resolveModule mempty) Grammar.module_prod
+                                          Grammar.oberonGrammar "<stdin>"
+                AmbiguousModuleMode -> go pure Grammar.module_prod Grammar.oberonGrammar "<stdin>"
+                DefinitionMode      -> go (Resolver.resolveModule mempty) Grammar.module_prod
+                                          Grammar.oberonDefinitionGrammar "<stdin>"
+                StatementMode       -> go pure Grammar.statement Grammar.oberonGrammar "<stdin>"
+                StatementsMode      -> go pure Grammar.statementSequence Grammar.oberonGrammar "<stdin>"
+                ExpressionMode      -> go pure Grammar.expression Grammar.oberonGrammar "<stdin>"
   where
     go :: (Show f, Data f) => 
-          (f' -> Validation (NonEmpty Resolver.Error) f) -> (forall p. Grammar.OberonGrammar Ambiguous p -> p f') -> String -> Text -> IO ()
-    go resolve f filename contents = case getCompose (f $ parseComplete Grammar.oberonGrammar contents)
-                                     of Right [x] -> succeed (resolve x)
-                                        Right l -> putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses") >> succeed (resolve $ l !! optsIndex)
-                                        Left err -> error (show err)
+          (f' -> Validation (NonEmpty Resolver.Error) f)
+       -> (forall p. Grammar.OberonGrammar Ambiguous p -> p f')
+       -> (Grammar (Grammar.OberonGrammar Ambiguous) LeftRecursive.Parser Text)
+       -> String -> Text -> IO ()
+    go resolve production grammar filename contents =
+       case getCompose (production $ parseComplete grammar contents)
+       of Right [x] -> succeed (resolve x)
+          Right l -> putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses") >> succeed (resolve $ l !! optsIndex)
+          Left err -> error (show err)
     succeed x = if optsPretty
                 then either print (putStrLn . reprTreeString) (validationToEither x)
                 else print x

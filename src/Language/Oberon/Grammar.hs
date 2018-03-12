@@ -95,10 +95,19 @@ instance Show (BinOp f) where
 
 $(Rank2.TH.deriveAll ''OberonGrammar)
 
-oberonGrammar :: Grammar (OberonGrammar Ambiguous) Parser Text
+oberonGrammar, oberonDefinitionGrammar :: Grammar (OberonGrammar Ambiguous) Parser Text
 oberonGrammar = fixGrammar grammar
+oberonDefinitionGrammar = fixGrammar definitionGrammar
 
-grammar :: GrammarBuilder (OberonGrammar Ambiguous) (OberonGrammar Ambiguous) Parser Text
+grammar, definitionGrammar :: GrammarBuilder (OberonGrammar Ambiguous) (OberonGrammar Ambiguous) Parser Text
+
+definitionGrammar g@OberonGrammar{..} = (grammar g){
+   module_prod = Module <$ (ignorable *> keyword "DEFINITION") <*> ident <* delimiter ";"
+                 <*> moptional importList <*> declarationSequence
+                 <*> pure Nothing <* keyword "END" <*> ident <* delimiter ".",
+   procedureDeclaration = ProcedureDeclaration <$> procedureHeading
+                          <*> (pure $ ProcedureBody [] Nothing) <*> pure mempty}
+   
 grammar OberonGrammar{..} = OberonGrammar{
    module_prod = Module <$ (ignorable *> keyword "MODULE") <*> ident <* delimiter ";"
                  <*> moptional importList <*> declarationSequence
