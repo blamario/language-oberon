@@ -14,7 +14,7 @@ import Numeric (readHex)
 import Data.Text (Text, unpack)
 import Text.Grampa
 import Text.Grampa.ContextFree.LeftRecursive (Parser)
-import Text.Parser.Combinators (sepBy, sepBy1)
+import Text.Parser.Combinators (sepBy, sepBy1, sepByNonEmpty)
 
 import qualified Rank2
 import qualified Rank2.TH
@@ -161,7 +161,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                 <|> Index <$> designator <* delimiter "[" <*> expList <* delimiter "]"
                 <|> TypeGuard <$> designator <* delimiter "(" <*> qualident <* delimiter ")"
                 <|> Dereference <$> designator <* operator "^",
-   expList = sepBy1' expression (delimiter ","),
+   expList = sepByNonEmpty expression (delimiter ","),
    actualParameters = delimiter "(" *> sepBy expression (delimiter ",") <* delimiter ")",
    mulOperator = BinOp <$> (Multiply <$ operator "*" <|> Divide <$ operator "/"
                             <|> IntegerDivide <$ keyword "DIV" <|> Modulo <$ keyword "MOD" <|> And <$ operator "&"),
@@ -178,14 +178,14 @@ grammar OberonGrammar{..} = OberonGrammar{
                <|> procedureType,
    qualident = QualIdent <$> ident <* delimiter "." <*> ident 
                <|> NonQualIdent <$> ident,
-   arrayType = ArrayType <$ keyword "ARRAY" <*> sepBy1' length (delimiter ",") <* keyword "OF" <*> type_prod,
+   arrayType = ArrayType <$ keyword "ARRAY" <*> sepByNonEmpty length (delimiter ",") <* keyword "OF" <*> type_prod,
    length = constExpression,
    recordType = RecordType <$ keyword "RECORD" <*> optional (delimiter "(" *> baseType <* delimiter ")") 
                 <*> fieldListSequence <* keyword "END",
    baseType = qualident,
    fieldListSequence = sepBy fieldList (delimiter ";"),
    fieldList = FieldList <$> identList <* delimiter ":" <*> type_prod,
-   identList = sepBy1' identdef (delimiter ","),
+   identList = sepByNonEmpty identdef (delimiter ","),
    pointerType = PointerType <$ keyword "POINTER" <* keyword "TO" <*> type_prod,
    procedureType = ProcedureType <$ keyword "PROCEDURE" <*> optional formalParameters,
    variableDeclaration = VariableDeclaration <$> identList <* delimiter ":" <*> type_prod,
@@ -195,7 +195,7 @@ grammar OberonGrammar{..} = OberonGrammar{
    formalParameters = FormalParameters <$ delimiter "(" <*> sepBy fPSection (delimiter ";") <* delimiter ")" 
                       <*> optional (delimiter ":" *> qualident),
    fPSection = FPSection <$> (True <$ keyword "VAR" <|> pure False) 
-               <*> sepBy1' ident (delimiter ",") <* delimiter ":" <*> formalType,
+               <*> sepByNonEmpty ident (delimiter ",") <* delimiter ":" <*> formalType,
    formalType = ArrayOf <$ keyword "ARRAY" <* keyword "OF" <*> formalType 
                 <|> FormalTypeReference <$> qualident 
                 <|> FormalProcedureType <$ keyword "PROCEDURE" <*> optional formalParameters,
@@ -212,12 +212,12 @@ grammar OberonGrammar{..} = OberonGrammar{
    assignment  =  Assignment <$> ambiguous designator <* delimiter ":=" <*> expression,
    procedureCall = ProcedureCall <$> ambiguous designator <*> optional actualParameters,
    ifStatement = If <$ keyword "IF"
-       <*> sepBy1' ((,) <$> expression <* keyword "THEN" <*> statementSequence) (keyword "ELSIF")
+       <*> sepByNonEmpty ((,) <$> expression <* keyword "THEN" <*> statementSequence) (keyword "ELSIF")
        <*> optional (keyword "ELSE" *> statementSequence) <* keyword "END",
    caseStatement = CaseStatement <$ keyword "CASE" <*> expression <* keyword "OF" <*> sepBy case_prod (skipSome $ delimiter "|")
        <*> optional (keyword "ELSE" *> statementSequence) <* keyword "END",
    case_prod  =  Case <$> caseLabelList <* delimiter ":" <*> statementSequence,
-   caseLabelList  =  sepBy1' caseLabels (delimiter ","),
+   caseLabelList  =  sepByNonEmpty caseLabels (delimiter ","),
    caseLabels = SingleLabel <$> constExpression 
                 <|> LabelRange <$> constExpression <* delimiter ".." <*> constExpression,
    whileStatement = While <$ keyword "WHILE" <*> expression <* keyword "DO" <*> statementSequence <* keyword "END",
@@ -228,9 +228,6 @@ grammar OberonGrammar{..} = OberonGrammar{
    loopStatement = Loop <$ keyword "LOOP" <*> statementSequence <* keyword "END",
    withStatement = With <$ keyword "WITH" <*> qualident <* delimiter ":" <*> qualident
                    <* keyword "DO" <*> statementSequence <* keyword "END"}
-
-sepBy1' :: Alternative p => p a -> p delimiter -> p (NonEmpty a)
-sepBy1' p q = fromList <$> sepBy1 p q
 
 moptional p = p <|> mempty
 

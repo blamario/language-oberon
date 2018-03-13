@@ -20,7 +20,7 @@ library
   hs-source-dirs:       src
   exposed-modules:      Language.Oberon.AST, Language.Oberon.Grammar, Language.Oberon.Resolver
   build-depends:        base >= 4.7 && < 5, text < 1.3, containers >= 0.5 && < 1.0,
-                        parsers >= 0.10 && < 0.13, either == 5.*,
+                        parsers >= 0.12.7 && < 0.13, either == 5.*,
                         rank2classes < 1.1, grammatical-parsers == 0.3.*
   default-language:     Haskell2010
 
