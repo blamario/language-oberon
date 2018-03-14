@@ -18,9 +18,9 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:       src
-  exposed-modules:      Language.Oberon.AST, Language.Oberon.Grammar, Language.Oberon.Resolver
+  exposed-modules:      Language.Oberon.AST, Language.Oberon.Grammar, Language.Oberon.Pretty, Language.Oberon.Resolver
   build-depends:        base >= 4.7 && < 5, text < 1.3, containers >= 0.5 && < 1.0,
-                        parsers >= 0.12.7 && < 0.13, either == 5.*,
+                        parsers >= 0.12.7 && < 0.13, prettyprinter >= 1 && < 1.3, either == 5.*,
                         rank2classes < 1.1, grammatical-parsers == 0.3.*
   default-language:     Haskell2010
 
@@ -29,7 +29,7 @@ executable parse
   -- other-modules:       
   other-extensions:    RankNTypes, RecordWildCards, ScopedTypeVariables, FlexibleInstances, DeriveDataTypeable
   build-depends:       base >= 4.7 && < 5, text < 1.3, either == 5.*, containers >= 0.5 && < 1.0,
-                       repr-tree-syb < 0.2, filepath < 1.5,
+                       repr-tree-syb < 0.2, filepath < 1.5, prettyprinter >= 1 && < 1.3,
                        rank2classes < 1.1, grammatical-parsers == 0.3.*, language-oberon,
                        optparse-applicative
   default-language:    Haskell2010

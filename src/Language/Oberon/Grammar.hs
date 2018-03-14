@@ -149,8 +149,8 @@ grammar OberonGrammar{..} = OberonGrammar{
                     <* ignorable),
    scaleFactor = (string "E" <|> string "D") <> moptional (string "+" <|> string "-") <> digit <> takeCharsWhile isDigit,
    charConstant = (CharConstant <$ char '"' <*> anyChar <* char '"'
-                   <|> (CharCode . fst . head . readHex . unpack) <$> (digit <> takeCharsWhile isHexDigit)
-                   <* string "X") <* ignorable,
+                   <|> CharCode . fst . head . readHex . unpack
+                       <$> (digit <> takeCharsWhile isHexDigit <* string "X")) <* ignorable,
    string_prod = char '"' *> takeWhile (/= "\"") <* char '"' <* ignorable
                  <|> char '\'' *> takeWhile (/= "'") <* char '\'' <* ignorable,   -- Oberon2
    set = Set <$ delimiter "{" <*> sepBy element (delimiter ",") <* delimiter "}",

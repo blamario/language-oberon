@@ -1,12 +1,13 @@
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances, RankNTypes, RecordWildCards, ScopedTypeVariables #-}
 
 module Main where
 
-import Language.Oberon.AST (Module(..))
+import Language.Oberon.AST (Module(..), Statement, Expression)
 import qualified Language.Oberon.Grammar as Grammar
 import qualified Language.Oberon.Resolver as Resolver
+import qualified Language.Oberon.Pretty ()
+import Data.Text.Prettyprint.Doc (Pretty(pretty))
+import Data.Text.Prettyprint.Doc.Util (putDocW)
 
 import Control.Monad
 import Data.Data (Data)
@@ -32,10 +33,13 @@ import Prelude hiding (getLine, readFile)
 data GrammarMode = ModuleWithImportsMode | ModuleMode | AmbiguousModuleMode | DefinitionMode | StatementsMode | StatementMode | ExpressionMode
     deriving Show
 
+data Output = Plain | Pretty Int | Tree
+            deriving Show
+
 data Opts = Opts
     { optsMode        :: GrammarMode
     , optsIndex       :: Int
-    , optsPretty      :: Bool
+    , optsOutput      :: Output
     , optsFile        :: Maybe FilePath
     } deriving Show
 
@@ -51,9 +55,9 @@ main = execParser opts >>= main'
     p = Opts
         <$> (mode <|> pure ModuleWithImportsMode)
         <*> (option auto (long "index" <> help "Index of ambiguous parse" <> showDefault <> value 0 <> metavar "INT"))
-        <*> switch
-            ( long "pretty"
-              <> help "Pretty-print output")
+        <*> (Pretty <$> option auto (long "pretty" <> help "Pretty-print output" <> metavar "WIDTH")
+             <|> Tree <$ switch (long "tree" <> help "Print the output as an abstract syntax tree")
+             <|> pure Plain)
         <*> optional (strArgument
             ( metavar "FILE"
               <> help "Oberon file to parse"))
@@ -72,7 +76,7 @@ main' Opts{..} =
     case optsFile of
         Just file -> readFile file
                      >>= case optsMode
-                         of ModuleWithImportsMode -> \_-> resolveModuleFile file >>= print
+                         of ModuleWithImportsMode -> \_-> resolveModuleFile file >>= succeed optsOutput
                             ModuleMode          -> go (Resolver.resolveModule mempty) Grammar.module_prod
                                                    Grammar.oberonGrammar file
                             DefinitionMode      -> go (Resolver.resolveModule mempty) Grammar.module_prod
@@ -93,19 +97,22 @@ main' Opts{..} =
                 StatementsMode      -> go pure Grammar.statementSequence Grammar.oberonGrammar "<stdin>"
                 ExpressionMode      -> go pure Grammar.expression Grammar.oberonGrammar "<stdin>"
   where
-    go :: (Show f, Data f) => 
+    go :: (Show f, Data f, Pretty f) => 
           (f' -> Validation (NonEmpty Resolver.Error) f)
        -> (forall p. Grammar.OberonGrammar Ambiguous p -> p f')
        -> (Grammar (Grammar.OberonGrammar Ambiguous) LeftRecursive.Parser Text)
        -> String -> Text -> IO ()
     go resolve production grammar filename contents =
        case getCompose (production $ parseComplete grammar contents)
-       of Right [x] -> succeed (resolve x)
-          Right l -> putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses") >> succeed (resolve $ l !! optsIndex)
+       of Right [x] -> succeed optsOutput (resolve x)
+          Right l -> putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
+                     >> succeed optsOutput (resolve $ l !! optsIndex)
           Left err -> error (show err)
-    succeed x = if optsPretty
-                then either print (putStrLn . reprTreeString) (validationToEither x)
-                else print x
+
+succeed out x = case out
+                of Pretty width -> either print (putDocW width . pretty) (validationToEither x)
+                   Tree -> either print (putStrLn . reprTreeString) (validationToEither x)
+                   Plain -> print x
 
 resolveModuleFile :: FilePath -> IO (Validation (NonEmpty Resolver.Error) (Module Identity))
 resolveModuleFile path =
@@ -117,3 +124,12 @@ resolveModuleFile path =
       let importMap = Map.fromList $ (head . fromRight undefined <$>) <$> importedModules
       let resolvedImportMap = Resolver.resolveModule resolvedImportMap <$> importMap
       return $ Resolver.resolveModule resolvedImportMap rootModule
+
+instance Pretty (Module Ambiguous) where
+   pretty _ = error "Disambiguate before pretty-printing"
+instance Pretty (Ambiguous (Statement Ambiguous)) where
+   pretty _ = error "Disambiguate before pretty-printing"
+instance Pretty (Statement Ambiguous) where
+   pretty _ = error "Disambiguate before pretty-printing"
+instance Pretty (Expression Ambiguous) where
+   pretty _ = error "Disambiguate before pretty-printing"
