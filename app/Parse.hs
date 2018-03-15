@@ -2,6 +2,7 @@
 
 module Main where
 
+import Language.Oberon (parseAndResolveModuleFile)
 import Language.Oberon.AST (Module(..), Statement, Expression)
 import qualified Language.Oberon.Grammar as Grammar
 import qualified Language.Oberon.Resolver as Resolver
@@ -11,7 +12,6 @@ import Data.Text.Prettyprint.Doc.Util (putDocW)
 
 import Control.Monad
 import Data.Data (Data)
-import Data.Either (fromRight)
 import Data.Either.Validation (Validation(..), validationToEither)
 import Data.Functor.Identity (Identity)
 import Data.Functor.Compose (getCompose)
@@ -24,9 +24,8 @@ import Data.Typeable (Typeable)
 import Options.Applicative
 import Text.Grampa (Ambiguous, Grammar, ParseResults, parseComplete)
 import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
---import Language.Oberon.PrettyPrinter (LPretty(..), displayS, renderPretty)
 import ReprTree
-import System.FilePath (FilePath, replaceFileName)
+import System.FilePath (FilePath)
 
 import Prelude hiding (getLine, readFile)
 
@@ -76,7 +75,7 @@ main' Opts{..} =
     case optsFile of
         Just file -> readFile file
                      >>= case optsMode
-                         of ModuleWithImportsMode -> \_-> resolveModuleFile file >>= succeed optsOutput
+                         of ModuleWithImportsMode -> \_-> parseAndResolveModuleFile file >>= succeed optsOutput
                             ModuleMode          -> go (Resolver.resolveModule mempty) Grammar.module_prod
                                                    Grammar.oberonGrammar file
                             DefinitionMode      -> go (Resolver.resolveModule mempty) Grammar.module_prod
@@ -113,17 +112,6 @@ succeed out x = case out
                 of Pretty width -> either print (putDocW width . pretty) (validationToEither x)
                    Tree -> either print (putStrLn . reprTreeString) (validationToEither x)
                    Plain -> print x
-
-resolveModuleFile :: FilePath -> IO (Validation (NonEmpty Resolver.Error) (Module Identity))
-resolveModuleFile path =
-   do let parse :: Grammar (Grammar.OberonGrammar Ambiguous) LeftRecursive.Parser Text -> FilePath -> IO (ParseResults ([Module Ambiguous]))
-          parse g f = getCompose . Grammar.module_prod . parseComplete g <$> readFile f
-      Right [rootModule@(Module _ imports _ _ _)] <- parse Grammar.oberonGrammar path
-      importedModules <- (traverse . traverse) (parse Grammar.oberonDefinitionGrammar)
-                         [(p, replaceFileName path $ unpack p <> ".Def") | (_, p) <- imports]
-      let importMap = Map.fromList $ (head . fromRight undefined <$>) <$> importedModules
-      let resolvedImportMap = Resolver.resolveModule resolvedImportMap <$> importMap
-      return $ Resolver.resolveModule resolvedImportMap rootModule
 
 instance Pretty (Module Ambiguous) where
    pretty _ = error "Disambiguate before pretty-printing"
