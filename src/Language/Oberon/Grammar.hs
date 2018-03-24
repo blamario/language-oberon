@@ -1,4 +1,4 @@
-{-# Language OverloadedStrings, Rank2Types, RecordWildCards, TemplateHaskell #-}
+{-# Language OverloadedStrings, Rank2Types, RecordWildCards, TypeFamilies, TemplateHaskell #-}
 
 -- * From http://www.ethoberon.ethz.ch/EBNF.html
 --   Extracted from the book Programmieren in Oberon - Das neue Pascal by N. Wirth and M. Reiser and translated by J. Templ.
@@ -95,6 +95,18 @@ instance Show (BinOp f) where
 
 $(Rank2.TH.deriveAll ''OberonGrammar)
 
+instance Lexical (OberonGrammar f) where
+   type LexicalConstraint p (OberonGrammar f) s = (s ~ Text, p ~ Parser)
+   lexicalComment = string "(*"
+                    *> skipMany (notFollowedBy (string "*)") *> anyToken *> takeCharsWhile (/= '*'))
+                    <* string "*)"
+   lexicalWhiteSpace = takeCharsWhile isSpace *> skipMany (lexicalComment *> takeCharsWhile isSpace)
+   isIdentifierStartChar = isLetter
+   isIdentifierFollowChar = isAlphaNum
+   identifierToken word = lexicalToken (do w <- word
+                                           guard (w `notElem` reservedWords)
+                                           return w)
+
 oberonGrammar, oberonDefinitionGrammar :: Grammar (OberonGrammar Ambiguous) Parser Text
 oberonGrammar = fixGrammar grammar
 oberonDefinitionGrammar = fixGrammar definitionGrammar
@@ -102,7 +114,7 @@ oberonDefinitionGrammar = fixGrammar definitionGrammar
 grammar, definitionGrammar :: GrammarBuilder (OberonGrammar Ambiguous) (OberonGrammar Ambiguous) Parser Text
 
 definitionGrammar g@OberonGrammar{..} = (grammar g){
-   module_prod = Module <$ (ignorable *> keyword "DEFINITION") <*> ident <* delimiter ";"
+   module_prod = Module <$ (lexicalWhiteSpace *> keyword "DEFINITION") <*> ident <* delimiter ";"
                  <*> moptional importList <*> declarationSequence
                  <*> pure Nothing <* keyword "END" <*> ident <* delimiter ".",
    procedureDeclaration = ProcedureDeclaration <$> procedureHeading
@@ -110,13 +122,10 @@ definitionGrammar g@OberonGrammar{..} = (grammar g){
    identdef = IdentDef <$> ident <*> pure True <* optional (delimiter "*")}
    
 grammar OberonGrammar{..} = OberonGrammar{
-   module_prod = Module <$ (ignorable *> keyword "MODULE") <*> ident <* delimiter ";"
+   module_prod = Module <$ (lexicalWhiteSpace *> keyword "MODULE") <*> ident <* delimiter ";"
                  <*> moptional importList <*> declarationSequence
                  <*> optional (keyword "BEGIN" *> statementSequence) <* keyword "END" <*> ident <* delimiter ".",
-   ident = do word <- letter <> takeCharsWhile isAlphaNum
-              guard (word `notElem` reservedWords)
-              ignorable
-              return word,
+   ident = identifier,
    letter = satisfyCharInput isLetter,
    digit = satisfyCharInput isDigit,
    importList = keyword "IMPORT" *> sepBy1 import_prod (delimiter ",") <* delimiter ";",
@@ -143,16 +152,16 @@ grammar OberonGrammar{..} = OberonGrammar{
               <|> delimiter "(" *> expression <* delimiter ")"
               <|> Not <$ operator "~" <*> factor,
    number  =  integer <|> real,
-   integer = Integer <$> (digit <> (takeCharsWhile isDigit <|> takeCharsWhile isHexDigit <> string "H") <* ignorable),
+   integer = Integer <$> lexicalToken (digit <> (takeCharsWhile isDigit <|> takeCharsWhile isHexDigit <> string "H")),
    hexDigit = satisfyCharInput isHexDigit,
-   real = Real <$> (digit <> takeCharsWhile isDigit <> string "." *> takeCharsWhile isDigit <> moptional scaleFactor
-                    <* ignorable),
+   real = Real <$> lexicalToken (digit <> takeCharsWhile isDigit <> string "."
+                                 *> takeCharsWhile isDigit <> moptional scaleFactor),
    scaleFactor = (string "E" <|> string "D") <> moptional (string "+" <|> string "-") <> digit <> takeCharsWhile isDigit,
-   charConstant = (CharConstant <$ char '"' <*> anyChar <* char '"'
-                   <|> CharCode . fst . head . readHex . unpack
-                       <$> (digit <> takeCharsWhile isHexDigit <* string "X")) <* ignorable,
-   string_prod = char '"' *> takeWhile (/= "\"") <* char '"' <* ignorable
-                 <|> char '\'' *> takeWhile (/= "'") <* char '\'' <* ignorable,   -- Oberon2
+   charConstant = lexicalToken (CharConstant <$ char '"' <*> anyChar <* char '"'
+                                <|> CharCode . fst . head . readHex . unpack
+                                <$> (digit <> takeCharsWhile isHexDigit <* string "X")),
+   string_prod = lexicalToken (char '"' *> takeWhile (/= "\"") <* char '"'
+                               <|> char '\'' *> takeWhile (/= "'") <* char '\''),   -- Oberon2
    set = Set <$ delimiter "{" <*> sepBy element (delimiter ",") <* delimiter "}",
    element = Element <$> expression 
              <|> Range <$> expression <* delimiter ".." <*> expression,
@@ -231,12 +240,12 @@ grammar OberonGrammar{..} = OberonGrammar{
 
 moptional p = p <|> mempty
 
-keyword, delimiter, operator :: Text -> Parser (OberonGrammar f) Text Text
+delimiter, operator :: Text -> Parser (OberonGrammar f) Text Text
 
-keyword s = string s <* notSatisfyChar isAlphaNum <* ignorable
-delimiter s = string s <* ignorable
+delimiter s = lexicalToken (string s)
 operator = delimiter
 
+reservedWords :: [Text]
 reservedWords = ["ARRAY", "IMPORT", "RETURN",
                  "BEGIN", "IN", "THEN",
                  "BY", "IS", "TO",
@@ -249,11 +258,6 @@ reservedWords = ["ARRAY", "IMPORT", "RETURN",
                  "EXIT", "PROCEDURE",
                  "FOR", "RECORD",
                  "IF", "REPEAT"]
-
-ignorable :: Parser (OberonGrammar f) Text ()
-ignorable = whiteSpace
-            *> skipMany (string "(*" *> skipMany (notFollowedBy (string "*)") *> anyToken *> takeCharsWhile (/= '*'))
-                         *> string "*)" *> whiteSpace)
 
 {-
 https://cseweb.ucsd.edu/~wgg/CSE131B/oberon2.htm
