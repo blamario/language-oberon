@@ -14,6 +14,7 @@ import Data.Text (Text, unpack)
 import Data.Text.IO (readFile)
 import Text.Grampa (Ambiguous, Grammar, ParseResults, parseComplete)
 import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
+import System.Directory (doesFileExist)
 import System.FilePath (FilePath, replaceFileName)
 
 import Prelude hiding (readFile)
@@ -27,11 +28,13 @@ parseDefinitionModule = getCompose . Grammar.module_prod . parseComplete Grammar
 parseAndResolveModuleFile :: FilePath -> IO (Validation (NonEmpty Resolver.Error) (Module Identity))
 parseAndResolveModuleFile path =
    do Right [rootModule@(Module _ imports _ _ _)] <- parseModule <$> readFile path
-      importedModules <- (traverse . traverse) ((parseDefinitionModule <$>) . readFile)
-                         [(p, replaceFileName path $ unpack p <> ".Def") | (_, p) <- imports]
+      let readAvailableFile name = do isDefn <- doesFileExist (name <> ".Def")
+                                      readFile (name <> if isDefn then ".Def" else ".Mod")
+      importedModules <- (traverse . traverse) ((parseDefinitionModule <$>) . readAvailableFile)
+                         [(p, replaceFileName path $ unpack p) | (_, p) <- imports]
       let importMap = Map.fromList (assertSuccess <$> importedModules)
           assertSuccess (m, Left err) = error ("Parse error in module " <> unpack m <> ":" <> show err)
           assertSuccess (m, Right [p]) = (m, p)
-          assertSuccess (m, Right _) = error ("Ambiguos parses of module " <> unpack m)
+          assertSuccess (m, Right _) = error ("Ambiguous parses of module " <> unpack m)
           resolvedImportMap = Resolver.resolveModule resolvedImportMap <$> importMap
       return $ Resolver.resolveModule resolvedImportMap rootModule
