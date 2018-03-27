@@ -77,7 +77,7 @@ instance Pretty (Designator Identity) where
 instance Pretty (Type Identity) where
    pretty (TypeReference q) = pretty q
    pretty (ArrayType dimensions itemType) =
-      "ARRAY" <+> hsep (punctuate comma $ pretty <$> toList dimensions) <+> "OF" <+> pretty itemType
+      "ARRAY" <+> hsep (punctuate comma $ pretty <$> dimensions) <+> "OF" <+> pretty itemType
    pretty (RecordType baseType fields) = vsep ["RECORD" <+> maybe mempty (parens . pretty) baseType,
                                                indent 3 (vsep $ punctuate semi $ pretty <$> fields),
                                                "END"]
@@ -91,23 +91,18 @@ instance Pretty QualIdent where
 instance Pretty (FieldList Identity) where
    pretty (FieldList names t) = hsep (punctuate comma $ pretty <$> toList names) <+> ":" <+> pretty t
 
-instance Pretty ProcedureHeading where
-   pretty (ProcedureHeading indirect ident parameters) =
+instance Pretty (ProcedureHeading Identity) where
+   pretty (ProcedureHeading receiver indirect ident parameters) =
       "PROCEDURE" <> (if indirect then "*" else mempty) <+> pretty ident <> pretty parameters
 
-instance Pretty FormalParameters where
+instance Pretty (FormalParameters Identity) where
    pretty (FormalParameters sections result) =
       prettyList sections <+> maybe mempty (colon <+>) (pretty <$> result)
 
-instance Pretty FPSection where
+instance Pretty (FPSection Identity) where
    prettyList sections = lparen <> hsep (punctuate comma $ pretty <$> sections) <> rparen
    pretty (FPSection var names t) =
       (if var then ("VAR" <+>) else id) $ hsep (punctuate comma $ pretty <$> toList names) <+> colon <+> pretty t
-
-instance Pretty FormalType where
-   pretty (ArrayOf itemType) = "ARRAY" <+> "OF" <+> pretty itemType
-   pretty (FormalTypeReference name) = pretty name
-   pretty (FormalProcedureType parameters) = "PROCEDURE" <+> pretty parameters
    
 instance Pretty (ProcedureBody Identity) where
    pretty (ProcedureBody declarations body) =

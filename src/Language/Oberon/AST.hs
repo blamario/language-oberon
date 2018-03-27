@@ -21,8 +21,8 @@ type Import = (Maybe Ident, Ident)
 data Declaration f  = ConstantDeclaration IdentDef (ConstExpression f)
                     | TypeDeclaration IdentDef (Type f)
                     | VariableDeclaration IdentList (Type f)
-                    | ProcedureDeclaration ProcedureHeading (ProcedureBody f) Ident
-                    | ForwardDeclaration IdentDef (Maybe FormalParameters)
+                    | ProcedureDeclaration (ProcedureHeading f) (ProcedureBody f) Ident
+                    | ForwardDeclaration IdentDef (Maybe (FormalParameters f))
 
 deriving instance Data (Declaration Identity)
 deriving instance Data (Declaration Ambiguous)
@@ -84,10 +84,10 @@ deriving instance Show (f (Designator f)) => Show (Designator f)
 type ActualParameters f = [Expression f]
 
 data Type f = TypeReference QualIdent 
-            | ArrayType (NonEmpty (ConstExpression f)) (Type f)
+            | ArrayType [ConstExpression f] (Type f)
             | RecordType (Maybe BaseType) (FieldListSequence f)
             | PointerType (Type f)
-            | ProcedureType (Maybe FormalParameters)
+            | ProcedureType (Maybe (FormalParameters f))
 
 deriving instance Data (Type Identity)
 deriving instance Data (Type Ambiguous)
@@ -109,18 +109,21 @@ deriving instance Show (f (Designator f)) => Show (FieldList f)
 
 type IdentList = NonEmpty IdentDef
 
-data ProcedureHeading  =  ProcedureHeading Bool IdentDef (Maybe FormalParameters)
-   deriving (Data, Show)
+data ProcedureHeading f =  ProcedureHeading (Maybe (Bool, Ident, Ident)) Bool IdentDef (Maybe (FormalParameters f))
+data FormalParameters f  = FormalParameters [FPSection f] (Maybe QualIdent)
+data FPSection f  =  FPSection Bool (NonEmpty Ident) (Type f)
 
-data FormalParameters  = FormalParameters [FPSection] (Maybe QualIdent)
-   deriving (Data, Show)
-data FPSection  =  FPSection Bool (NonEmpty Ident) FormalType
-   deriving (Data, Show)
+deriving instance Data (ProcedureHeading Identity)
+deriving instance Data (ProcedureHeading Ambiguous)
+deriving instance Show (f (Designator f)) => Show (ProcedureHeading f)
 
-data FormalType  = ArrayOf FormalType
-                 | FormalTypeReference QualIdent 
-                 | FormalProcedureType (Maybe FormalParameters)
-   deriving (Data, Show)
+deriving instance Data (FormalParameters Identity)
+deriving instance Data (FormalParameters Ambiguous)
+deriving instance Show (f (Designator f)) => Show (FormalParameters f)
+
+deriving instance Data (FPSection Identity)
+deriving instance Data (FPSection Ambiguous)
+deriving instance Show (f (Designator f)) => Show (FPSection f)
 
 data ProcedureBody f =  ProcedureBody [Declaration f] (Maybe (StatementSequence f))
 

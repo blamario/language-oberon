@@ -67,10 +67,10 @@ data OberonGrammar f p = OberonGrammar {
    procedureType :: p (Type f),
    variableDeclaration :: p (Declaration f),
    procedureDeclaration :: p (Declaration f),
-   procedureHeading :: p ProcedureHeading,
-   formalParameters :: p FormalParameters,
-   fPSection :: p FPSection,
-   formalType :: p FormalType,
+   procedureHeading :: p (ProcedureHeading f),
+   formalParameters :: p (FormalParameters f),
+   fPSection :: p (FPSection f),
+   formalType :: p (Type f),
    procedureBody :: p (ProcedureBody f),
    forwardDeclaration :: p (Declaration f),
    statementSequence :: p [Ambiguous (Statement f)],
@@ -187,7 +187,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                <|> procedureType,
    qualident = QualIdent <$> ident <* delimiter "." <*> ident 
                <|> NonQualIdent <$> ident,
-   arrayType = ArrayType <$ keyword "ARRAY" <*> sepByNonEmpty length (delimiter ",") <* keyword "OF" <*> type_prod,
+   arrayType = ArrayType <$ keyword "ARRAY" <*> sepBy1 length (delimiter ",") <* keyword "OF" <*> type_prod,
    length = constExpression,
    recordType = RecordType <$ keyword "RECORD" <*> optional (delimiter "(" *> baseType <* delimiter ")") 
                 <*> fieldListSequence <* keyword "END",
@@ -199,15 +199,15 @@ grammar OberonGrammar{..} = OberonGrammar{
    procedureType = ProcedureType <$ keyword "PROCEDURE" <*> optional formalParameters,
    variableDeclaration = VariableDeclaration <$> identList <* delimiter ":" <*> type_prod,
    procedureDeclaration = ProcedureDeclaration <$> procedureHeading <* delimiter ";" <*> procedureBody <*> ident,
-   procedureHeading = ProcedureHeading <$ keyword "PROCEDURE" <*> (True <$ delimiter "*" <|> pure False) 
+   procedureHeading = ProcedureHeading Nothing <$ keyword "PROCEDURE" <*> (True <$ delimiter "*" <|> pure False) 
                       <*> identdef <*> optional formalParameters,
    formalParameters = FormalParameters <$ delimiter "(" <*> sepBy fPSection (delimiter ";") <* delimiter ")" 
                       <*> optional (delimiter ":" *> qualident),
    fPSection = FPSection <$> (True <$ keyword "VAR" <|> pure False) 
                <*> sepByNonEmpty ident (delimiter ",") <* delimiter ":" <*> formalType,
-   formalType = ArrayOf <$ keyword "ARRAY" <* keyword "OF" <*> formalType 
-                <|> FormalTypeReference <$> qualident 
-                <|> FormalProcedureType <$ keyword "PROCEDURE" <*> optional formalParameters,
+   formalType = ArrayType [] <$ keyword "ARRAY" <* keyword "OF" <*> formalType 
+                <|> TypeReference <$> qualident 
+                <|> ProcedureType <$ keyword "PROCEDURE" <*> optional formalParameters,
    procedureBody = ProcedureBody <$> declarationSequence 
                    <*> optional (keyword "BEGIN" *> statementSequence) <* keyword "END",
    forwardDeclaration = ForwardDeclaration <$ keyword "PROCEDURE" <* delimiter "^"
