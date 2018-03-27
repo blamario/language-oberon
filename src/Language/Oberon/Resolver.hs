@@ -51,7 +51,7 @@ resolveModule :: Map Ident (Validation (NonEmpty Error) (Module Identity)) -> Mo
               -> Validation (NonEmpty Error) (Module Identity)
 resolveModule modules (Module name imports declarations body name') = module'
    where moduleExports      :: Map Ident Scope
-         moduleGlobals      :: Map Ident (Bool, Validation (NonEmpty Error) (DeclarationRHS Identity))
+         moduleGlobals      :: Map Ident (AccessMode, Validation (NonEmpty Error) (DeclarationRHS Identity))
          importedModules    :: Map Ident (Validation (NonEmpty Error) (Module Identity))
          resolveDeclaration :: Scope -> Declaration Ambiguous -> Validation (NonEmpty Error) (Declaration Identity)
          resolveType        :: Scope -> Type Ambiguous -> Validation (NonEmpty Error) (Type Identity)
@@ -246,7 +246,7 @@ resolveModule modules (Module name imports declarations body name') = module'
          resolveBinding scope (DeclaredProcedure parameters) =
             DeclaredProcedure <$> traverse (resolveParameters scope) parameters
          
-declarationBinding :: Declaration f -> [(Ident, (Bool, DeclarationRHS f))]
+declarationBinding :: Declaration f -> [(Ident, (AccessMode, DeclarationRHS f))]
 declarationBinding (ConstantDeclaration (IdentDef name export) expr) =
    [(name, (export, DeclaredConstant expr))]
 declarationBinding (TypeDeclaration (IdentDef name export) typeDef) =
@@ -329,10 +329,10 @@ predefined = Success <$> Map.fromList
 
 exportsOfModule :: Module Identity -> Scope
 exportsOfModule = Map.mapMaybe isExported . globalsOfModule
-   where isExported (True, binding) = Just binding
-         isExported (False, _) = Nothing
+   where isExported (PrivateOnly, _) = Nothing
+         isExported (_, binding) = Just binding
 
-globalsOfModule :: Module Identity -> Map Ident (Bool, Validation (NonEmpty Error) (DeclarationRHS Identity))
+globalsOfModule :: Module Identity -> Map Ident (AccessMode, Validation (NonEmpty Error) (DeclarationRHS Identity))
 globalsOfModule (Module _ imports declarations _ _) = scope'
    where scope' = (Success <$>) <$> Map.fromList declarationBindings
          declarationBindings = concatMap declarationBinding declarations

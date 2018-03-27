@@ -28,7 +28,10 @@ deriving instance Data (Declaration Identity)
 deriving instance Data (Declaration Ambiguous)
 deriving instance (Show (f (Designator f)), Show (f (Statement f))) => Show (Declaration f)
 
-data IdentDef = IdentDef Ident Bool
+data IdentDef = IdentDef Ident AccessMode
+   deriving (Data, Show)
+
+data AccessMode = Exported | ReadOnly | PrivateOnly
    deriving (Data, Show)
 
 type ConstExpression = Expression

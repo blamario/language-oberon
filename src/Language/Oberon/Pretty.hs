@@ -31,8 +31,9 @@ instance Pretty (Declaration Identity) where
    pretty (ForwardDeclaration ident parameters) = "PROCEDURE" <+> "^" <+> pretty ident <+> pretty parameters
 
 instance Pretty IdentDef where
-   pretty (IdentDef name True) = pretty name <> "*"
-   pretty (IdentDef name False) = pretty name
+   pretty (IdentDef name Exported) = pretty name <> "*"
+   pretty (IdentDef name ReadOnly) = pretty name <> "-"
+   pretty (IdentDef name PrivateOnly) = pretty name
 
 instance Pretty (Expression Identity) where
    pretty = prettyPrec 0

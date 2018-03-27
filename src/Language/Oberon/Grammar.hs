@@ -119,7 +119,7 @@ definitionGrammar g@OberonGrammar{..} = (grammar g){
                  <*> pure Nothing <* keyword "END" <*> ident <* delimiter ".",
    procedureDeclaration = ProcedureDeclaration <$> procedureHeading
                           <*> (pure $ ProcedureBody [] Nothing) <*> pure mempty,
-   identdef = IdentDef <$> ident <*> pure True <* optional (delimiter "*")}
+   identdef = IdentDef <$> ident <*> pure Exported <* optional (delimiter "*")}
    
 grammar OberonGrammar{..} = OberonGrammar{
    module_prod = Module <$ (lexicalWhiteSpace *> keyword "MODULE") <*> ident <* delimiter ";"
@@ -136,7 +136,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                          <> many (procedureDeclaration <* delimiter ";"
                                   <|> forwardDeclaration <* delimiter ";"),
    constantDeclaration = ConstantDeclaration <$> identdef <* delimiter "=" <*> constExpression,
-   identdef = IdentDef <$> ident <*> (True <$ delimiter "*" <|> pure False),
+   identdef = IdentDef <$> ident <*> (Exported <$ delimiter "*" <|> pure PrivateOnly),
    constExpression = expression,
    expression = simpleExpression <**> (pure id <|> (flip . Relation) <$> relation <*> simpleExpression),
    simpleExpression = (Positive <$ operator "+" <|> Negative <$ operator "-" <|> pure id)
