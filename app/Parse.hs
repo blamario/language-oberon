@@ -37,6 +37,7 @@ data Output = Plain | Pretty Int | Tree
 
 data Opts = Opts
     { optsMode        :: GrammarMode
+    , optsOberon2     :: Bool
     , optsIndex       :: Int
     , optsOutput      :: Output
     , optsFile        :: Maybe FilePath
@@ -53,6 +54,7 @@ main = execParser opts >>= main'
     p :: Parser Opts
     p = Opts
         <$> (mode <|> pure ModuleWithImportsMode)
+        <*> (switch (long "oberon2"))
         <*> (option auto (long "index" <> help "Index of ambiguous parse" <> showDefault <> value 0 <> metavar "INT"))
         <*> (Pretty <$> option auto (long "pretty" <> help "Pretty-print output" <> metavar "WIDTH")
              <|> Tree <$ switch (long "tree" <> help "Print the output as an abstract syntax tree")
@@ -77,10 +79,10 @@ main' Opts{..} =
                      >>= case optsMode
                          of ModuleWithImportsMode -> \_-> parseAndResolveModuleFile file >>= succeed optsOutput
                             ModuleMode          -> go (Resolver.resolveModule mempty) Grammar.module_prod
-                                                   Grammar.oberonGrammar file
+                                                   chosenGrammar file
                             DefinitionMode      -> go (Resolver.resolveModule mempty) Grammar.module_prod
                                                    Grammar.oberonDefinitionGrammar file
-                            AmbiguousModuleMode -> go pure Grammar.module_prod Grammar.oberonGrammar file
+                            AmbiguousModuleMode -> go pure Grammar.module_prod chosenGrammar file
                             _                   -> error "A file usually contains a whole module."
 
         Nothing ->
@@ -88,14 +90,15 @@ main' Opts{..} =
             getLine >>=
             case optsMode of
                 ModuleMode          -> go (Resolver.resolveModule mempty) Grammar.module_prod
-                                          Grammar.oberonGrammar "<stdin>"
-                AmbiguousModuleMode -> go pure Grammar.module_prod Grammar.oberonGrammar "<stdin>"
+                                          chosenGrammar "<stdin>"
+                AmbiguousModuleMode -> go pure Grammar.module_prod chosenGrammar "<stdin>"
                 DefinitionMode      -> go (Resolver.resolveModule mempty) Grammar.module_prod
                                           Grammar.oberonDefinitionGrammar "<stdin>"
-                StatementMode       -> go pure Grammar.statement Grammar.oberonGrammar "<stdin>"
-                StatementsMode      -> go pure Grammar.statementSequence Grammar.oberonGrammar "<stdin>"
-                ExpressionMode      -> go pure Grammar.expression Grammar.oberonGrammar "<stdin>"
+                StatementMode       -> go pure Grammar.statement chosenGrammar "<stdin>"
+                StatementsMode      -> go pure Grammar.statementSequence chosenGrammar "<stdin>"
+                ExpressionMode      -> go pure Grammar.expression chosenGrammar "<stdin>"
   where
+    chosenGrammar = if optsOberon2 then Grammar.oberon2Grammar else Grammar.oberonGrammar
     go :: (Show f, Data f, Pretty f) => 
           (f' -> Validation (NonEmpty Resolver.Error) f)
        -> (forall p. Grammar.OberonGrammar Ambiguous p -> p f')

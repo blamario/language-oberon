@@ -146,7 +146,10 @@ resolveModule modules (Module name imports declarations body name') = module'
             For index <$> resolveExpression scope from <*> resolveExpression scope to 
                       <*> traverse (resolveExpression scope) by <*> resolveStatements scope body
          resolveStatement scope (Loop body) = Loop <$> resolveStatements scope body
-         resolveStatement scope (With inner outer body) = With inner outer <$> resolveStatements scope body
+         resolveStatement scope (With alternatives fallback) = With <$> traverse resolveAlt alternatives
+                                                                    <*> traverse (resolveStatements scope) fallback
+            where resolveAlt (WithAlternative name t action) =
+                     WithAlternative name t <$> resolveStatements scope action
          resolveStatement scope Exit = pure Exit
          resolveStatement scope (Return expression) = Return <$> traverse (resolveExpression scope) expression
 

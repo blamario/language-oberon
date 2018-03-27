@@ -118,12 +118,14 @@ instance Pretty (Statement Identity) where
       pretty procedure <> maybe mempty (parens . hsep . punctuate comma . (pretty <$>)) parameters
    pretty (If (ifThen :| elsifs) fallback) = vsep [branch "IF" ifThen,
                                                    vsep (branch "ELSIF" <$> elsifs),
-                                                   maybe mempty ("ELSE" <#>) (prettyBlock <$> fallback)]
+                                                   maybe mempty ("ELSE" <#>) (prettyBlock <$> fallback),
+                                                   "END"]
       where branch kwd (condition, body) = vsep [kwd <+> pretty condition <+> "THEN",
                                                  prettyBlock body]
    pretty (CaseStatement scrutinee cases fallback) = vsep ["CASE" <+> pretty scrutinee <+> "OF",
                                                            pretty cases,
-                                                           maybe mempty ("ELSE" <#>) (prettyBlock <$> fallback)]
+                                                           maybe mempty ("ELSE" <#>) (prettyBlock <$> fallback),
+                                                           "END"]
                                                            
    pretty (While condition body) = vsep ["WHILE" <+> pretty condition,
                                          prettyBlock body,
@@ -138,15 +140,21 @@ instance Pretty (Statement Identity) where
    pretty (Loop body) = vsep ["LOOP",
                               prettyBlock body,
                               "END"]
-   pretty (With inner outer body) = vsep ["WITH" <+> pretty inner <+> colon <+> pretty outer <+> "DO",
-                                          prettyBlock body,
-                                          "END"]
+   pretty (With alternatives fallback) =
+      vsep ["WITH",
+            pretty alternatives,
+            maybe mempty ("ELSE" <#>) (prettyBlock <$> fallback),
+            "END"]
    pretty Exit = "EXIT"
    pretty (Return result) = "RETURN" <+> maybe mempty pretty result
    
 instance Pretty (Case Identity) where
    pretty (Case labels body) = vsep ["|" <+> pretty labels <+> colon,
                                      prettyBlock body]
+   
+instance Pretty (WithAlternative Identity) where
+   pretty (WithAlternative name t body) = vsep ["|" <+> pretty name <+> colon <+> pretty t <+> "DO",
+                                                prettyBlock body]
 
 instance Pretty (CaseLabels Identity) where
    pretty (SingleLabel expression) = pretty expression

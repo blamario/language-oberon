@@ -145,7 +145,7 @@ data Statement f = EmptyStatement
                  | Repeat (StatementSequence f) (Expression f)
                  | For Ident (Expression f) (Expression f) (Maybe (Expression f)) (StatementSequence f)  -- Oberon2
                  | Loop (StatementSequence f)
-                 | With QualIdent QualIdent (StatementSequence f)
+                 | With (NonEmpty (WithAlternative f)) (Maybe (StatementSequence f))
                  | Exit 
                  | Return (Maybe (Expression f))
 
@@ -153,10 +153,16 @@ deriving instance Data (Statement Identity)
 deriving instance Data (Statement Ambiguous)
 deriving instance (Show (f (Designator f)), Show (f (Statement f))) => Show (Statement f)
 
+data WithAlternative f = WithAlternative QualIdent QualIdent (StatementSequence f)
+
 data Case f = Case (NonEmpty (CaseLabels f)) (StatementSequence f)
 
 data CaseLabels f = SingleLabel (ConstExpression f)
                   | LabelRange (ConstExpression f) (ConstExpression f)
+
+deriving instance Data (WithAlternative Identity)
+deriving instance Data (WithAlternative Ambiguous)
+deriving instance (Show (f (Designator f)), Show (f (Statement f))) => Show (WithAlternative f)
 
 deriving instance Data (Case Identity)
 deriving instance Data (Case Ambiguous)
