@@ -12,13 +12,13 @@ data Module f = Module Ident [Import] [Declaration f] (Maybe (StatementSequence 
 
 deriving instance Data (Module Identity)
 deriving instance Data (Module Ambiguous)
-deriving instance (Show (f (Designator f)), Show (f (Statement f))) => Show (Module f)
+deriving instance (Show (f (Designator f)), Show (f (Expression f)), Show (f (Statement f))) => Show (Module f)
 
 type Ident = Text
 
 type Import = (Maybe Ident, Ident)
 
-data Declaration f  = ConstantDeclaration IdentDef (ConstExpression f)
+data Declaration f  = ConstantDeclaration IdentDef (f (ConstExpression f))
                     | TypeDeclaration IdentDef (Type f)
                     | VariableDeclaration IdentList (Type f)
                     | ProcedureDeclaration (ProcedureHeading f) (ProcedureBody f) Ident
@@ -26,7 +26,7 @@ data Declaration f  = ConstantDeclaration IdentDef (ConstExpression f)
 
 deriving instance Data (Declaration Identity)
 deriving instance Data (Declaration Ambiguous)
-deriving instance (Show (f (Designator f)), Show (f (Statement f))) => Show (Declaration f)
+deriving instance (Show (f (Designator f)), Show (f (Expression f)), Show (f (Statement f))) => Show (Declaration f)
 
 data IdentDef = IdentDef Ident AccessMode
    deriving (Data, Show)
@@ -87,14 +87,14 @@ deriving instance Show (f (Designator f)) => Show (Designator f)
 type ActualParameters f = [Expression f]
 
 data Type f = TypeReference QualIdent 
-            | ArrayType [ConstExpression f] (Type f)
+            | ArrayType [f (ConstExpression f)] (Type f)
             | RecordType (Maybe BaseType) (FieldListSequence f)
             | PointerType (Type f)
             | ProcedureType (Maybe (FormalParameters f))
 
 deriving instance Data (Type Identity)
 deriving instance Data (Type Ambiguous)
-deriving instance Show (f (Designator f)) => Show (Type f)
+deriving instance (Show (f (Designator f)), Show (f (Expression f))) => Show (Type f)
 
 data QualIdent = QualIdent Ident Ident 
                | NonQualIdent Ident
@@ -109,7 +109,7 @@ data FieldList f = FieldList IdentList (Type f)
 
 deriving instance Data (FieldList Identity)
 deriving instance Data (FieldList Ambiguous)
-deriving instance Show (f (Designator f)) => Show (FieldList f)
+deriving instance (Show (f (Designator f)), Show (f (Expression f))) => Show (FieldList f)
 
 type IdentList = NonEmpty IdentDef
 
@@ -119,21 +119,21 @@ data FPSection f  =  FPSection Bool (NonEmpty Ident) (Type f)
 
 deriving instance Data (ProcedureHeading Identity)
 deriving instance Data (ProcedureHeading Ambiguous)
-deriving instance Show (f (Designator f)) => Show (ProcedureHeading f)
+deriving instance (Show (f (Designator f)),  Show (f (Expression f))) => Show (ProcedureHeading f)
 
 deriving instance Data (FormalParameters Identity)
 deriving instance Data (FormalParameters Ambiguous)
-deriving instance Show (f (Designator f)) => Show (FormalParameters f)
+deriving instance (Show (f (Designator f)),  Show (f (Expression f))) => Show (FormalParameters f)
 
 deriving instance Data (FPSection Identity)
 deriving instance Data (FPSection Ambiguous)
-deriving instance Show (f (Designator f)) => Show (FPSection f)
+deriving instance (Show (f (Designator f)),  Show (f (Expression f))) => Show (FPSection f)
 
 data ProcedureBody f =  ProcedureBody [Declaration f] (Maybe (StatementSequence f))
 
 deriving instance Data (ProcedureBody Identity)
 deriving instance Data (ProcedureBody Ambiguous)
-deriving instance (Show (f (Designator f)), Show (f (Statement f))) => Show (ProcedureBody f)
+deriving instance (Show (f (Designator f)), Show (f (Expression f)), Show (f (Statement f))) => Show (ProcedureBody f)
 
 type StatementSequence f  = [f (Statement f)]
 

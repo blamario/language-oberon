@@ -131,7 +131,7 @@ grammar2 g@OberonGrammar{..} = g1{
                                           <*> ident <* delimiter ":" <*> ident))
                       <*> (True <$ delimiter "*" <|> pure False) 
                       <*> identdef <*> optional formalParameters,
-   arrayType = ArrayType <$ keyword "ARRAY" <*> sepBy length (delimiter ",") <* keyword "OF" <*> type_prod,
+   arrayType = ArrayType <$ keyword "ARRAY" <*> sepBy (ambiguous length) (delimiter ",") <* keyword "OF" <*> type_prod,
    statement = statement1 <|> forStatement,
    forStatement = For <$ keyword "FOR" <*> ident <* delimiter ":=" <*> expression <* keyword "TO" <*> expression 
                   <*> optional (keyword "BY" *> constExpression) <* keyword "DO"
@@ -156,7 +156,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                                      <|> keyword "VAR" *> many (variableDeclaration <* delimiter ";"))
                          <> many (procedureDeclaration <* delimiter ";"
                                   <|> forwardDeclaration <* delimiter ";"),
-   constantDeclaration = ConstantDeclaration <$> identdef <* delimiter "=" <*> constExpression,
+   constantDeclaration = ConstantDeclaration <$> identdef <* delimiter "=" <*> ambiguous constExpression,
    identdef = IdentDef <$> ident <*> (Exported <$ delimiter "*" <|> pure PrivateOnly),
    constExpression = expression,
    expression = simpleExpression <**> (pure id <|> (flip . Relation) <$> relation <*> simpleExpression),
@@ -208,7 +208,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                <|> procedureType,
    qualident = QualIdent <$> ident <* delimiter "." <*> ident 
                <|> NonQualIdent <$> ident,
-   arrayType = ArrayType <$ keyword "ARRAY" <*> sepBy1 length (delimiter ",") <* keyword "OF" <*> type_prod,
+   arrayType = ArrayType <$ keyword "ARRAY" <*> sepBy1 (ambiguous length) (delimiter ",") <* keyword "OF" <*> type_prod,
    length = constExpression,
    recordType = RecordType <$ keyword "RECORD" <*> optional (parens baseType)
                 <*> fieldListSequence <* keyword "END",

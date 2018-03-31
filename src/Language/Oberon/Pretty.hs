@@ -21,7 +21,7 @@ instance Pretty (Module Identity) where
             prettyImport (Just inner, mod) = pretty inner <> ":=" <+> pretty mod
 
 instance Pretty (Declaration Identity) where
-   pretty (ConstantDeclaration ident expr) = "CONST" <+> pretty ident <+> "=" <+> pretty expr <> semi
+   pretty (ConstantDeclaration ident (Identity expr)) = "CONST" <+> pretty ident <+> "=" <+> pretty expr <> semi
    pretty (TypeDeclaration ident typeDef) = "TYPE" <+> pretty ident <+> "=" <+> pretty typeDef <> semi
    pretty (VariableDeclaration idents varType) =
       "VAR" <+> hsep (punctuate comma $ pretty <$> toList idents) <+> colon <+> pretty varType
@@ -78,7 +78,7 @@ instance Pretty (Designator Identity) where
 instance Pretty (Type Identity) where
    pretty (TypeReference q) = pretty q
    pretty (ArrayType dimensions itemType) =
-      "ARRAY" <+> hsep (punctuate comma $ pretty <$> dimensions) <+> "OF" <+> pretty itemType
+      "ARRAY" <+> hsep (punctuate comma $ pretty . runIdentity <$> dimensions) <+> "OF" <+> pretty itemType
    pretty (RecordType baseType fields) = vsep ["RECORD" <+> maybe mempty (parens . pretty) baseType,
                                                indent 3 (vsep $ punctuate semi $ pretty <$> toList fields),
                                                "END"]

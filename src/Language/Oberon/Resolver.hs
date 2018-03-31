@@ -19,7 +19,7 @@ import Text.Grampa (Ambiguous(..))
 
 import Language.Oberon.AST
 
-data DeclarationRHS f = DeclaredConstant (ConstExpression f)
+data DeclarationRHS f = DeclaredConstant (f (ConstExpression f))
                       | DeclaredType (Type f)
                       | DeclaredVariable (Type f)
                       | DeclaredProcedure (Maybe (FormalParameters f))
@@ -27,10 +27,12 @@ data DeclarationRHS f = DeclaredConstant (ConstExpression f)
 data Error = UnknownModule Ident
            | UnknownLocal Ident
            | UnknownImport QualIdent
-           | AmbiguousStatement [Statement Identity]
-           | InvalidStatement (NonEmpty Error)
            | AmbiguousDesignator [Designator Identity]
+           | AmbiguousExpression [Expression Identity]
+           | AmbiguousStatement [Statement Identity]
            | InvalidDesignator (NonEmpty Error)
+           | InvalidExpression (NonEmpty Error)
+           | InvalidStatement (NonEmpty Error)
            | NotAProcedure QualIdent
            | NotAType QualIdent
            | NotAValue QualIdent
@@ -53,6 +55,8 @@ resolveModule modules (Module name imports declarations body name') = module'
    where moduleExports      :: Map Ident Scope
          moduleGlobals      :: Map Ident (AccessMode, Validation (NonEmpty Error) (DeclarationRHS Identity))
          importedModules    :: Map Ident (Validation (NonEmpty Error) (Module Identity))
+         resolveBinding     :: Scope -> DeclarationRHS Ambiguous
+                            -> Validation (NonEmpty Error) (DeclarationRHS Identity)
          resolveDeclaration :: Scope -> Declaration Ambiguous -> Validation (NonEmpty Error) (Declaration Identity)
          resolveType        :: Scope -> Type Ambiguous -> Validation (NonEmpty Error) (Type Identity)
          resolveFields      :: Scope -> FieldList Ambiguous -> Validation (NonEmpty Error) (FieldList Identity)
@@ -82,8 +86,8 @@ resolveModule modules (Module name imports declarations body name') = module'
                          <$> Map.fromList (concatMap declarationBinding declarations)
          moduleGlobalScope = Map.union (snd <$> moduleGlobals) predefined
 
-         resolveDeclaration scope (ConstantDeclaration name expr) =
-            ConstantDeclaration name <$> resolveExpression scope expr
+         resolveDeclaration scope (ConstantDeclaration name (Ambiguous expr)) =
+            ConstantDeclaration name . Identity <$> uniqueExpression (resolveExpression scope <$> expr)
          resolveDeclaration scope (TypeDeclaration name typeDef) =
             TypeDeclaration name <$> resolveType scope typeDef
          resolveDeclaration scope (VariableDeclaration name typeDef) =
@@ -103,7 +107,9 @@ resolveModule modules (Module name imports declarations body name') = module'
 
          resolveType scope (TypeReference name) = pure (TypeReference name)
          resolveType scope (ArrayType dimensions itemType) =
-            ArrayType <$> (traverse (resolveExpression scope) dimensions) <*> resolveType scope itemType
+            ArrayType <$> (traverse (fmap Identity . uniqueExpression . (resolveExpression scope <$>) . unA) dimensions)
+                      <*> resolveType scope itemType
+            where unA (Ambiguous a) = a
          resolveType scope (RecordType baseType fields) = RecordType baseType <$> traverse (resolveFields scope) fields
          resolveType scope (PointerType baseType) = PointerType <$> resolveType scope baseType
          resolveType scope (ProcedureType parameters) = ProcedureType <$> traverse (resolveParameters scope) parameters
@@ -244,7 +250,8 @@ resolveModule modules (Module name imports declarations body name') = module'
                _ -> Failure (UnknownLocal name :| [])
                
 
-         resolveBinding scope (DeclaredConstant expression) = DeclaredConstant <$> resolveExpression scope expression
+         resolveBinding scope (DeclaredConstant (Ambiguous expression)) =
+            DeclaredConstant . Identity <$> uniqueExpression (resolveExpression scope <$> expression)
          resolveBinding scope (DeclaredType typeDef) = DeclaredType <$> resolveType scope typeDef
          resolveBinding scope (DeclaredVariable typeDef) = DeclaredVariable <$> resolveType scope typeDef
          resolveBinding scope (DeclaredProcedure parameters) =
@@ -272,8 +279,8 @@ predefined = Success <$> Map.fromList
     ("REAL", DeclaredType (TypeReference $ NonQualIdent "REAL")),
     ("LONGREAL", DeclaredType (TypeReference $ NonQualIdent "LONGREAL")),
     ("SET", DeclaredType (TypeReference $ NonQualIdent "SET")),
-    ("TRUE", DeclaredConstant (Read $ Identity $ Variable $ NonQualIdent "TRUE")),
-    ("FALSE", DeclaredConstant (Read $ Identity $ Variable $ NonQualIdent "FALSE")),
+    ("TRUE", DeclaredConstant (Identity $ Read $ Identity $ Variable $ NonQualIdent "TRUE")),
+    ("FALSE", DeclaredConstant (Identity $ Read $ Identity $ Variable $ NonQualIdent "FALSE")),
     ("ABS", DeclaredProcedure $ Just $
             FormalParameters [FPSection False (pure "n") $ TypeReference $ NonQualIdent "INTEGER"] $
             Just $ NonQualIdent "INTEGER"),
@@ -342,6 +349,7 @@ globalsOfModule (Module _ imports declarations _ _) = scope'
          declarationBindings = concatMap declarationBinding declarations
 
 uniqueDesignator = unique InvalidDesignator AmbiguousDesignator
+uniqueExpression = unique InvalidExpression AmbiguousExpression
 uniqueStatement = unique InvalidStatement AmbiguousStatement
 
 unique :: (NonEmpty Error -> Error) -> ([a] -> Error) 
