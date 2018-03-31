@@ -109,6 +109,7 @@ resolveModule modules (Module name imports declarations body name') = module'
          resolveType scope (ProcedureType parameters) = ProcedureType <$> traverse (resolveParameters scope) parameters
 
          resolveFields scope (FieldList names fieldType) = FieldList names <$> resolveType scope fieldType
+         resolveFields scope EmptyFieldList = pure EmptyFieldList
 
          resolveParameters scope (FormalParameters sections result) =
             FormalParameters <$> traverse resolveSection sections <*> pure result

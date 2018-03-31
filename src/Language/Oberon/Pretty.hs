@@ -80,7 +80,7 @@ instance Pretty (Type Identity) where
    pretty (ArrayType dimensions itemType) =
       "ARRAY" <+> hsep (punctuate comma $ pretty <$> dimensions) <+> "OF" <+> pretty itemType
    pretty (RecordType baseType fields) = vsep ["RECORD" <+> maybe mempty (parens . pretty) baseType,
-                                               indent 3 (vsep $ punctuate semi $ pretty <$> fields),
+                                               indent 3 (vsep $ punctuate semi $ pretty <$> toList fields),
                                                "END"]
    pretty (PointerType pointed) = "POINTER" <+> "TO" <+> pretty pointed
    pretty (ProcedureType parameters) = "PROCEDURE" <+> pretty parameters
@@ -91,6 +91,7 @@ instance Pretty QualIdent where
 
 instance Pretty (FieldList Identity) where
    pretty (FieldList names t) = hsep (punctuate comma $ pretty <$> toList names) <+> ":" <+> pretty t
+   pretty EmptyFieldList = mempty
 
 instance Pretty (ProcedureHeading Identity) where
    pretty (ProcedureHeading receiver indirect ident parameters) =

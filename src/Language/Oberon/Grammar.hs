@@ -213,8 +213,9 @@ grammar OberonGrammar{..} = OberonGrammar{
    recordType = RecordType <$ keyword "RECORD" <*> optional (parens baseType)
                 <*> fieldListSequence <* keyword "END",
    baseType = qualident,
-   fieldListSequence = sepBy fieldList (delimiter ";"),
-   fieldList = FieldList <$> identList <* delimiter ":" <*> type_prod,
+   fieldListSequence = sepByNonEmpty fieldList (delimiter ";"),
+   fieldList = FieldList <$> identList <* delimiter ":" <*> type_prod
+               <|> pure EmptyFieldList,
    identList = sepByNonEmpty identdef (delimiter ","),
    pointerType = PointerType <$ keyword "POINTER" <* keyword "TO" <*> type_prod,
    procedureType = ProcedureType <$ keyword "PROCEDURE" <*> optional formalParameters,

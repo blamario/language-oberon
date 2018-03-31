@@ -102,9 +102,10 @@ data QualIdent = QualIdent Ident Ident
 
 type BaseType  =  QualIdent
 
-type FieldListSequence f = [FieldList f]
+type FieldListSequence f = NonEmpty (FieldList f)
 
 data FieldList f = FieldList IdentList (Type f)
+                 | EmptyFieldList
 
 deriving instance Data (FieldList Identity)
 deriving instance Data (FieldList Ambiguous)
