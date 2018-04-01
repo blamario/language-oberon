@@ -35,6 +35,7 @@ data Error = UnknownModule Ident
            | InvalidStatement (NonEmpty Error)
            | NotAProcedure QualIdent
            | NotAType QualIdent
+           | NotATypeDesignator (Designator Ambiguous)
            | NotAValue QualIdent
            | NotWriteable QualIdent
            | ClashingImports
@@ -169,6 +170,12 @@ resolveModule predefinedScope modules (Module name imports declarations body nam
          resolveStatement scope Exit = pure Exit
          resolveStatement scope (Return expression) = Return <$> traverse (resolveExpression scope) expression
 
+         resolveExpression scope (Relation Is left (Read (Ambiguous rights))) =
+            Relation Is <$> resolveExpression scope left
+                        <*> (typeToValue <$> sconcat (designatorToType <$> rights))
+            where typeToValue (TypeReference n) = Read (Identity (Variable n))
+                  designatorToType (Variable q) = resolveType scope (TypeReference q)
+                  designatorToType d = Failure (NotATypeDesignator d :| [])
          resolveExpression scope (Relation op left right) =
             Relation op <$> resolveExpression scope left <*> resolveExpression scope right
          resolveExpression scope (Positive e) = Positive <$> resolveExpression scope e
