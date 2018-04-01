@@ -16,7 +16,8 @@ instance Pretty (Module Identity) where
             else "IMPORT" <+> align (vsep (punctuate comma $ prettyImport <$> imports)) <> semi,
             vsep (pretty <$> declarations),
             maybe mempty (\statements-> vsep ["BEGIN", prettyBlock statements]) body,
-            "END" <+> pretty name' <> "."]
+            "END" <+> pretty name' <> ".",
+            mempty]
       where prettyImport (Nothing, mod) = pretty mod
             prettyImport (Just inner, mod) = pretty inner <> ":=" <+> pretty mod
 
@@ -63,6 +64,13 @@ instance Pretty (Expression Identity) where
 
 instance Pretty RelOp where
    pretty Equal = "="
+   pretty Unequal = "#"
+   pretty Less = "<"
+   pretty LessOrEqual =  "<="
+   pretty Greater = ">"
+   pretty GreaterOrEqual = ">="
+   pretty In = "IN"
+   pretty Is = "IS"
 
 instance Pretty (Element Identity) where
    pretty (Element e) = pretty e
