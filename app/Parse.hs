@@ -77,10 +77,11 @@ main' Opts{..} =
     case optsFile of
         Just file -> readFile file
                      >>= case optsMode
-                         of ModuleWithImportsMode -> \_-> parseAndResolveModuleFile file >>= succeed optsOutput
-                            ModuleMode          -> go (Resolver.resolveModule mempty) Grammar.module_prod
+                         of ModuleWithImportsMode -> \_-> parseAndResolveModuleFile optsOberon2 file
+                                                          >>= succeed optsOutput
+                            ModuleMode          -> go (Resolver.resolveModule predefined mempty) Grammar.module_prod
                                                    chosenGrammar file
-                            DefinitionMode      -> go (Resolver.resolveModule mempty) Grammar.module_prod
+                            DefinitionMode      -> go (Resolver.resolveModule predefined mempty) Grammar.module_prod
                                                    Grammar.oberonDefinitionGrammar file
                             AmbiguousModuleMode -> go pure Grammar.module_prod chosenGrammar file
                             _                   -> error "A file usually contains a whole module."
@@ -89,16 +90,17 @@ main' Opts{..} =
             forever $
             getLine >>=
             case optsMode of
-                ModuleMode          -> go (Resolver.resolveModule mempty) Grammar.module_prod
+                ModuleMode          -> go (Resolver.resolveModule predefined mempty) Grammar.module_prod
                                           chosenGrammar "<stdin>"
                 AmbiguousModuleMode -> go pure Grammar.module_prod chosenGrammar "<stdin>"
-                DefinitionMode      -> go (Resolver.resolveModule mempty) Grammar.module_prod
+                DefinitionMode      -> go (Resolver.resolveModule predefined mempty) Grammar.module_prod
                                           Grammar.oberonDefinitionGrammar "<stdin>"
                 StatementMode       -> go pure Grammar.statement chosenGrammar "<stdin>"
                 StatementsMode      -> go pure Grammar.statementSequence chosenGrammar "<stdin>"
                 ExpressionMode      -> go pure Grammar.expression chosenGrammar "<stdin>"
   where
     chosenGrammar = if optsOberon2 then Grammar.oberon2Grammar else Grammar.oberonGrammar
+    predefined = if optsOberon2 then Resolver.predefined2 else Resolver.predefined
     go :: (Show f, Data f, Pretty f) => 
           (f' -> Validation (NonEmpty Resolver.Error) f)
        -> (forall p. Grammar.OberonGrammar Ambiguous p -> p f')

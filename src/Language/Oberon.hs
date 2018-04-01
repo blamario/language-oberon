@@ -25,8 +25,8 @@ parseModule = getCompose . Grammar.module_prod . parseComplete Grammar.oberonGra
 parseDefinitionModule :: Text -> ParseResults [Module Ambiguous]
 parseDefinitionModule = getCompose . Grammar.module_prod . parseComplete Grammar.oberonDefinitionGrammar
 
-parseAndResolveModuleFile :: FilePath -> IO (Validation (NonEmpty Resolver.Error) (Module Identity))
-parseAndResolveModuleFile path =
+parseAndResolveModuleFile :: Bool -> FilePath -> IO (Validation (NonEmpty Resolver.Error) (Module Identity))
+parseAndResolveModuleFile oberon2 path =
    do Right [rootModule@(Module _ imports _ _ _)] <- parseModule <$> readFile path
       let readAvailableFile name = do isDefn <- doesFileExist (name <> ".Def")
                                       readFile (name <> if isDefn then ".Def" else ".Mod")
@@ -36,5 +36,6 @@ parseAndResolveModuleFile path =
           assertSuccess (m, Left err) = error ("Parse error in module " <> unpack m <> ":" <> show err)
           assertSuccess (m, Right [p]) = (m, p)
           assertSuccess (m, Right _) = error ("Ambiguous parses of module " <> unpack m)
-          resolvedImportMap = Resolver.resolveModule resolvedImportMap <$> importMap
-      return $ Resolver.resolveModule resolvedImportMap rootModule
+          resolvedImportMap = Resolver.resolveModule predefinedScope resolvedImportMap <$> importMap
+          predefinedScope = if oberon2 then Resolver.predefined2 else Resolver.predefined
+      return $ Resolver.resolveModule predefinedScope resolvedImportMap rootModule

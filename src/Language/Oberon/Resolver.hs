@@ -42,16 +42,16 @@ data Error = UnknownModule Ident
 
 type Scope = Map Ident (Validation (NonEmpty Error) (DeclarationRHS Identity))
 
-resolveModules :: Map Ident (Module Ambiguous) 
+resolveModules :: Scope -> Map Ident (Module Ambiguous)
                   -> Validation (NonEmpty (Ident, NonEmpty Error)) (Map Ident (Module Identity))
-resolveModules modules = traverseWithKey extractErrors modules'
-   where modules' = resolveModule modules' <$> modules
+resolveModules predefinedScope modules = traverseWithKey extractErrors modules'
+   where modules' = resolveModule predefinedScope modules' <$> modules
          extractErrors moduleKey (Failure e)   = Failure ((moduleKey, e) :| [])
          extractErrors _         (Success mod) = Success mod
 
-resolveModule :: Map Ident (Validation (NonEmpty Error) (Module Identity)) -> Module Ambiguous
+resolveModule :: Scope -> Map Ident (Validation (NonEmpty Error) (Module Identity)) -> Module Ambiguous
               -> Validation (NonEmpty Error) (Module Identity)
-resolveModule modules (Module name imports declarations body name') = module'
+resolveModule predefinedScope modules (Module name imports declarations body name') = module'
    where moduleExports      :: Map Ident Scope
          moduleGlobals      :: Map Ident (AccessMode, Validation (NonEmpty Error) (DeclarationRHS Identity))
          importedModules    :: Map Ident (Validation (NonEmpty Error) (Module Identity))
@@ -84,7 +84,7 @@ resolveModule modules (Module name imports declarations body name') = module'
          moduleExports = foldMap exportsOfModule <$> importedModules
          moduleGlobals = (resolveBinding moduleGlobalScope <$>)
                          <$> Map.fromList (concatMap declarationBinding declarations)
-         moduleGlobalScope = Map.union (snd <$> moduleGlobals) predefined
+         moduleGlobalScope = Map.union (snd <$> moduleGlobals) predefinedScope
 
          resolveDeclaration scope (ConstantDeclaration name (Ambiguous expr)) =
             ConstantDeclaration name . Identity <$> uniqueExpression (resolveExpression scope <$> expr)
@@ -95,11 +95,20 @@ resolveModule modules (Module name imports declarations body name') = module'
          resolveDeclaration scope (ProcedureDeclaration head (ProcedureBody declarations statements) name) =
             ProcedureDeclaration <$> resolveHeading head
                                  <*> (ProcedureBody <$> sequenceA declarations'
-                                                    <*> (traverse (resolveStatements scope') statements))
+                                                    <*> (traverse (resolveStatements scope'') statements))
                                  <*> pure name
-            where scope' = Map.union (resolveBinding scope . snd <$> Map.fromList declarationBindings) scope
+            where scope'' = Map.union (resolveBinding scope . snd <$> Map.fromList declarationBindings) scope'
+                  scope' = Map.union (headBindings head) scope
+                  headBindings (ProcedureHeading receiver indirect name parameters) =
+                     Map.union (foldMap receiverBinding receiver) (foldMap parametersBinding parameters)
+                  receiverBinding (_, name, t) =
+                     Map.singleton name (DeclaredVariable <$> resolveType scope (TypeReference $ NonQualIdent t))
+                  parametersBinding (FormalParameters sections _return) = foldMap sectionBinding sections
+                  sectionBinding (FPSection var names t) = foldMap parameterBinding names
+                     where parameterBinding name = Map.singleton name (DeclaredVariable <$> resolveType scope t)
+                     
                   declarationBindings = concatMap declarationBinding declarations
-                  declarations' = resolveDeclaration scope' <$> declarations
+                  declarations' = resolveDeclaration scope'' <$> declarations
                   resolveHeading (ProcedureHeading receiver indirect name parameters) =
                      ProcedureHeading receiver indirect name <$> traverse (resolveParameters scope) parameters
          resolveDeclaration scope (ForwardDeclaration name parameters) =
@@ -269,7 +278,7 @@ declarationBinding (ProcedureDeclaration (ProcedureHeading _ _ (IdentDef name ex
 declarationBinding (ForwardDeclaration (IdentDef name export) parameters) =
    [(name, (export, DeclaredProcedure parameters))]
 
-predefined :: Scope
+predefined, predefined2 :: Scope
 predefined = Success <$> Map.fromList
    [("BOOLEAN", DeclaredType (TypeReference $ NonQualIdent "BOOLEAN")),
     ("CHAR", DeclaredType (TypeReference $ NonQualIdent "CHAR")),
@@ -337,6 +346,12 @@ predefined = Success <$> Map.fromList
             FormalParameters [FPSection False (pure "n") $ TypeReference $ NonQualIdent "POINTER"] Nothing),
     ("HALT", DeclaredProcedure $ Just $
              FormalParameters [FPSection False (pure "n") $ TypeReference $ NonQualIdent "INTEGER"] Nothing)]
+
+predefined2 = predefined <>
+   (Success <$> Map.fromList
+    [("ASSERT", DeclaredProcedure $ Just $
+             FormalParameters [FPSection False (pure "s") $ TypeReference $ NonQualIdent "ARRAY",
+                               FPSection False (pure "n") $ TypeReference $ NonQualIdent "ARRAY"] Nothing)])
 
 exportsOfModule :: Module Identity -> Scope
 exportsOfModule = Map.mapMaybe isExported . globalsOfModule
