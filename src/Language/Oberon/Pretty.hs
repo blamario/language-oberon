@@ -160,6 +160,7 @@ instance Pretty (Statement Identity) where
 instance Pretty (Case Identity) where
    pretty (Case labels body) = vsep ["|" <+> pretty labels <+> colon,
                                      prettyBlock body]
+   pretty EmptyCase = mempty
    
 instance Pretty (WithAlternative Identity) where
    pretty (WithAlternative name t body) = vsep ["|" <+> pretty name <+> colon <+> pretty t <+> "DO",

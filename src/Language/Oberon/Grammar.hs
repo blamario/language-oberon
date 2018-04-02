@@ -251,9 +251,10 @@ grammar OberonGrammar{..} = OberonGrammar{
        <*> sepByNonEmpty ((,) <$> expression <* keyword "THEN" <*> statementSequence) (keyword "ELSIF")
        <*> optional (keyword "ELSE" *> statementSequence) <* keyword "END",
    caseStatement = CaseStatement <$ keyword "CASE" <*> expression
-       <*  keyword "OF" <*> sepBy case_prod (skipSome $ delimiter "|")
+       <*  keyword "OF" <*> sepByNonEmpty case_prod (delimiter "|")
        <*> optional (keyword "ELSE" *> statementSequence) <* keyword "END",
-   case_prod  =  Case <$> caseLabelList <* delimiter ":" <*> statementSequence,
+   case_prod  =  Case <$> caseLabelList <* delimiter ":" <*> statementSequence
+                 <|> pure EmptyCase,
    caseLabelList  =  sepByNonEmpty caseLabels (delimiter ","),
    caseLabels = SingleLabel <$> constExpression 
                 <|> LabelRange <$> constExpression <* delimiter ".." <*> constExpression,

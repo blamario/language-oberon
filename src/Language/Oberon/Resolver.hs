@@ -152,6 +152,7 @@ resolveModule predefinedScope modules (Module name imports declarations body nam
                           <*> traverse (resolveStatements scope) fallback
             where resolveCase (Case caseLabels action) =
                      Case <$> traverse resolveLabels caseLabels <*> resolveStatements scope action
+                  resolveCase EmptyCase = pure EmptyCase
                   resolveLabels (SingleLabel expression) = SingleLabel <$> resolveExpression scope expression
                   resolveLabels (LabelRange low high) =
                      LabelRange <$> resolveExpression scope low <*> resolveExpression scope high

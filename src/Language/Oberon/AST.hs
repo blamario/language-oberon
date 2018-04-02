@@ -141,7 +141,7 @@ data Statement f = EmptyStatement
                  | Assignment (AmbDesignator f) (Expression f)
                  | ProcedureCall (AmbDesignator f) (Maybe (ActualParameters f))
                  | If (NonEmpty (Expression f, StatementSequence f)) (Maybe (StatementSequence f))
-                 | CaseStatement (Expression f) [Case f] (Maybe (StatementSequence f))
+                 | CaseStatement (Expression f) (NonEmpty (Case f)) (Maybe (StatementSequence f))
                  | While (Expression f) (StatementSequence f)
                  | Repeat (StatementSequence f) (Expression f)
                  | For Ident (Expression f) (Expression f) (Maybe (Expression f)) (StatementSequence f)  -- Oberon2
@@ -157,6 +157,7 @@ deriving instance (Show (f (Designator f)), Show (f (Statement f))) => Show (Sta
 data WithAlternative f = WithAlternative QualIdent QualIdent (StatementSequence f)
 
 data Case f = Case (NonEmpty (CaseLabels f)) (StatementSequence f)
+            | EmptyCase
 
 data CaseLabels f = SingleLabel (ConstExpression f)
                   | LabelRange (ConstExpression f) (ConstExpression f)
