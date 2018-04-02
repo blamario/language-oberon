@@ -19,19 +19,29 @@ import System.FilePath (FilePath, replaceFileName)
 
 import Prelude hiding (readFile)
 
-parseModule :: Text -> ParseResults [Module Ambiguous]
-parseModule = getCompose . Grammar.module_prod . parseComplete Grammar.oberonGrammar
+parseModule :: Bool -> Text -> ParseResults [Module Ambiguous]
+parseModule oberon2 = getCompose . Grammar.module_prod
+                      . parseComplete (if oberon2 then Grammar.oberon2Grammar else Grammar.oberonGrammar)
 
-parseDefinitionModule :: Text -> ParseResults [Module Ambiguous]
-parseDefinitionModule = getCompose . Grammar.module_prod . parseComplete Grammar.oberonDefinitionGrammar
+parseDefinitionModule :: Bool -> Text -> ParseResults [Module Ambiguous]
+parseDefinitionModule oberon2 = getCompose . Grammar.module_prod
+                                . parseComplete (if oberon2 then Grammar.oberon2DefinitionGrammar
+                                                 else Grammar.oberonDefinitionGrammar)
+
+parseNamedModule :: Bool -> FilePath -> Text -> IO (ParseResults [Module Ambiguous])
+parseNamedModule oberon2 path name =
+   do let basePath = replaceFileName path (unpack name)
+      isDefn <- doesFileExist (basePath <> ".Def")
+      let grammar = if oberon2
+                    then if isDefn then Grammar.oberon2DefinitionGrammar else Grammar.oberon2Grammar
+                    else if isDefn then Grammar.oberonDefinitionGrammar else Grammar.oberonGrammar
+      getCompose . Grammar.module_prod . parseComplete grammar
+         <$> readFile (basePath <> if isDefn then ".Def" else ".Mod")
 
 parseAndResolveModuleFile :: Bool -> FilePath -> IO (Validation (NonEmpty Resolver.Error) (Module Identity))
 parseAndResolveModuleFile oberon2 path =
-   do Right [rootModule@(Module _ imports _ _ _)] <- parseModule <$> readFile path
-      let readAvailableFile name = do isDefn <- doesFileExist (name <> ".Def")
-                                      readFile (name <> if isDefn then ".Def" else ".Mod")
-      importedModules <- (traverse . traverse) ((parseDefinitionModule <$>) . readAvailableFile)
-                         [(p, replaceFileName path $ unpack p) | (_, p) <- imports]
+   do Right [rootModule@(Module _ imports _ _ _)] <- parseModule oberon2 <$> readFile path
+      importedModules <- (traverse . traverse) (parseNamedModule oberon2 path) [(p, p) | (_, p) <- imports]
       let importMap = Map.fromList (assertSuccess <$> importedModules)
           assertSuccess (m, Left err) = error ("Parse error in module " <> unpack m <> ":" <> show err)
           assertSuccess (m, Right [p]) = (m, p)

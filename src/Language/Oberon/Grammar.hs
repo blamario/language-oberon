@@ -108,14 +108,19 @@ instance Lexical (OberonGrammar f) where
                                            guard (w `notElem` reservedWords)
                                            return w)
 
-oberonGrammar, oberon2Grammar, oberonDefinitionGrammar :: Grammar (OberonGrammar Ambiguous) Parser Text
+oberonGrammar, oberon2Grammar, oberonDefinitionGrammar, oberon2DefinitionGrammar
+   :: Grammar (OberonGrammar Ambiguous) Parser Text
 oberonGrammar = fixGrammar grammar
 oberon2Grammar = fixGrammar grammar2
 oberonDefinitionGrammar = fixGrammar definitionGrammar
+oberon2DefinitionGrammar = fixGrammar definitionGrammar2
 
 grammar, definitionGrammar :: GrammarBuilder (OberonGrammar Ambiguous) (OberonGrammar Ambiguous) Parser Text
 
-definitionGrammar g@OberonGrammar{..} = (grammar g){
+definitionGrammar g@OberonGrammar{..} = definitionMixin (grammar g)
+definitionGrammar2 g@OberonGrammar{..} = definitionMixin (grammar2 g)
+
+definitionMixin g@OberonGrammar{..} = g{
    module_prod = Module <$ (lexicalWhiteSpace *> keyword "DEFINITION") <*> ident <* delimiter ";"
                  <*> moptional importList <*> declarationSequence
                  <*> pure Nothing <* keyword "END" <*> ident <* delimiter ".",
