@@ -22,7 +22,7 @@ import Language.Oberon.AST
 data DeclarationRHS f = DeclaredConstant (f (ConstExpression f))
                       | DeclaredType (Type f)
                       | DeclaredVariable (Type f)
-                      | DeclaredProcedure (Maybe (FormalParameters f))
+                      | DeclaredProcedure Bool (Maybe (FormalParameters f))
 
 data Error = UnknownModule Ident
            | UnknownLocal Ident
@@ -34,6 +34,7 @@ data Error = UnknownModule Ident
            | InvalidExpression (NonEmpty Error)
            | InvalidStatement (NonEmpty Error)
            | NotAProcedure QualIdent
+           | NotARecord QualIdent
            | NotAType QualIdent
            | NotATypeDesignator (Designator Ambiguous)
            | NotAValue QualIdent
@@ -52,7 +53,7 @@ resolveModules predefinedScope modules = traverseWithKey extractErrors modules'
 
 resolveModule :: Scope -> Map Ident (Validation (NonEmpty Error) (Module Identity)) -> Module Ambiguous
               -> Validation (NonEmpty Error) (Module Identity)
-resolveModule predefinedScope modules (Module name imports declarations body name') = module'
+resolveModule predefinedScope modules (Module moduleName imports declarations body name') = module'
    where moduleExports      :: Map Ident Scope
          moduleGlobals      :: Map Ident (AccessMode, Validation (NonEmpty Error) (DeclarationRHS Identity))
          importedModules    :: Map Ident (Validation (NonEmpty Error) (Module Identity))
@@ -71,7 +72,7 @@ resolveModule predefinedScope modules (Module name imports declarations body nam
          resolveName        :: Scope -> QualIdent -> Validation (NonEmpty Error) (DeclarationRHS Identity)
          resolveTypeName    :: Scope -> QualIdent -> Validation (NonEmpty Error) QualIdent
 
-         module' = Module name imports
+         module' = Module moduleName imports
                    <$> traverse (resolveDeclaration moduleGlobalScope) declarations
                    <*> traverse (resolveStatements moduleGlobalScope) body
                    <*> pure name'
@@ -84,7 +85,7 @@ resolveModule predefinedScope modules (Module name imports declarations body nam
 
          moduleExports = foldMap exportsOfModule <$> importedModules
          moduleGlobals = (resolveBinding moduleGlobalScope <$>)
-                         <$> Map.fromList (concatMap declarationBinding declarations)
+                         <$> Map.fromList (concatMap (declarationBinding moduleName) declarations)
          moduleGlobalScope = Map.union (snd <$> moduleGlobals) predefinedScope
 
          resolveDeclaration scope (ConstantDeclaration name (Ambiguous expr)) =
@@ -108,7 +109,7 @@ resolveModule predefinedScope modules (Module name imports declarations body nam
                   sectionBinding (FPSection var names t) = foldMap parameterBinding names
                      where parameterBinding name = Map.singleton name (DeclaredVariable <$> resolveType scope t)
                      
-                  declarationBindings = concatMap declarationBinding declarations
+                  declarationBindings = concatMap (declarationBinding moduleName) declarations
                   declarations' = resolveDeclaration scope'' <$> declarations
                   resolveHeading (ProcedureHeading receiver indirect name parameters) =
                      ProcedureHeading receiver indirect name <$> traverse (resolveParameters scope) parameters
@@ -206,11 +207,24 @@ resolveModule predefinedScope modules (Module name imports declarations body nam
          resolveExpression scope (Set elements) = Set <$> traverse (resolveElement scope) elements
          resolveExpression scope (Read (Ambiguous designators)) =
             Read . Identity <$> uniqueDesignator (resolveDesignator scope <$> designators)
-         resolveExpression scope (FunctionCall (Ambiguous functions) parameters) =
-            FunctionCall . Identity
-            <$> uniqueDesignator (resolveProcedure scope <$> functions)
-            <*> traverse (resolveExpression scope) parameters
+         resolveExpression scope (FunctionCall (Ambiguous functions) parameters)
+            | Success (Variable q) <- uniqueDesignator (resolveProcedure scope <$> functions),
+              Success (DeclaredProcedure True _) <- resolveName scope q =
+                 FunctionCall (Identity $ Variable q)
+                 <$> traverse (resolveExpressionOrType scope) parameters
+            | otherwise =
+                 FunctionCall . Identity
+                 <$> uniqueDesignator (resolveProcedure scope <$> functions)
+                 <*> traverse (resolveExpression scope) parameters
          resolveExpression scope (Not e) = Negative <$> resolveExpression scope e
+
+         resolveExpressionOrType scope (Read (Ambiguous designators)) =
+            Read . Identity <$> uniqueDesignator (resolveDesignatorOrType scope <$> designators)
+         resolveExpressionOrType scope e = resolveExpression scope e
+
+         resolveDesignatorOrType scope (Variable q)
+            | Success DeclaredType{} <- resolveName scope q = Success (Variable q)
+         resolveDesignatorOrType scope e = resolveDesignator scope e
 
          resolveElement scope (Element e) = Element <$> resolveExpression scope e
          resolveElement scope (Range left right) =
@@ -224,7 +238,7 @@ resolveModule predefinedScope modules (Module name imports declarations body nam
          resolveDesignator scope (Field record field) = Field <$> resolveRecord scope record <*> pure field
          resolveDesignator scope (Index array indexes) = Index <$> resolveArray scope array
                                                                <*> traverse (resolveExpression scope) indexes
-         resolveDesignator scope (TypeGuard designator subtype) = TypeGuard <$> resolveDesignator scope designator
+         resolveDesignator scope (TypeGuard designator subtype) = TypeGuard <$> resolveRecord scope designator
                                                                   <*> resolveTypeName scope subtype
          resolveDesignator scope (Dereference pointer) = Dereference <$> resolvePointer scope pointer
 
@@ -234,12 +248,21 @@ resolveModule predefinedScope modules (Module name imports declarations body nam
                Success DeclaredType{} -> Success q
                Success _ -> Failure (NotAType q :| [])
 
+         resolveTypeReference scope (TypeReference name) =
+            case resolveName scope name
+            of Failure err ->  Failure err
+               Success (DeclaredType t) -> resolveTypeReference scope t
+               Success _ -> Failure (NotAType name :| [])
+         resolveTypeReference scope t = pure t
+
          resolveProcedure scope d@(Variable q) =
             case resolveName scope q
             of Failure err ->  Failure err
                Success DeclaredType{} -> Failure (NotAValue q :| [])
                Success DeclaredProcedure{} -> resolveDesignator scope d
-               Success _ -> resolveDesignator scope d
+               Success (DeclaredVariable t)
+                  | Success ProcedureType{} <- resolveTypeReference scope t -> resolveDesignator scope d
+                  | otherwise -> Failure (NotAProcedure q :| [])
          resolveProcedure scope d = resolveDesignator scope d
 
          resolveWriteable scope d@(Variable q) =
@@ -251,7 +274,19 @@ resolveModule predefinedScope modules (Module name imports declarations body nam
                Success DeclaredVariable{} -> resolveDesignator scope d
          resolveWriteable scope d = resolveDesignator scope d
 
-         resolveRecord = resolveDesignator
+         resolveRecord scope d@(Variable q) =
+            case resolveName scope q
+            of Failure err ->  Failure err
+               Success DeclaredType{} -> Failure (NotAValue q :| [])
+               Success DeclaredProcedure{} -> Failure (NotAValue q :| [])
+               Success (DeclaredVariable t) -> resolveDesignator scope d
+               Success (DeclaredVariable t)
+                  | Success RecordType{} <- resolveTypeReference scope t -> resolveDesignator scope d
+                  | Success (PointerType t') <- resolveTypeReference scope t,
+                    Success RecordType{} <- resolveTypeReference scope t' -> resolveDesignator scope d
+                  | otherwise -> Failure (NotARecord q :| [])
+         resolveRecord scope d = resolveDesignator scope d
+
          resolveArray = resolveDesignator
          resolvePointer = resolveDesignator
 
@@ -271,20 +306,20 @@ resolveModule predefinedScope modules (Module name imports declarations body nam
             DeclaredConstant . Identity <$> uniqueExpression (resolveExpression scope <$> expression)
          resolveBinding scope (DeclaredType typeDef) = DeclaredType <$> resolveType scope typeDef
          resolveBinding scope (DeclaredVariable typeDef) = DeclaredVariable <$> resolveType scope typeDef
-         resolveBinding scope (DeclaredProcedure parameters) =
-            DeclaredProcedure <$> traverse (resolveParameters scope) parameters
+         resolveBinding scope (DeclaredProcedure special parameters) =
+            DeclaredProcedure special <$> traverse (resolveParameters scope) parameters
          
-declarationBinding :: Declaration f -> [(Ident, (AccessMode, DeclarationRHS f))]
-declarationBinding (ConstantDeclaration (IdentDef name export) expr) =
+declarationBinding :: Ident -> Declaration f -> [(Ident, (AccessMode, DeclarationRHS f))]
+declarationBinding _ (ConstantDeclaration (IdentDef name export) expr) =
    [(name, (export, DeclaredConstant expr))]
-declarationBinding (TypeDeclaration (IdentDef name export) typeDef) =
+declarationBinding _ (TypeDeclaration (IdentDef name export) typeDef) =
    [(name, (export, DeclaredType typeDef))]
-declarationBinding (VariableDeclaration names typeDef) =
+declarationBinding _ (VariableDeclaration names typeDef) =
    [(name, (export, DeclaredVariable typeDef)) | (IdentDef name export) <- NonEmpty.toList names]
-declarationBinding (ProcedureDeclaration (ProcedureHeading _ _ (IdentDef name export) parameters) _ _) =
-   [(name, (export, DeclaredProcedure parameters))]
-declarationBinding (ForwardDeclaration (IdentDef name export) parameters) =
-   [(name, (export, DeclaredProcedure parameters))]
+declarationBinding moduleName (ProcedureDeclaration (ProcedureHeading _ _ (IdentDef name export) parameters) _ _) =
+   [(name, (export, DeclaredProcedure (moduleName == "SYSTEM") parameters))]
+declarationBinding _ (ForwardDeclaration (IdentDef name export) parameters) =
+   [(name, (export, DeclaredProcedure False parameters))]
 
 predefined, predefined2 :: Scope
 predefined = Success <$> Map.fromList
@@ -298,66 +333,66 @@ predefined = Success <$> Map.fromList
     ("SET", DeclaredType (TypeReference $ NonQualIdent "SET")),
     ("TRUE", DeclaredConstant (Identity $ Read $ Identity $ Variable $ NonQualIdent "TRUE")),
     ("FALSE", DeclaredConstant (Identity $ Read $ Identity $ Variable $ NonQualIdent "FALSE")),
-    ("ABS", DeclaredProcedure $ Just $
+    ("ABS", DeclaredProcedure False $ Just $
             FormalParameters [FPSection False (pure "n") $ TypeReference $ NonQualIdent "INTEGER"] $
             Just $ NonQualIdent "INTEGER"),
-    ("ASH", DeclaredProcedure $ Just $
+    ("ASH", DeclaredProcedure False $ Just $
             FormalParameters [FPSection False (pure "n") $ TypeReference $ NonQualIdent "INTEGER"] $
             Just $ NonQualIdent "INTEGER"),
-    ("CAP", DeclaredProcedure $ Just $
+    ("CAP", DeclaredProcedure False $ Just $
             FormalParameters [FPSection False (pure "c") $ TypeReference $ NonQualIdent "INTEGER"] $
             Just $ NonQualIdent "CAP"),
-    ("LEN", DeclaredProcedure $ Just $
+    ("LEN", DeclaredProcedure False $ Just $
             FormalParameters [FPSection False (pure "c") $ TypeReference $ NonQualIdent "ARRAY"] $
             Just $ NonQualIdent "LONGINT"),
-    ("MAX", DeclaredProcedure $ Just $
+    ("MAX", DeclaredProcedure True $ Just $
             FormalParameters [FPSection False (pure "c") $ TypeReference $ NonQualIdent "SET"] $
             Just $ NonQualIdent "INTEGER"),
-    ("MIN", DeclaredProcedure $ Just $
+    ("MIN", DeclaredProcedure True $ Just $
             FormalParameters [FPSection False (pure "c") $ TypeReference $ NonQualIdent "SET"] $
             Just $ NonQualIdent "INTEGER"),
-    ("ODD", DeclaredProcedure $ Just $
+    ("ODD", DeclaredProcedure False $ Just $
             FormalParameters [FPSection False (pure "n") $ TypeReference $ NonQualIdent "CHAR"] $
             Just $ NonQualIdent "BOOLEAN"),
-    ("SIZE", DeclaredProcedure $ Just $
+    ("SIZE", DeclaredProcedure True $ Just $
              FormalParameters [FPSection False (pure "n") $ TypeReference $ NonQualIdent "CHAR"] $
              Just $ NonQualIdent "INTEGER"),
-    ("ORD", DeclaredProcedure $ Just $
+    ("ORD", DeclaredProcedure False $ Just $
             FormalParameters [FPSection False (pure "n") $ TypeReference $ NonQualIdent "CHAR"] $
             Just $ NonQualIdent "INTEGER"),
-    ("CHR", DeclaredProcedure $ Just $
+    ("CHR", DeclaredProcedure False $ Just $
             FormalParameters [FPSection False (pure "n") $ TypeReference $ NonQualIdent "INTEGER"] $
             Just $ NonQualIdent "CHAR"),
-    ("SHORT", DeclaredProcedure $ Just $
+    ("SHORT", DeclaredProcedure False $ Just $
               FormalParameters [FPSection False (pure "n") $ TypeReference $ NonQualIdent "INTEGER"] $
               Just $ NonQualIdent "INTEGER"),
-    ("LONG", DeclaredProcedure $ Just $
+    ("LONG", DeclaredProcedure False $ Just $
              FormalParameters [FPSection False (pure "n") $ TypeReference $ NonQualIdent "INTEGER"] $
              Just $ NonQualIdent "INTEGER"),
-    ("ENTIER", DeclaredProcedure $ Just $
+    ("ENTIER", DeclaredProcedure False $ Just $
                FormalParameters [FPSection False (pure "n") $ TypeReference $ NonQualIdent "REAL"] $
                Just $ NonQualIdent "INTEGER"),
-    ("INC", DeclaredProcedure $ Just $
+    ("INC", DeclaredProcedure False $ Just $
             FormalParameters [FPSection False (pure "n") $ TypeReference $ NonQualIdent "INTEGER"] Nothing),
-    ("DEC", DeclaredProcedure $ Just $
+    ("DEC", DeclaredProcedure False $ Just $
             FormalParameters [FPSection False (pure "n") $ TypeReference $ NonQualIdent "INTEGER"] Nothing),
-    ("INCL", DeclaredProcedure $ Just $
+    ("INCL", DeclaredProcedure False $ Just $
              FormalParameters [FPSection False (pure "s") $ TypeReference $ NonQualIdent "SET",
                                FPSection False (pure "n") $ TypeReference $ NonQualIdent "INTEGER"] Nothing),
-    ("EXCL", DeclaredProcedure $ Just $
+    ("EXCL", DeclaredProcedure False $ Just $
              FormalParameters [FPSection False (pure "s") $ TypeReference $ NonQualIdent "SET",
                                FPSection False (pure "n") $ TypeReference $ NonQualIdent "INTEGER"] Nothing),
-    ("COPY", DeclaredProcedure $ Just $
+    ("COPY", DeclaredProcedure False $ Just $
              FormalParameters [FPSection False (pure "s") $ TypeReference $ NonQualIdent "ARRAY",
                                FPSection False (pure "n") $ TypeReference $ NonQualIdent "ARRAY"] Nothing),
-    ("NEW", DeclaredProcedure $ Just $
+    ("NEW", DeclaredProcedure False $ Just $
             FormalParameters [FPSection False (pure "n") $ TypeReference $ NonQualIdent "POINTER"] Nothing),
-    ("HALT", DeclaredProcedure $ Just $
+    ("HALT", DeclaredProcedure False $ Just $
              FormalParameters [FPSection False (pure "n") $ TypeReference $ NonQualIdent "INTEGER"] Nothing)]
 
 predefined2 = predefined <>
    (Success <$> Map.fromList
-    [("ASSERT", DeclaredProcedure $ Just $
+    [("ASSERT", DeclaredProcedure False $ Just $
              FormalParameters [FPSection False (pure "s") $ TypeReference $ NonQualIdent "ARRAY",
                                FPSection False (pure "n") $ TypeReference $ NonQualIdent "ARRAY"] Nothing)])
 
@@ -367,9 +402,9 @@ exportsOfModule = Map.mapMaybe isExported . globalsOfModule
          isExported (_, binding) = Just binding
 
 globalsOfModule :: Module Identity -> Map Ident (AccessMode, Validation (NonEmpty Error) (DeclarationRHS Identity))
-globalsOfModule (Module _ imports declarations _ _) = scope'
+globalsOfModule (Module name imports declarations _ _) = scope'
    where scope' = (Success <$>) <$> Map.fromList declarationBindings
-         declarationBindings = concatMap declarationBinding declarations
+         declarationBindings = concatMap (declarationBinding name) declarations
 
 uniqueDesignator = unique InvalidDesignator AmbiguousDesignator
 uniqueExpression = unique InvalidExpression AmbiguousExpression
