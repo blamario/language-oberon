@@ -99,8 +99,10 @@ $(Rank2.TH.deriveAll ''OberonGrammar)
 instance Lexical (OberonGrammar f) where
    type LexicalConstraint p (OberonGrammar f) s = (s ~ Text, p ~ Parser)
    lexicalComment = string "(*"
-                    *> skipMany (notFollowedBy (string "*)") *> anyToken *> takeCharsWhile (/= '*'))
+                    *> skipMany (lexicalComment
+                                 <|> notFollowedBy (string "*)") <* anyToken <* takeCharsWhile isCommentChar)
                     <* string "*)"
+      where isCommentChar c = c /= '*' && c /= '('
    lexicalWhiteSpace = takeCharsWhile isSpace *> skipMany (lexicalComment *> takeCharsWhile isSpace)
    isIdentifierStartChar = isLetter
    isIdentifierFollowChar = isAlphaNum
