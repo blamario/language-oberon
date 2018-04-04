@@ -135,7 +135,7 @@ deriving instance Data (ProcedureBody Identity)
 deriving instance Data (ProcedureBody Ambiguous)
 deriving instance (Show (f (Designator f)), Show (f (Expression f)), Show (f (Statement f))) => Show (ProcedureBody f)
 
-type StatementSequence f  = [f (Statement f)]
+type StatementSequence f  = NonEmpty (f (Statement f))
 
 data Statement f = EmptyStatement
                  | Assignment (AmbDesignator f) (Expression f)
