@@ -185,7 +185,7 @@ grammar OberonGrammar{..} = OberonGrammar{
    real = Real <$> lexicalToken (digit <> takeCharsWhile isDigit <> string "."
                                  *> takeCharsWhile isDigit <> moptional scaleFactor),
    scaleFactor = (string "E" <|> string "D") <> moptional (string "+" <|> string "-") <> digit <> takeCharsWhile isDigit,
-   charConstant = lexicalToken (CharConstant <$ char '"' <*> anyChar <* char '"'
+   charConstant = lexicalToken (empty -- CharConstant <$ char '"' <*> anyChar <* char '"'
                                 <|> CharCode . fst . head . readHex . unpack
                                 <$> (digit <> takeCharsWhile isHexDigit <* string "X")),
    string_prod = lexicalToken (char '"' *> takeWhile (/= "\"") <* char '"'
