@@ -1,0 +1,240 @@
+(*
+https://web.archive.org/web/20041103105402/http://www.oberon.ethz.ch:80/ethoberon/defs/Display3.Def.html
+*)
+DEFINITION Display3; (* portable *) (* jm 17.1.95 / tk 7.12.95*)
+
+(*Module Display3 implements the clipped graphic primitives used by the Gadget
+system. It has a twin module called Printer3 that implements the same primitives
+for the printer.
+*)
+ IMPORT
+  Display, Fonts, Pictures;
+
+ CONST
+  replace = Display.replace; paint = Display.paint; invert = Display.invert;  (*
+Standard display modes. *)
+
+ (* Display styles *)
+  filled = 1;  (* Filled *)
+
+ TYPE
+  Mask = POINTER TO MaskDesc; (* Clipping Mask. *)
+
+ (* Informs a frame of a new mask. This message is always sent directly. *)
+  OverlapMsg = RECORD ( Display.FrameMsg ) 
+   M: Mask;  (* Use NIL to indicate to a frame that its current mask is invalid.
+*)
+  END;
+
+ (* Message broadcast by a frame (identified by the F field) to indicate that
+it has an invalid mask and now requires
+ its parent, to calculate a new mask for it and to inform it through the OverlapMsg.
+*)
+  UpdateMaskMsg = RECORD ( Display.FrameMsg ) 
+  END;
+
+  MaskDesc = RECORD (* Clipping mask descriptor. *)
+   x, y: INTEGER;  (* Relative mask origin or offset. *)
+   X, Y, W, H: INTEGER;  (* Current clipping port in absolute coordinates.
+*)
+  END;
+
+ (* Enumerate the set of rectangles in a mask. The clipping port is not enumerated.
+*)
+  EnumProc = PROCEDURE (X, Y, W, H: INTEGER);
+
+ VAR 
+  selectpat: Display.Pattern; (* Pattern used to draw gadgets when in a selected
+state. *)
+
+ (* Colors *)
+  FG, BG: INTEGER;  (* Foreground (black) and background (white) color indexes.
+*)
+  red, green, blue: INTEGER; (* Primary color indexes. *)
+  black, white: INTEGER; (* True black and white. *)
+  topC: INTEGER; (* Top shadow color. *)
+  bottomC: INTEGER; (* Bottom shadow color. *)
+  upC: INTEGER; (* Color of a button. *)
+  downC: INTEGER; (* Color of the pushed  button *)
+  groupC: INTEGER; (* Color of containers, i.e. gadgets that have a grouping
+function like panels. *)
+  invertC: INTEGER; (* Best color for doing inverts.. *)
+  textC: INTEGER; (* Default text color. *)
+  textbackC: INTEGER; (* Default text background. *)
+  textmode: INTEGER; (* Best CopyPattern mode for this display card. *)
+
+(* Initialize the Mask to the empty region, i.e. everything will be clipped
+away. *)
+ PROCEDURE Open (M: Mask);
+
+(* Enumerate all the visible areas of a mask. The clipping port is not enumerated.
+The mask translation vector is taken into account.*)
+ PROCEDURE Enum (M: Mask; enum: EnumProc);
+
+(* Enumerate all the invisible areas of a mask. The clipping port is not enumerated.
+Note that you might obtain coordinates outside of the normal screen area, bounded
+by approximately -/+ 8192. The mask translation vector is taken into account.*)
+ PROCEDURE EnumInvert (M: Mask; enum: EnumProc);
+
+(* Enumerate all the visible areas in the given rectangular region. The clipping
+port is not taken into account. *)
+ PROCEDURE EnumRect (M: Mask; X, Y, W, H: INTEGER; enum: EnumProc);
+
+(* Make a copy of a mask. *)
+ PROCEDURE Copy (from: Mask; VAR to: Mask);
+
+(* Add the rectangle X, Y, W, H as a visible/drawable area to the mask. *)
+ PROCEDURE Add (M: Mask; X, Y, W, H: INTEGER);
+
+(* Clip the current clipping port of the mask to the rectangle X, Y, W, H. The
+result is an updated clipping port. *)
+ PROCEDURE AdjustMask (M: Mask; X, Y, W, H: INTEGER);
+
+(* Remove area X, Y, W, H from the mask i.e. make area undrawable.  *)
+ PROCEDURE Subtract (M: Mask; X, Y, W, H: INTEGER);
+
+(* Interset the mask with the rectangle X, Y, W, H. The visible areas are restricted
+to this rectangle. *)
+ PROCEDURE Intersect (M: Mask; X, Y, W, H: INTEGER);
+
+(* Intersect the masks A and B resulting in R. *)
+ PROCEDURE IntersectMasks (A, B: Mask; VAR R: Mask);  (* R is an out parameter
+only *)
+
+(* Subtracts the visible areas of B from A to give mask R. *)
+ PROCEDURE SubtractMasks (A, B: Mask; VAR R: Mask);
+
+(* Translate the mask so that the resulting origin/offset is 0, 0. This is done
+by "adding in" the translation vector. *)
+ PROCEDURE Shift (M: Mask);
+
+(* Returns TRUE if the visible areas of the mask form a single rectangle. The
+result, when TRUE, is returned. The clipping port is not taken into account.
+*)
+ PROCEDURE Rectangular (M: Mask; VAR X, Y, W, H: INTEGER): BOOLEAN;
+
+(* Using Display.CopyBlock, copy the area M to position X, Y. The point M.x,
+M.y is copied to screen coordinates X, Y. *)
+ PROCEDURE CopyMask (M: Mask; X, Y: INTEGER; mode: INTEGER);
+
+(* Display.ReplConst through a mask. *)
+ PROCEDURE ReplConst (M: Mask; col: Display.Color; X, Y, W, H, mode: INTEGER);
+
+(* Is this rectangle completely visible? The clipping port is taken into acount.
+*)
+ PROCEDURE Visible (M: Mask; X, Y, W, H: INTEGER): BOOLEAN;
+
+(* Display.Dot through a clipping mask. *)
+ PROCEDURE Dot (M: Mask; col: Display.Color; X, Y, mode: INTEGER);
+
+(* Display.FillPattern through a clipping mask. pX, pY is the pattern pin-point.
+*)
+ PROCEDURE FillPattern (M: Mask; col: Display.Color; pat: Display.Pattern; pX, pY, X, Y, W, H, mode: INTEGER);
+
+(* Same as Display.CopyPattern, but through a clipping mask. *)
+ PROCEDURE CopyPattern (M: Mask; col: Display.Color; pat: Display.Pattern; X, Y, mode: INTEGER);
+
+(* Draw rectangle outline in the specified size, line width and pattern. *)
+ PROCEDURE Rect (M: Mask; col: Display.Color; pat: Display.Pattern; X, Y, W, H, width, mode: INTEGER);
+
+(* Draw rectangle outline in width using top and bottom shadow (3D effects ).*)
+ PROCEDURE Rect3D (M: Mask; topcol, botcol: Display.Color; X, Y, W, H, width, mode: INTEGER);
+
+(* Fill rectangle with 3D shadow effects. incol specifies the "inside" color.
+*)
+ PROCEDURE FilledRect3D (M: Mask; topcol, botcol, incol: Display.Color; X, Y, W, H, width, mode: INTEGER);
+
+(* Draw a line in the specified pattern and width. Round brushes are used to
+draw thick lines. *)
+ PROCEDURE Line (M: Mask; col: Display.Color; pat: Display.Pattern; X, Y, X1, Y1, width, mode: INTEGER);
+
+(* Draw a polygon in pattern pat. n specifies the number of vertices listed
+in the arrays X and Y. Style may be {filled}. *)
+ PROCEDURE Poly (M: Mask; col: Display.Color; pat: Display.Pattern; VAR X, Y: ARRAY OF INTEGER; n, width: INTEGER; style: SET; mode: INTEGER);
+
+(* Draw an ellipse. Implementation restriction: cannot fill an ellipse or draw
+an ellipse with line width > 1 *)
+ PROCEDURE Ellipse (M: Mask; col: Display.Color; pat: Display.Pattern; X, Y, a, b, width: INTEGER; style: SET; mode: INTEGER);
+
+(* Draw a circle in radius r using pattern pat at position X, Y. Thick line
+widths are allowed. *)
+ PROCEDURE Circle (M: Mask; col: Display.Color; pat: Display.Pattern; X, Y, r, width: INTEGER; style: SET; mode: INTEGER);
+
+(* Draw string s in font fnt and color col at position X, Y. *)
+ PROCEDURE String (M: Mask; col: Display.Color; X, Y: INTEGER; fnt: Fonts.Font; s: ARRAY OF CHAR; mode: INTEGER);
+
+(* Draw a string s in font fnt centered in the rectangle X, Y, W, H. Line breaks
+will be inserted as needed. *)
+ PROCEDURE CenterString (M: Mask; col: Display.Color; X, Y, W, H: INTEGER; fnt: Fonts.Font; s: ARRAY OF CHAR; mode: INTEGER);
+
+(* Return the size of a string in width w and height h. dsr returns the baseline
+offset as a positive value. *)
+ PROCEDURE StringSize (s: ARRAY OF CHAR; fnt: Fonts.Font; VAR w, h, dsr: INTEGER);
+
+(* Draw the area X, Y, W, H of picture P at position DX, DY on the display.
+*)
+ PROCEDURE Pict (M: Mask; P: Pictures.Picture; X, Y, W, H, DX, DY, mode: INTEGER);
+
+(* Replicate a picture filling area X, Y, W, H on the display. px, py is the
+picture pin-point. *)
+ PROCEDURE ReplPict (M: Mask; P: Pictures.Picture; px, py, X, Y, W, H, mode: INTEGER);
+END Display3.
+
+(* Remarks:
+
+1. Clipping Masks
+Built on top of the Display module, the Display3 module is the basis of the
+gadgets imaging model. It extends the Display module with more advanced clipped
+drawing primitives like lines, polygonal lines, ellipses, circles etc. A clipping
+mask indicates which areas on the display can be drawn in. You can imagine the
+mask to be a sheet of paper, possibly full of holes, and a display primitive
+being a spray can. The holes are all rectangular, and may overlap (i.e. only
+rectangular holes can be cut out of the paper). Just as you can move the piece
+of paper to spray an image at a new location, the mask can be translated by
+a translation vector (also refered to as the mask origin). By default, the holes
+of a mask are always defined relative to the origin (0, 0). The origin can be
+translated, efficiently moving the mask to a different position. In the MaskDesc,
+the fields x, y specify the mask origin/translation vector. It can be changed
+directly as needed. Internally masks are sets of non-overlapping rectangles,
+where each rectangle has a flag to indicate if drawing is allowed in that area
+or not. After each operation that changes the mask, the mask is checked to see
+if it might be optimal, i.e. if it is a single rectangular visible area. The
+latter case is handled separately, allowing more efficient drawing and masking
+operations. The construction of a mask is more heavyweight in comparison to
+drawing through a mask, mainly due to the latter checks. Masks should be generated
+once, and then left unchanged for as long as possible.
+
+2. Clipping Ports
+Clipping ports are used to optimize masks operations. A clipping port is an
+absolutely positioned rectangular area through which all display operations
+are clipped (a clipping rectangle). The mask and clipping port form together
+the clipped region, where drawing primitives are first clipped to the mask,
+and then to the clipping port. This is an implementation of the following idea.
+Each gadget on the display can be overlapped by other visual objects, and potentially
+need to clip itself when displayed. Each gadget is thus allocated a static clipping
+mask. In some cases however, only parts of a gadget need to be redisplayed,
+for example when a gadget lying partially in front is removed. Rather than creating
+a new clipping mask just for this simple case, the clipping port can manipulated
+to indicate which "sub-area" of a gadget must be drawn. The key idea is thus
+to restrict the clipping mask of a gadget without actually changing the mask
+(a potentially expensive operation). The clipping port is set by the rectangle
+X, Y, W, H in the MaskDesc. These are absolute display coordinates. Programmers
+are allowed to manipulate the clipping port directly or use Display3.AdjustMask.
+
+3. OverlapMsg and UpdateMaskMsg
+Each gadget has a (cached) display mask associated with it, even if it is completely
+visible. This mask is used when a gadget wants to draw on the display. Each
+parent visual gadget (container) has to manage the display masks of its children.
+The Display3 module provides messages for requesting a mask and for setting
+a mask. The OverlapMsg informs a gadget of its display mask. It is sent directly
+to a visual gadget by its parent. After some editing operations it may happen
+that a gadgets' mask has become invalid, in which case it is set to nothing
+(NIL). Should the gadget notice that it has no mask when it wants to draw itself,
+it may broadcast an UpdateMaskMsg to indicate that the parent must create a
+mask for it (the gadget itself is identified by the F field in the frame message).
+The latter should then calculate the mask, and inform the gadget using the OverlapMsg.
+In some cases, a parent can indicate to a child that its mask is not valid any
+more, by sending an OverlapMsg with no mask (M.M = NIL).
+
+*)
+

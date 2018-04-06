@@ -1,0 +1,348 @@
+(*
+https://web.archive.org/web/20041227181940/http://www.oberon.ethz.ch:80/ethoberon/defs/Texts.Def.html
+*)
+DEFINITION Texts; (* portable *)
+
+(* The Texts module implements the text abstract data type. Texts are sequences
+of 
+characters and objects, with different colors, different fonts, and vertical
+offsets.
+*)
+ IMPORT Files, Objects, Display;
+
+ CONST
+    (* Scanner symbol classes.*)
+  Inval = 0;           (* Invalid symbol. *)
+  Name = 1;        (* Name s (of length len).*)
+  String = 2;        (* Quoted string s (length len). *)
+  Int = 3;             (* Integer i (decimal or hexadecimal). *)
+  Real = 4;          (* Real number x. *)
+  LongReal = 5;  (* Long real number y. *)
+  Char = 6;          (* Special character c. *)
+  Object = 7;      (* Object obj. *)
+
+ TYPE
+  Text = POINTER TO TextDesc;
+  TextDesc = RECORD ( Objects.ObjDesc ) 
+   len: LONGINT; (* Text consists of characters 0 to T.len - 1. *)
+  END;
+
+  UpdateMsg = RECORD ( Display.FrameMsg )  (* Message broadcast to indicate
+that part of a text changed. *)
+   text: Text; (* The text that changed. *)
+   beg, end, len: LONGINT (* Change location. *)
+  END;
+
+  Finder = RECORD (* Finder of (non-character) objects located in text. *)
+   eot: BOOLEAN; (* End-of-text reached during search. *)
+   pos: LONGINT; (* Offset of Finder in text. *)
+  END;
+
+  Reader = RECORD (* Character-wise reader of a text stream. *)
+   lib: Objects.Library; (* Library of last character/object read. *)
+   col: SHORTINT; (* Color index of last character read. *)
+   voff: SHORTINT; (* vertical offset of last character read. *)
+   eot: BOOLEAN (* Reader has reached end of the text stream. *)
+  END;
+
+  Scanner = RECORD ( Reader )  (* Scanner for symbol streams. *)
+   nextCh: CHAR; (* Character immediately following the last symbol scanned.
+*)
+   line: INTEGER; (* # carriage returns scanned so far. *)
+   class: INTEGER; (* Scan result: Int, Real, String etc. *)
+   i: LONGINT;
+   x: REAL;
+   y: LONGREAL;
+   c: CHAR;
+   len: SHORTINT; (* Length of name or string scanned. *)
+   s: ARRAY 64 OF CHAR;
+   obj: Objects.Object
+  END;
+
+  Buffer = POINTER TO BufDesc; (* Temporary container of text stretches. *)
+  BufDesc = RECORD
+   len: LONGINT; (* # characters in buffer. *)
+  END;
+
+  Writer = RECORD (* Used to write a stream of textual data in a buffer. *)
+   buf: Buffer; (* Associated buffer. *)
+   lib: Objects.Library; (* Current font/library of characters written. *)
+   col: SHORTINT; (* Current color of text being written. *)
+   voff: SHORTINT (* Current vertical offset of text being written. *)
+  END;
+
+ VAR  (* First character of a text block. *)
+  TextBlockId: CHAR;
+
+(* Load text block from ASCII file f to text T. *)
+ PROCEDURE LoadAscii (T: Text; f: Files.File);
+
+(* Load text block from file f at position pos to text T (assumes that the text
+id has been read already). len returns length. *)
+ PROCEDURE Load (T: Text; f: Files.File; pos: LONGINT; VAR len: LONGINT);
+
+(* Store text T on disk file f at position pos. Writes the first id character
+too. len is the number of bytes written. *)
+ PROCEDURE Store (T: Text; f: Files.File; pos: LONGINT; VAR len: LONGINT);
+
+(* Open text T from file specified by name. A new text is opened when name =
+"". *)
+ PROCEDURE Open (T: Text; name: ARRAY OF CHAR);
+
+(* Text generator procedure. Resulting text is assigned to Objects.NewObj. *)
+ PROCEDURE New;
+
+(* Insert buffer B in text T position pos. B is emptied. *)
+ PROCEDURE Insert (T: Text; pos: LONGINT; B: Buffer);
+
+(* Append buffer to the end of text T. B is emptied. *)
+ PROCEDURE Append (T: Text; B: Buffer);
+
+(* Delete text stretch [beg, end[. *)
+ PROCEDURE Delete (T: Text; beg, end: LONGINT);
+
+(* Replace [beg, end[ of T with contents of buffer B. B is emptied. *)
+ PROCEDURE Replace (T: Text; beg, end: LONGINT; B: Buffer);
+
+(* Change character attributes within stretch [beg, end[ of text T. sel selects
+the attributes to be changed: 0, 1, 2 IN sel = fnt, col, voff selected. *)
+ PROCEDURE ChangeLooks (T: Text; beg, end: LONGINT; sel: SET; lib: Objects.Library; col, voff: SHORTINT);
+
+(* Open a new text buffer B. *)
+ PROCEDURE OpenBuf (B: Buffer);
+
+(* Save stretch [beg, end[ of T in buffer B. *)
+ PROCEDURE Save (T: Text; beg, end: LONGINT; B: Buffer);
+
+(* Append copy of source buffer SB to destination buffer DB. *)
+ PROCEDURE Copy (SB, DB: Buffer);
+
+(* Recall previously deleted text. *)
+ PROCEDURE Recall (VAR B: Buffer);
+
+(* Default handler for text objects. This handler understands Objects.AttrMsg(for
+Gen attribute), Objects.CopyMsg, Objects.BindMsg, and Objects.FileMsg only.
+*)
+ PROCEDURE Handle (obj: Objects.Object; VAR M: Objects.ObjMsg);
+
+(* Open Finder at position pos in T. The finder is automatically advanced to
+the next object in text. *)
+ PROCEDURE OpenFinder (VAR F: Finder; T: Text; pos: LONGINT);
+
+  (* Advance Finder to next object in text and return current object. *)
+ PROCEDURE FindObj (VAR F: Finder; VAR obj: Objects.Object);
+
+(* Open text reader R and set it up at position pos in text T. *)
+ PROCEDURE OpenReader (VAR R: Reader; T: Text; pos: LONGINT);
+
+(* Read next character into ch. R.eot is set when the last character is read.
+The fields lib, voff and col of R give 
+information about the last character read. *)
+ PROCEDURE Read (VAR R: Reader; VAR ch: CHAR);
+
+(* Return reader's position within the text. *)
+ PROCEDURE Pos (VAR R: Reader): LONGINT;
+
+(* Open text scanner S and set it up at position pos in text T. *)
+ PROCEDURE OpenScanner (VAR S: Scanner; T: Text; pos: LONGINT);
+
+(* Read the next symbol. Whitespace is ignored. CR increments the line counter.
+*)
+ PROCEDURE Scan (VAR S: Scanner);
+
+(* Open a new writer W. *)
+ PROCEDURE OpenWriter (VAR W: Writer);
+
+(* Set writer W to font fnt. *)
+ PROCEDURE SetFont (VAR W: Writer; fnt: Objects.Library);
+
+(* Set writer W to color col. *)
+ PROCEDURE SetColor (VAR W: Writer; col: SHORTINT);
+
+(* Set writer W to vertical offset voff. Vertical offset controls the writing
+of super- and sub-scripts. *)
+ PROCEDURE SetOffset (VAR W: Writer; voff: SHORTINT);
+
+(* Write character ch to writer W's buffer. *)
+ PROCEDURE Write (VAR W: Writer; ch: CHAR);
+
+(* Write an end-of-line character to W's buffer. *)
+ PROCEDURE WriteLn (VAR W: Writer);
+
+(* Write string s to W's buffer. *)
+ PROCEDURE WriteString (VAR W: Writer; s: ARRAY OF CHAR);
+
+(* Write integer x to W's buffer. Spaces are padded to the left until the number
+field is at least n characters long. *)
+ PROCEDURE WriteInt (VAR W: Writer; x, n: LONGINT);
+
+(* Write a hexadecimal representation of x to W's buffer. *)
+ PROCEDURE WriteHex (VAR W: Writer; x: LONGINT);
+
+(* Write the hexadecimal representation of x to W's buffer. *)
+ PROCEDURE WriteRealHex (VAR W: Writer; x: REAL);
+
+(* Write the hexadecimal representation of x to W's buffer. *)
+ PROCEDURE WriteLongRealHex (VAR W: Writer; x: LONGREAL);
+
+(* Write real x to W's buffer using n character positions. *)
+ PROCEDURE WriteReal (VAR W: Writer; x: REAL; n: LONGINT);
+
+(* Write real x in a fixed point notation. n is the overall minimal length for
+the output field, 
+f the number of fraction digits following the decimal point, E the fixed exponent
+(printed only 
+when E # 0). *)
+ PROCEDURE WriteRealFix (VAR W: Writer; x: REAL; n, f, E: LONGINT);
+
+(* Write LONGREAL x to W's buffer using n character positions. *)
+ PROCEDURE WriteLongReal (VAR W: Writer; x: LONGREAL; n: LONGINT);
+
+(* Write LONGREAL x in a fixed point notation. n is the overall minimal length
+for the output field, f the number of fraction digits following the decimal
+point, D the fixed exponent (printed only when D # 0). *)
+ PROCEDURE WriteLongRealFix (VAR W: Writer; x: LONGREAL; n, f, D: LONGINT);
+
+(* Write the time and date to W's buffer. *)
+ PROCEDURE WriteDate (VAR W: Writer; t, d: LONGINT);
+
+(* Write a SET value to writer W. *)
+ PROCEDURE WriteSet (VAR W: Writer; s: SET);
+
+(* Write obj to writer W. *)
+ PROCEDURE WriteObj (VAR W: Writer; obj: Objects.Object);
+END Texts.
+
+(* Remarks:
+
+1. Text streams consists of sequence of characters (type Fonts.Char) and and
+
+non-character objects (in different colors, fonts, and vertical offsets). The
+only 
+way to distinguish between a character and an object in the text stream is by
+
+fetching the character/object from its library and then making a type test.
+
+The library of a character/object is given by the lib field of the reader while
+
+advancing through a text stream. The reference number of a character/object
+
+is the ordinal number of the character read (i.e. ORD(ch)). As character objects
+
+are bound to character fonts (Fonts.Font), a quick type test of the Reader lib
+
+field against Fonts.Font also settles the question. Non-character objects of
+a 
+text are typically bound to the obs library field of the text descriptor.
+
+2. The non-character objects of a text stream must have reference numbers 
+in the range 0 <= ref < 256, and must be bound to a library (not necessarily
+
+obs of the text descriptor). Writing non-character objects involves binding
+it 
+to a library (say T.obs), changing the font of the Writer, and the writing the
+
+reference number of the non-character object into the writer's buffer. 
+Afterwards the writer font is reset to its old value. More that 256 non-character
+
+objects can be written into the text by allocating a new library when the old
+
+library is full, and attaching it to the obs field of the text descriptor. The
+obs field 
+just acts as a placeholder for libraries and is not used by the texts directly.
+
+3. There are two mechanisms to read from a text and one to write to a text.
+
+The Readers allow characterwise reading from a certain text position onwards.
+
+The Scanners allow reading of formatted tokens like names, strings, numbers
+and 
+characters. Writers are used to write characters into temporary holding areas
+
+called buffers. Buffers contains large sequences of objects (both character
+and 
+non-character) and allow low-level temporary manipulation. The difference 
+between texts and buffers involve the display update operations. Each text can
+
+possibly be represented on the display by some kind of text editor or viewer.
+
+When a module manipulates a text, a message called the UpdateMsg (type 
+Texts.UpdateMsg) is broadcast to all viewers or text editors representing the
+text. 
+They then update their representation accordingly. To prevent broadcasts being
+
+sent for potentially each character being written into a text, the text manipulation
+
+is first done in a buffer. Operations on buffers do not result in update messages
+
+being broadcasted. Only when a buffer is applied to a text (inserted or appended),
+
+the texts broadcasts an update message. By convention, once a buffer is applied
+to a text, its contents is emptied.
+
+4. The scanner classes indicate what token was scanned. The scanner understands
+the following token types:
+
+ Name Longest sequence starting with "A".."Z", "a".."z", ".", "/", and containing
+
+  "A".."Z", "a".."z", "0".."9", "@", ".", "/", ":", "_", 80X..96X
+ String Any character sequence surrounded by double quotes, i.e. "string".
+  The quotes are not returned in the s field of the scanner descriptor.
+ Int Any valid integer number.
+ Real Any valid REAL number, including exponent E.
+ LongReal Any valid LONGREAL number, including exponent D.
+ Char A character (single) not classified as one of the above.
+ 
+5. The end of line character is carriage return (CR or 0DX), tabulators are
+9X. 
+Unprintable characters are show on the display as smallish square boxes.
+
+6. Vertical offsets are typically measured in screen pixels (positive or negative
+
+to the text base line).
+
+7. The Finder allow quick searching for non-character objects in a text. 
+
+8. The meaning of the UpdateMsg fields are defined as in the following table
+
+listed according to the procedures that broadcast the message. Note that a text
+
+stretch identified by (beg, end) does not include the character at position
+end 
+in the text. Below, M is of type Texts.UpdateMsg and B stands for a buffer.
+
+ Delete(beg, end) M.beg = beg
+  M.end = end
+  M.len = 0
+ Replace(beg, end, B) M.beg = beg
+  M.end = end
+  M.len = B.len
+ ChangeLooks(beg, end) M.beg = beg
+  M.end = end
+  M.len = end - beg
+ Insert(pos, buf) M.beg = pos
+  M.end = pos
+  M.len = B.len
+  
+The general scheme is that the stretch between M.beg and M.end was "deleted",
+
+and a new stretch of length M.len was inserted at M.beg. The message indicates
+
+a change AFTER it has already been made by the texts module.
+
+9. There is an asymmetry in writing and reading texts to a file. Each text "block"
+
+in a file is identified by a first character. Reading a text block requires
+that the 
+starting position does not include this character, while writing a text block
+writes 
+the id character automatically.
+
+10. Opening of non-text files is allowed with Texts.Open; they are simply converted
+
+to ASCII streams. Storing such an opened text will convert it into an Oberon
+text. 
+Note that the EditTools package allows the manipulation of ASCII texts both
+in 
+MSDOS and UNIX format.
+*)

@@ -1,0 +1,208 @@
+(*
+https://web.archive.org/web/20041223052353/http://www.oberon.ethz.ch:80/ethoberon/defs/Attributes.Def.html
+*)
+DEFINITION Attributes; (* portable *)
+
+(*Module Attributes manages the attribute lists of the gadgets, provides an
+improved scanner with macro substitution facilities for executing commands,
+and supplies type conversion routines.
+*)
+ IMPORT
+  Objects, Texts, Files;
+
+ CONST
+  (* Scanner symbol classes. *)
+  Inval = Texts.Inval;           (* Invalid symbol. *)
+  Name = Texts.Name;        (* Name. *)
+  String = Texts.String;        (* Literal string. *)
+  Int = Texts.Int;             (* Integer i. *)
+  Real = Texts.Real;          (* Real number x. *)
+  LongReal = Texts.LongReal;  (* Long real number y. *)
+  Char = Texts.Char;          (* Special character c. *)
+  Obj = Texts.Object;      (* Object o. *)
+
+ TYPE
+  Reader = POINTER TO ReaderDesc;  (* Macro substituting reader. *)
+  ReaderDesc = RECORD
+   substitute: BOOLEAN;  (* Is substitution on or off? *)
+   text: Texts.Text;  (* Current text read. *)
+   eot: BOOLEAN;  (* End of text reached? *)
+   lib: Objects.Library; (* Library of last character/object read. *)
+  END;
+
+(* Upcall for macro substitution. Ch is the character to be substituted, res
+is the substitution text and beg is the starting position inside of the text.*)
+  MacroHandler = PROCEDURE (ch: CHAR; VAR T: Reader; VAR res: Texts.Text; VAR beg: LONGINT);
+  Scanner = RECORD (* Macro substituting scanner *)
+   R: Reader;  (* Scanner operates with this reader. *)
+   eot: BOOLEAN; (* End of text reached? *)
+   nextCh: CHAR; (* Character located immediately after scanned token. *)
+   class: INTEGER;  (* Scanner classes. Scanned tokens are returned in the
+record fields below. *)
+   i: LONGINT;
+   x: REAL;
+   y: LONGREAL;
+   c: CHAR;
+   len: SHORTINT;
+   s: ARRAY  128 OF CHAR;
+   o: Objects.Object;
+  END;
+
+ (* Data structures for storing attribute lists. *)
+  Attr = POINTER TO AttrDesc;
+  AttrDesc = RECORD
+   next: Attr;
+   name: Objects.Name
+  END;
+
+  BoolAttr = POINTER TO BoolDesc;
+  BoolDesc = RECORD ( AttrDesc ) 
+   b: BOOLEAN END;
+
+  CharAttr = POINTER TO CharDesc;
+  CharDesc = RECORD ( AttrDesc ) 
+   c: CHAR END;
+
+  IntAttr = POINTER TO IntDesc;
+  IntDesc = RECORD ( AttrDesc ) 
+   i: LONGINT END;
+
+  RealAttr = POINTER TO RealDesc;
+  RealDesc = RECORD ( AttrDesc ) 
+   r: LONGREAL END;
+
+  StringAttr = POINTER TO StringDesc;
+  StringDesc = RECORD ( AttrDesc ) 
+   s: ARRAY 64 OF CHAR; END;
+
+(* Convert a string to a text. *)
+ PROCEDURE StrToTxt (s: ARRAY OF CHAR; VAR T: Texts.Text);
+
+(* Convert a text to a string. The string might be terminated early if the text
+is too long to fit. *)
+ PROCEDURE TxtToStr (T: Texts.Text; VAR s: ARRAY OF CHAR);
+
+(* Read character ch from the Reader. Registered character macros are automatically
+substituted by making upcalls to the installed macro handlers. *)
+ PROCEDURE Read (VAR R: Reader; VAR ch: CHAR);
+
+(* Open reader R at position pos in text. *)
+ PROCEDURE OpenReader (VAR R: Reader; text: Texts.Text; pos: LONGINT);
+
+(* Return current position of Reader R in text R.text. Note that R.text may
+change as macro characters are being substituted. *)
+ PROCEDURE Pos (VAR R: Reader): LONGINT;
+
+(* Open Scanner S at position pos in text T. *)
+ PROCEDURE OpenScanner (VAR S: Scanner; T: Texts.Text; pos: LONGINT);
+
+(* Read the next symbol or object in the text. White space is ignored. *)
+ PROCEDURE Scan (VAR S: Scanner);
+
+(* Register a macro handler for a character. This handler is called when character
+ch is read using the reader/scanner, and must return a text with the substitution.
+*)
+ PROCEDURE AddMacro (ch: CHAR; handler: MacroHandler);
+
+(* Store the atttribute list A. *)
+ PROCEDURE StoreAttributes (VAR R: Files.Rider; A: Attr);
+
+(* Load attribute list resulting in a list A. *)
+ PROCEDURE LoadAttributes (VAR R: Files.Rider; VAR A: Attr);
+
+(* Copy an attribute list. *)
+ PROCEDURE CopyAttributes (in: Attr; VAR out: Attr);
+
+(* Insert an attribute in a list. An existing attribute with the same name is
+discarded. *)
+ PROCEDURE InsertAttr (VAR list: Attr; name: ARRAY OF CHAR; val: Attr);
+
+(* Search for an attribute name in list. *)
+ PROCEDURE FindAttr (name: ARRAY OF CHAR; list: Attr): Attr;
+
+(* Delete an attribute. *)
+ PROCEDURE DeleteAttr (VAR list: Attr; name: ARRAY OF CHAR);
+
+(* Write the attribute attr of object obj to the writer W. Format conversion
+to strings are automatic.*)
+ PROCEDURE WriteAttr (obj: Objects.Object; attr: ARRAY OF CHAR; VAR W: Texts.Writer);
+
+(* GetXXX(obj: Objects.Object; name: ARRAY OF CHAR; VAR x: T);
+  Retrieve object attribute name and convert it to type T.
+  The following conversions are done by GetType:
+ Type T Attribute classes converted
+
+ Bool BOOLEAN Bool, String, Char
+ Int LONGINT Int, String, Real, LongReal
+ Real REAL Real, String, LongReal, Int
+ LongReal LONGREAL LongReal, String, Real, Int
+ String ARRAY OF CHAR String, Int, Bool, Real, LongReal, Bool
+*)
+ PROCEDURE GetBool (obj: Objects.Object; name: ARRAY OF CHAR; VAR b: BOOLEAN);
+ PROCEDURE GetInt (obj: Objects.Object; name: ARRAY OF CHAR; VAR i: LONGINT);
+ PROCEDURE GetReal (obj: Objects.Object; name: ARRAY OF CHAR; VAR x: REAL);
+ PROCEDURE GetLongReal (obj: Objects.Object; name: ARRAY OF CHAR; VAR y: LONGREAL);
+ PROCEDURE GetString (obj: Objects.Object; name: ARRAY OF CHAR; VAR s: ARRAY OF CHAR);
+
+(* SetXXX(obj: Objects.Object; name: ARRAY OF CHAR; x: T);
+  Set object attribute name and convert it to the the attribute class understood
+by obj.
+  The following conversions are done by SetType:
+ Type T Attribute classes converted
+
+ Bool BOOLEAN Bool, String, Char
+ Int LONGINT Int, String, Real, LongReal
+ Real REAL Real, String, LongReal, Int
+ LongReal LONGREAL LongReal, String, Real, Int
+ String ARRAY OF CHAR String, Int, Bool, Real, LongReal, Bool
+*)
+ PROCEDURE SetBool (obj: Objects.Object; name: ARRAY OF CHAR; b: BOOLEAN);
+ PROCEDURE SetInt (obj: Objects.Object; name: ARRAY OF CHAR; i: LONGINT);
+ PROCEDURE SetReal (obj: Objects.Object; name: ARRAY OF CHAR; x: REAL);
+ PROCEDURE SetLongReal (obj: Objects.Object; name: ARRAY OF CHAR; y: LONGREAL);
+ PROCEDURE SetString (obj: Objects.Object; name, s: ARRAY OF CHAR);
+
+(* Write all parameters of command. *)
+ PROCEDURE Echo;
+
+END Attributes.
+
+(*
+Remarks:
+
+1. Reader and Scanner
+The reader and scanner operate in the same fashion as that of the Text module.
+There are however a few exceptions. First, the reader does macro substitution
+as texts are read. Some macros are predefined, and the programmer has the capability
+to add his or her own macros by identifying special symbols for macros and a
+handler for that macro symbol. While reading or scanning a text, upcalls are
+made to the registered macro handler to return a substitution text for the macro
+symbol. New macros are registered with the AddMacro procedure. The macro handler
+has to return a text and a position in the text where reading/scanning should
+continue. Reading/scanning will continue in the original text after the end
+of the substitution text is reached. The macro might take parameters (letters
+that follow immediately after the macro symbol), which are read by the macro
+handler using the passed Reader. Note that no substitution is made when no text
+(= NIL) is returned. By default, the up arrow ("^"), which expands to the current
+selection, is installed as a macro in the Attributes module. In contrast to
+the Texts.Scanner, the Attributes.Scanner scan words containing letters like
+ä, ü, ö, – etc, and (non-character) objects embedded inside of the text.
+
+2. Attribute Message and Attribute Storage
+Most gadgets employ two strategies for storing attribute values. The first is
+by allocating own storage space for the attributes in the object definition
+and by responding on the Objects.AttrMsg when these attributes are accessed.
+The second way is having the default message handlers of module Gadgets take
+care of attributes. This is called the default or standard handling of attributes.
+The default message handlers manage lists of gadgets with the types defined
+in module Attributes. Such an attribute list is always identified by its first
+component, which might change when attributes are inserted or deleted. Many
+gadgets uses a hybrid approach to attribute handling, where own attributes are
+handled in a special way, and all other attributes are handled by the default
+message handlers. For example, the "Name" of a gadget is typically handled by
+the default message handlers. This has the advantage that storage space is only
+used when the attribute has a value (remember that many gadgets don't have names,
+and allocating space inside your own gadget record descriptor for a name, makes
+you pay the storage price for each gadget, even if it is not named).
+
+*)

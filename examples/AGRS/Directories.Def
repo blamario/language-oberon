@@ -1,0 +1,48 @@
+(*
+https://web.archive.org/web/20041224144144/http://www.oberon.ethz.ch:80/ethoberon/defs/Directories.Def.html
+*)
+DEFINITION Directories; (* portable *)
+
+ IMPORT
+  Objects,
+  Gadgets, ListRiders;
+
+ TYPE
+  Model = POINTER TO ModelDesc;
+  ModelDesc = RECORD ( Gadgets.ObjDesc ) 
+  END;
+
+  Rider = POINTER TO RiderDesc;
+  RiderDesc = RECORD ( ListRiders.RiderDesc ) 
+  END;
+
+ TYPE FileProc = PROCEDURE (d: Directory; name: ARRAY OF CHAR; isDir: BOOLEAN; VAR continue: BOOLEAN);
+
+(* Update the model (not yet implemented) *)
+ PROCEDURE UpdateModel (obj: Model);
+
+(* Standard handler for directory models *)
+ PROCEDURE ModelHandler (obj: Objects.Object; VAR M: Objects.ObjMsg);
+
+(* Initialize a directory model *)
+ PROCEDURE InitModel (obj: Model; rootDir, mask: ARRAY OF CHAR);
+
+(* Generator for directory models *)
+ PROCEDURE New;
+ PROCEDURE NewDirList;
+ PROCEDURE NewDrv;
+
+(* Finds all the filenames in the search path that match a specified pattern
+and inserts them
+ into a list model gadget (ListModel, Tree or Dag) named <Objname> in the current
+context. 
+ If the option p is specified, the filenames are prefixed with their relative
+path in the current
+ working directory.
+ Usage: Directories.Directory [p] "<pattern>" <Objname> ~
+*)
+ PROCEDURE Directory;
+
+ PROCEDURE Enumerate (dir: Directory; fileProc: FileProc);
+ PROCEDURE This (path: ARRAY OF CHAR): Directory;
+END Directories.

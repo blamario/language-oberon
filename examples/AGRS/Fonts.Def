@@ -1,0 +1,41 @@
+(*
+https://web.archive.org/web/20050219180020/http://www.oberon.ethz.ch:80/ethoberon/defs/Fonts.Def.html
+*)
+DEFINITION Fonts; (* portable *)
+
+(*
+The Module Fonts implement the Oberon font manager. Fonts are collections 
+of characters, each character being a pattern and and metric data.
+*)
+ IMPORT Objects, Display;
+
+ CONST
+  substitute = -1; font = 0; metric = 1; (* Font types. *)
+
+ TYPE
+  Char = POINTER TO CharDesc;
+  Font = POINTER TO FontDesc;
+  CharDesc = RECORD ( Objects.ObjDesc )  (* The objects in a font library.
+*)
+   dx, x, y, w, h: INTEGER; (* Character width, pattern offset (x, y),
+pattern size (w, h). *)
+   pat: Display.Pattern (* Character raster data. *)
+  END;
+
+  FontDesc = RECORD ( Objects.LibDesc ) 
+   type: SHORTINT; (* Substitute, font, or metric. *)
+   height, minX, maxX, minY, maxY: INTEGER (* Font height, extremal values
+of characters in font. *)
+  END;
+
+ VAR 
+  FontId: CHAR; (* Initial character of font files (.Fnt). *)
+  Default: Font; (* Default system screen font (typically Oberon10.Scn.Fnt).
+*)
+
+(* Return the character and data of ch in a font. *)
+ PROCEDURE GetChar (F: Font; ch: CHAR; VAR dx, x, y, w, h: INTEGER; VAR pat: Display.Pattern);
+
+(* Load and cache a font. *)
+ PROCEDURE This (name: ARRAY OF CHAR): Font;
+END Fonts.

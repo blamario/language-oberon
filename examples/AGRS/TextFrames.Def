@@ -1,0 +1,69 @@
+(*
+https://web.archive.org/web/20041227181940/http://www.oberon.ethz.ch:80/ethoberon/defs/TextFrames.Def.html
+*)
+
+DEFINITION TextFrames; (* portable *)
+
+ IMPORT Objects, Display, Texts, Oberon;
+
+ TYPE
+  Location = RECORD
+   org, pos: LONGINT;
+   dx, x, y: INTEGER;
+  END;
+
+  Frame = POINTER TO FrameDesc;
+  FrameDesc = RECORD ( Display.FrameDesc ) 
+   text: Texts.Text;
+   org: LONGINT;
+   col: INTEGER;
+   lsp: INTEGER;
+   left, right, top, bot: INTEGER;
+   markH: INTEGER;
+   time: LONGINT;
+   mark, car, sel: INTEGER;
+   carloc: Location;
+   selbeg, selend: Location;
+  END;
+
+ VAR 
+  menuH, barW, left, right, top, bot, lsp: INTEGER;
+ PROCEDURE Mark (F: Frame; mark: INTEGER);
+ PROCEDURE Restore (F: Frame);
+ PROCEDURE Suspend (F: Frame);
+ PROCEDURE Extend (F: Frame; newY: INTEGER);
+ PROCEDURE Reduce (F: Frame; newY: INTEGER);
+ PROCEDURE Show (F: Frame; pos: LONGINT);
+ PROCEDURE Pos (F: Frame; X, Y: INTEGER): LONGINT;
+ PROCEDURE SetCaret (F: Frame; pos: LONGINT);
+ PROCEDURE TrackCaret (F: Frame; X, Y: INTEGER; VAR keysum: SET);
+ PROCEDURE RemoveCaret (F: Frame);
+ PROCEDURE SetSelection (F: Frame; beg, end: LONGINT);
+ PROCEDURE TrackSelection (F: Frame; X, Y: INTEGER; VAR keysum: SET);
+ PROCEDURE RemoveSelection (F: Frame);
+ PROCEDURE TrackLine (F: Frame; X, Y: INTEGER; VAR org: LONGINT; VAR keysum: SET);
+ PROCEDURE TrackWord (F: Frame; X, Y: INTEGER; VAR pos: LONGINT; VAR keysum: SET);
+ PROCEDURE GetAttr (F: Frame; VAR s: ARRAY OF CHAR);
+ PROCEDURE Call (F: Frame; pos: LONGINT; new: BOOLEAN);
+ PROCEDURE Write (F: Frame; ch: CHAR; lib: Objects.Library; col, voff: SHORTINT);
+ PROCEDURE Defocus (F: Frame);
+ PROCEDURE Neutralize (F: Frame);
+ PROCEDURE Modify (F: Frame; id, dY, Y, H: INTEGER);
+ PROCEDURE Open (
+        F: Frame; H: Objects.Handler; T: Texts.Text; org: LONGINT; 
+        col, left, right, top, bot, lsp: INTEGER);
+ PROCEDURE Copy (F: Frame; VAR F1: Frame);
+ PROCEDURE CopyOver (F: Frame; text: Texts.Text; beg, end: LONGINT);
+ PROCEDURE GetSelection (F: Frame; VAR M: Oberon.SelectMsg);
+ PROCEDURE GetCaret (F: Frame; VAR M: Oberon.CaretMsg);
+ PROCEDURE Update (F: Frame; beg, end, len: LONGINT);
+ PROCEDURE Edit (F: Frame; X, Y: INTEGER; Keys: SET);
+ PROCEDURE Handle (F: Objects.Object; VAR M: Objects.ObjMsg);
+ PROCEDURE Text (name: ARRAY OF CHAR): Texts.Text;
+ PROCEDURE NewMenu (name, commands: ARRAY OF CHAR): Frame;
+ PROCEDURE NewText (text: Texts.Text; pos: LONGINT): Frame;
+
+(* Replace the default system editor with a textframe. *)
+ PROCEDURE ReplaceSystemEditor;
+
+END TextFrames.

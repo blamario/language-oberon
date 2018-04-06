@@ -1,0 +1,137 @@
+(*
+https://web.archive.org/web/20050219180235/http://www.oberon.ethz.ch:80/ethoberon/defs/Pictures.Def.html
+*)
+DEFINITION Pictures; (* portable, except where noted *)
+
+(*Module Pictures implement an abstract data type (and object type) for manipulating
+colored bitmaps of various color depths.
+*)
+ IMPORT Files, Display, Objects;
+
+ CONST
+  redraw = 4; resize = 5; (* UpdateMsg id. *)
+  PictFileId = - 4093;  (* First two bytes of a .Pict file (0F0H, 3H). *)
+
+ TYPE
+  Picture = POINTER TO PictureDesc;
+  UpdateMsg = RECORD ( Display.FrameMsg ) 
+   id, u, v, w, h: INTEGER;
+   pict: Picture;
+  END;
+
+  PictureDesc = RECORD ( Objects.ObjDesc ) 
+   width, height, depth: INTEGER; (* Width, height in pixels, and depth in
+bits per pixel (1, 4, or 8). *)
+   address: LONGINT; (* non-portable *) (* Pointer to bitmap data. *)
+  END;
+
+ VAR 
+  dots: Display.Pattern;
+  colorD: INTEGER; (* Default bitmap color depth. *)
+
+(* Get the color index of the bitmap pixel at X, Y. *)
+ PROCEDURE Get (P: Picture; X, Y: INTEGER): INTEGER;
+
+(* Put a pixel of color col at x, y using mode. *)
+ PROCEDURE Dot (P: Picture; col: INTEGER; X, Y, mode: INTEGER);
+
+(* Starting at position x, y, determine the longest run of the same colored
+pixels (col) on the same scanline. Afterwards x indicates the first pixel of
+a different color thatn col. *)
+ PROCEDURE GetRun (P: Picture; VAR col: INTEGER; VAR X: INTEGER; Y: INTEGER);
+
+(* Copy a the block sx, sy, w, h from picture sP to position dx, dy in destination
+picture dP. Source and destination picture may be the same. *)
+ PROCEDURE CopyBlock (sP, dP: Picture; SX, SY, W, H, DX, DY, mode: INTEGER);
+
+(* Copy the pattern pat in color col to position x, y using mode. *)
+ PROCEDURE CopyPattern (P: Picture; col: INTEGER; pat: LONGINT; X, Y, mode: INTEGER);
+
+(* Block fill area x, y, w, h in color col using mode. *)
+ PROCEDURE ReplConst (P: Picture; col, X, Y, W, H, mode: INTEGER);
+
+(* Pattern fill pattern pat in the area x, y, w, h in color col using mode.
+*)
+ PROCEDURE ReplPattern (P: Picture; col: INTEGER; pat: LONGINT; X, Y, W, H, mode: INTEGER);
+
+(* Copy area SX, SY, SW, SH of source picture sP to area DX, DY, DW, DH of destination
+picture dP. Appropriate scaling is done. *)
+ PROCEDURE Copy (sP, dP: Picture; SX, SY, SW, SH, DX, DY, DW, DH, mode: INTEGER);
+
+(* Define the color palette for color index col. *)
+ PROCEDURE SetColor (P: Picture; col, red, green, blue: INTEGER);
+
+(* Retrieve the color palette entry for color index col. *)
+ PROCEDURE GetColor (P: Picture; col: INTEGER; VAR red, green, blue: INTEGER);
+
+(* Indicate that a change has been made to the area X, Y, W, H of P. This results
+in an UpdateMsg with id = redraw to be broadcasted into the display space. *)
+ PROCEDURE Update (P: Picture; X, Y, W, H: INTEGER);
+
+(* Copy the area x, y, w, h of picture P to position dx, dy on the display.
+*)
+ PROCEDURE DisplayBlock (P: Picture; X, Y, W, H, DX, DY, mode: INTEGER);
+
+(* Create a picture of size width x height with depth bits per pixel. The picture
+palette is initialized to a default state. If not enough memory is available
+to allocate the bitmap data, the width, height, and depth of the picture is
+set to zero. *)
+ PROCEDURE Create (P: Picture; width, height, depth: INTEGER);
+
+(* Like Dot, for a line of pixels. *)
+ PROCEDURE PutLine (P: Picture; VAR data: ARRAY OF INTEGER; x, y, w: INTEGER);
+
+(* Like Get, for a line of pixels. *)
+ PROCEDURE GetLine (P: Picture; VAR data: ARRAY OF INTEGER; x, y, w: INTEGER);
+
+(* Stores picture run length encoded to file F (including tag). *)
+ PROCEDURE Store (P: Picture; F: Files.File; pos: LONGINT; VAR len: LONGINT);
+
+(* Load a run length encoded picture from position pos from file F. Pos should
+be AFTER the two byte picture identification of a picture file. *)
+ PROCEDURE Load (P: Picture; F: Files.File; pos: LONGINT; VAR len: LONGINT);
+
+(* Open the picture file with name from disk. Any graphic file format listed
+in the PictureConverters section of Oberon.Text can be loaded (e.g. GIF, JPEG,
+XBM, BMP). *)
+ PROCEDURE Open (P: Picture; name: ARRAY OF CHAR; color: BOOLEAN);
+
+(* Returns the address of the bitmap data of a picture. *)
+ PROCEDURE Address (P: Picture): LONGINT; (* non-portable *)
+
+(* Default picture object handler. *)
+ PROCEDURE Handle (obj: Objects.Object; VAR msg: Objects.ObjMsg);
+
+(* Generator for a picture object. *)
+ PROCEDURE NewPicture;
+END Pictures.
+
+(* Remarks
+
+1. The origin (0, 0) is the bottom left corner of a bitmap. A picture has a
+bitmap and a color palette. The color palette specifies the reg, green, blue
+components (in the range 0 - 255) of the color indexes in the bitmap data. Only
+palettized bitmaps are supported in depths of 1, 4, and 8 bits per pixel. On
+most Oberon platforms the color palette of a picture is ignored when displaying
+the picture. Instead the picture is displayed with the current screen palette.
+To see the true colors of a picture, the picture palette has to be copied into
+the screen palette.
+
+2. The drawing modes are the same as that of module Display (replace, paint,
+invert). After drawing into a picture, a module should indicate using procedure
+Update what area of the picture should be displayed fresh.
+
+3. On many Oberon platforms the address of the bitmap data is set to zero. This
+indicates that it is impossible to access the bitmap directly.
+
+4. Native Oberon only supports bit depths of 8 bits per pixel.
+
+5. When opening a GIF picture with Pictures.Open, the GIF background color is
+burned in to color 14 (light grey).
+
+6. Implementation restriction
+Picture objects cannot be named or have attributes (see module Attributes).
+Picture objects only understand the messages Objects.FileMsg, Objects.CopyMsg
+and Objects.BindMsg.
+
+*)

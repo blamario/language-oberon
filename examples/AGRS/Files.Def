@@ -1,0 +1,135 @@
+(*
+https://web.archive.org/web/20050218154659/http://www.oberon.ethz.ch:80/ethoberon/defs/Files.Def.html
+*)
+DEFINITION Files;
+
+ IMPORT SYSTEM, OFS;
+
+ TYPE
+  File = OFS.File;
+  Rider = OFS.Rider;
+
+(* Creates a new file with the specified name. *)
+ PROCEDURE New (name: ARRAY OF CHAR): File;
+
+(* Open an existing file. The same file descriptor is returned if a file is
+opened multiple times. *)
+ PROCEDURE Old (name: ARRAY OF CHAR): File;
+
+(* Register a file created with New in the directory, replacing the previous
+file in the 
+directory with the same name. The file is automatically closed. *)
+ PROCEDURE Register (f: File);
+
+(* Flushes the changes made to a file to disk. Register will automatically Close
+a file. *)
+ PROCEDURE Close (f: File);
+
+(* Returns the current length of a file. *)
+ PROCEDURE Length (f: File): LONGINT;
+
+(* Returns the time (t) and date (d) when a file was last modified. *)
+ PROCEDURE GetDate (f: File; VAR t, d: LONGINT);
+
+(* Sets the modification time (t) and date (d) of a file. *)
+ PROCEDURE SetDate (f: File; t, d: LONGINT);
+
+(* Positions a Rider at a certain position in a file. Multiple Riders can be
+positioned 
+at different locations in a file. A Rider cannot be positioned beyond the end
+of a file. *)
+ PROCEDURE Set (VAR r: Rider; f: File; pos: LONGINT);
+
+(* Returns the offset of a Rider positioned on a file. *)
+ PROCEDURE Pos (VAR r: Rider): LONGINT;
+
+(* Returns the File a Rider is based on. *)
+ PROCEDURE Base (VAR r: Rider): File;
+
+(* Read a byte from a file, advancing the Rider one byte further. R.eof indicates
+if the end 
+of the file has been passed. *)
+ PROCEDURE Read (VAR r: Rider; VAR x: SYSTEM.BYTE);
+
+(* Reads a sequence of length n bytes into the buffer x, advancing the Rider.
+Less bytes 
+will be read when reading over the length of the file. r.res indicates the number
+of unread bytes. 
+x must be big enough to hold n bytes. *)
+ PROCEDURE ReadBytes (VAR r: Rider; VAR x: ARRAY OF SYSTEM.BYTE; n: LONGINT);
+
+(*
+Portable routines to read the standard Oberon types.
+*)
+ PROCEDURE ReadInt (VAR r: Rider; VAR x: INTEGER);
+ PROCEDURE ReadLInt (VAR r: Rider; VAR x: LONGINT);
+ PROCEDURE ReadSet (VAR r: Rider; VAR x: SET);
+ PROCEDURE ReadBool (VAR r: Rider; VAR x: BOOLEAN);
+ PROCEDURE ReadReal (VAR r: Rider; VAR x: REAL);
+ PROCEDURE ReadLReal (VAR r: Rider; VAR x: LONGREAL);
+ PROCEDURE ReadString (VAR r: Rider; VAR x: ARRAY OF CHAR);
+
+(* Reads a number in compressed variable length notation using the minimum amount
+of bytes. *)
+ PROCEDURE ReadNum (VAR r: Rider; VAR x: LONGINT);
+
+(* Writes a byte into the file at the Rider position, advancing the Rider by
+one. *)
+ PROCEDURE Write (VAR r: Rider; x: SYSTEM.BYTE);
+
+(* Writes the buffer x containing n bytes into a file at the Rider position.
+*)
+ PROCEDURE WriteBytes (VAR r: Rider; VAR x: ARRAY OF SYSTEM.BYTE; n: LONGINT);
+
+(*
+Portable routines to write the standard Oberon types.
+*)
+ PROCEDURE WriteInt (VAR r: Rider; x: INTEGER);
+ PROCEDURE WriteLInt (VAR r: Rider; x: LONGINT);
+ PROCEDURE WriteSet (VAR r: Rider; x: SET);
+ PROCEDURE WriteBool (VAR r: Rider; x: BOOLEAN);
+ PROCEDURE WriteReal (VAR r: Rider; x: REAL);
+ PROCEDURE WriteLReal (VAR r: Rider; x: LONGREAL);
+ PROCEDURE WriteString (VAR r: Rider; x: ARRAY OF CHAR);
+
+(* Writes a number in a compressed format. *)
+ PROCEDURE WriteNum (VAR r: Rider; x: LONGINT);
+
+(* Deletes a file. res = 0 indicates success. *)
+ PROCEDURE Delete (name: ARRAY OF CHAR; VAR res: INTEGER);
+
+(* Renames a file. res = 0 indicates success. *)
+ PROCEDURE Rename (old, new: ARRAY OF CHAR; VAR res: INTEGER);
+
+(* Returns the full name of a file. *)
+ PROCEDURE GetName (f: File; VAR name: ARRAY OF CHAR);
+
+END Files.
+
+(* Remarks:
+
+1. Oberon uses the little-endian byte ordering for exchanging files between
+different Oberon platforms.
+
+2. Files are separate entities from directory entries. Files may be anonymous
+by having no name and not being registered in a
+ directory. Files only become visible to other clients of the Files module by
+explicitly passing a File descriptor or by registering
+ a file and then opening it from the other client. Deleting a file of which
+a file descriptor is still available, results in the file
+ becoming anonymous. The deleted file may be re-registered at any time.
+
+3. Files and their access mechanism (Riders) are separated. A file might have
+more than one rider operating on it at different
+ offsets in the file.
+
+4. The garbage collector will automatically close files when they are not required
+any more. File buffers will be discarded
+ without flushing them to disk.  Use the Close procedure to update modified
+files on disk.
+
+5. Relative and absolute filenames written in the directory syntax of the host
+operating system are used. By convention, Oberon
+ filenames consists of the letters A..Z, a..z, 0..9, and ".". The directory
+separator is typically / or :. Oberon filenames are
+ case sensitive. *)

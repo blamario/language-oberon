@@ -1,0 +1,64 @@
+(*
+https://web.archive.org/web/20041226015509/http://www.oberon.ethz.ch:80/ethoberon/defs/Links.Def.html
+*)
+DEFINITION Links; (* portable *)
+
+(*The Links module manage a set of named references to objects for the gadgets.
+*)
+ IMPORT
+  Files, Objects;
+
+ TYPE
+  Link = POINTER TO LinkDesc;
+  LinkDesc = RECORD
+   next: Link;
+   name: ARRAY 32 OF CHAR;
+   obj: Objects.Object
+  END;
+
+(* Store links to a file. Only (ref, lib) references to links are written. *)
+ PROCEDURE StoreLinks (VAR R: Files.Rider; lib: Objects.Library; list: Link);
+
+(* Load links from a file. *)
+ PROCEDURE LoadLinks (VAR R: Files.Rider; lib: Objects.Library; VAR list: Link);
+
+(* Copy links.  Both shallow and deep copies are supported. *)
+ PROCEDURE CopyLinks (VAR M: Objects.CopyMsg; in: Link; VAR out: Link);
+
+(* Bind all linked objects. *)
+ PROCEDURE BindLinks (list: Link; VAR M: Objects.BindMsg);
+
+(* Insert a link in a list. An existing link with the same name is discarded.
+*)
+ PROCEDURE InsertLink (VAR list: Link; name: ARRAY OF CHAR; val: Link);
+
+(* Link Locate. *)
+ PROCEDURE FindLink (name: ARRAY OF CHAR; list: Link): Link;
+
+(* Delete a link. *)
+ PROCEDURE DeleteLink (VAR list: Link; name: ARRAY OF CHAR);
+
+(* Default handling of setting, retrieving and enumerating a list of links.
+Parameter list might be modified
+during a set operation. *)
+ PROCEDURE HandleLinkMsg (VAR list: Link; VAR M: Objects.LinkMsg);
+
+(* Forward a message to all linked objects in the list. USE WITH CARE, MESSAGE
+CYCLES! *)
+ PROCEDURE Broadcast (list: Link; VAR M: Objects.ObjMsg);
+
+(* Get the named link of obj. *)
+ PROCEDURE GetLink (obj: Objects.Object; name: ARRAY OF CHAR; VAR ob1: Objects.Object);
+
+(* Set the named link of obj. *)
+ PROCEDURE SetLink (obj: Objects.Object; name: ARRAY OF CHAR; ob1: Objects.Object);
+
+END Links.
+
+(* Remarks:
+
+1. The links of gadgets (both Gadgets.Object and Gadgets.Frame) are managed
+by module Gadgets. Module Gadgets use the utility procedures defined in module
+Links.
+
+*)

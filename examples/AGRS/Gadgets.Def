@@ -1,0 +1,538 @@
+(*
+https://web.archive.org/web/20050101093105/http://www.oberon.ethz.ch:80/ethoberon/defs/Gadgets.Def.html
+*)
+DEFINITION Gadgets; (* portable *)
+
+(*The Gadgets module forms the basis of the Gadgets system. It defines the
+most important types, provide default message handlers and often used utility
+procedures. In addition, a few gadget specific messages are defined.
+*)
+ IMPORT
+  Objects, Display, Display3, Oberon, Files,
+  Attributes, Links;
+
+ CONST
+ (* Priority message id's. *)
+  top = 0;  (* Move gadget to the front. *)
+  bottom = 1;  (* Move gadget to the back. *)
+  visible = 2;  (* Move gadget to the front if not completely visible. *)
+
+ (* Gadget Frame states. *)
+  selected = 0;  (* Selected or not. *)
+  lockedsize = 2;  (* Gadget prefers a fixed W, H. *)
+  transparent = 4;  (* Transparent or not. *)
+  lockedcontents = 10;  (* All direct descendants are locked. *)
+
+ TYPE
+ (* Message broadcast in the display space to indicate that "obj" has changed.
+Normally used for updating model gadgets, although obj can be a list of gadget
+frames belonging to the same container. In this case all of the frames are to
+be displayed. This message is used by the Inspector to indicate that an attribute
+value has changed. *)
+  UpdateMsg = RECORD ( Display.FrameMsg ) 
+   obj: Objects.Object;
+  END;
+
+ (* Message broadcast in the display space to indicate that the destination
+frame F wants to change its overlapping  priority. *)
+  PriorityMsg = RECORD ( Display.FrameMsg ) 
+   id: INTEGER; (* Top, bottom, visible. *)
+   passon: BOOLEAN; (* Indication if a whole tree of containers should be changed
+in priority. *)
+  END;
+
+  CmdMsg = RECORD ( Objects.ObjMsg ) 
+   cmd: ARRAY 128 OF CHAR;
+   res: INTEGER;
+  END;
+
+ (* Base type of the Model gadgets *)
+  Object = POINTER TO ObjDesc;
+  ObjDesc = RECORD ( Objects.ObjDesc ) 
+   attr: Attributes.Attr; (* Attribute list. Private variable. *)
+   link: Links.Link  (* Link list. Private variable. *)
+  END;
+
+ (* Base type of the visual gadgets *)
+  Frame = POINTER TO FrameDesc;
+  FrameDesc = RECORD ( Display.FrameDesc ) 
+   attr: Attributes.Attr; (* Attribute list. Private variable. *)
+   link: Links.Link;  (* Link list. Private variable. *)
+   state: SET;
+   mask: Display3.Mask; (*  Cached display mask. Can be NIL to indicate no/invalid
+mask. *)
+   obj: Objects.Object (* Model object, if any. *)
+  END;
+
+ (* Base type of the camera-view gadgets. *)
+  View = POINTER TO ViewDesc;
+  ViewDesc = RECORD ( FrameDesc ) 
+   absX, absY: INTEGER; (* Absolute screen position at last message forward
+to descendants. *)
+   border: INTEGER; (* Border width for clipping. *)
+
+  (* Install own clipping to display/printer mask here if view has an irregular
+outline. Otherwise set to NIL. *)
+   ClipMask: PROCEDURE (v: View; M: Display3.Mask; ondisplay: BOOLEAN);
+  END;
+
+ (* Calculate a mask for gadget G positioned at X, Y in the context dlink. *)
+  MakeMaskHandler = PROCEDURE (G: Frame; X, Y: INTEGER; dlink: Objects.Object; VAR M: Display3.Mask);
+
+ VAR 
+  framehandle: Objects.Handler; (* Default message handler for visual gadgets.
+*)
+  objecthandle: Objects.Handler; (* Default message handler for Model gadgets.
+*)
+  MakeMask: MakeMaskHandler; (* Calculates the current display mask of a visual
+gadget. *)
+  MakePrinterMask: MakeMaskHandler; (* Calculates the current printer mask
+of a visual gadget. *)
+
+ (* The following fields are used for parameter transfer during command execution.
+*)
+  context: Objects.Object; (* Context/parent of a gadget executing the command
+*)
+  executorObj: Objects.Object; (* Gadget executing the command. Same as Oberon.Par.obj.
+*)
+  senderObj: Objects.Object; (* Initiator of a drag and drop operation i.e.
+the gadget being dropped. *)
+  receiverObj: Objects.Object; (* Receiver of a dropped gadget. Often same
+as executorObj.  *)
+
+(* Is the context/parent of the frame F locked ? *)
+ PROCEDURE IsLocked (F: Frame; dlink: Objects.Object): BOOLEAN;
+
+(* Is the mouse located inside the work area of a gadget (i.e. excluding the
+control areas)? *)
+ PROCEDURE InActiveArea (F: Frame; VAR M: Oberon.InputMsg): BOOLEAN;
+
+(* Returns the name of of obj. Sends an Objects.AttrMsg behind the scenes. *)
+ PROCEDURE GetObjName (obj: Objects.Object; VAR name: ARRAY OF CHAR);
+
+(* Name object obj. Sends an Objects.AttrMsg behind the scenes. *)
+ PROCEDURE NameObj (obj: Objects.Object; name: ARRAY OF CHAR);
+
+(* Search for the object "O" in the public library "L.Lib" wherename is specified
+as "L.O". *)
+ PROCEDURE FindPublicObj (name: ARRAY OF CHAR): Objects.Object;
+
+(* Search for object named name in context. *)
+ PROCEDURE FindObj (context: Objects.Object; name: ARRAY OF CHAR): Objects.Object;
+
+(* Sets new W and H to (offscreen) frame F. *)
+ PROCEDURE ModifySize (F: Display.Frame; W, H: INTEGER);
+
+(* Inserts the frame f into container F at (u, v). (u, v) is relative to upper
+left corner of F. *)
+ PROCEDURE Consume (F, f: Frame; u, v: INTEGER);
+
+(* Returns a deep or shallow copy of object obj, depending on parameter deep
+*)
+ PROCEDURE Clone (obj: Objects.Object; deep: BOOLEAN): Objects.Object;
+
+(* Check if a message loop would be created should newchild be inserted in the
+container parent. Sends a dummy message behind the scenes. *)
+ PROCEDURE Recursive (parent, newchild: Objects.Object): BOOLEAN;
+
+(* Broadcasts an Gadgets.UpdateMsg should obj be a model gadget, or a Display.DisplayMsg
+if obj is a Display.Frame. *)
+ PROCEDURE Update (obj: Objects.Object);
+
+(* Make a copy of a pointer to an object. A shallow copy returns a reference
+to obj. A deep copy results in M being forwarded to obj. *)
+ PROCEDURE CopyPtr (VAR M: Objects.CopyMsg; obj: Objects.Object): Objects.Object;
+
+(* Copy the record fields belonging to the base gadget type. Copies handle,
+X, Y, W, H, state, attr and obj.*)
+ PROCEDURE CopyFrame (VAR M: Objects.CopyMsg; F, F0: Frame);
+
+(* Copy the record fields belonging to the base Model gadget type. Copies handle
+and attr. *)
+ PROCEDURE CopyObject (VAR M: Objects.CopyMsg; obj, obj0: Object);
+
+(* Default handling of Display.ModifyMsg for visual gadgets. F.mask is invalidated
+when the frame changes its location or size. Sends behind the scenes to F an
+Display.OverlapMsg message to invalidate F.mask. Finally, a Display.DisplayMsg
+is broadcast to update F on the display.*)
+ PROCEDURE Adjust (F: Display.Frame; VAR M: Display.ModifyMsg);
+
+(* Returns the frame that is located at X, Y on the display. U, v return the
+relative coordinates of X, Y inside F. Behind the scenes a Display.LocateMsg
+is broadcast. *)
+ PROCEDURE ThisFrame (X, Y: INTEGER; VAR F: Display.Frame; VAR u, v: INTEGER);
+
+(* Implements standard resize handling for frames. Rubber-bands the gadget size
+and broadcasts a Display.ModifyMsg. *)
+ PROCEDURE SizeFrame (F: Display.Frame; VAR M: Oberon.InputMsg);
+
+(*  Implements standard move behaviour for frames. Tracks the gadget outline,
+broadcasts a ConsumeMsg on a copy-over or consume interclick, or broadcast a
+Display.ModifyMsg for a simple move operation.   *)
+ PROCEDURE MoveFrame (F: Display.Frame; VAR M: Oberon.InputMsg);
+
+(* Integrate obj at the caret position. A Display.ConsumeMsg is broadcast behind
+the scenes. *)
+ PROCEDURE Integrate (obj: Objects.Object);
+
+(* Write an object POINTER to a file. Lib is the library of the object that
+contains the pointer.*)
+ PROCEDURE WriteRef (VAR r: Files.Rider; lib: Objects.Library; obj: Objects.Object);
+
+(* Read an object POINTER from a file. Lib is the library of the object that
+contains the pointer. Obj might be of type Objects.Dummy if a loading failure
+occured. *)
+ PROCEDURE ReadRef (VAR r: Files.Rider; lib: Objects.Library; VAR obj: Objects.Object);
+
+(* Execute a string as an Oberon command. The parameters executor, dlink, sender,
+receiver are copied to the global variables executorObj, context, senderObj,
+receiverObj respectively. Dlink must be the parent of executor. If a '%' is
+leading the command, no Oberon.Par is set up. *)
+ PROCEDURE Execute (cmd: ARRAY OF CHAR; executor, dlink, sender, receiver: Objects.Object);
+
+(* Forwards a message from a camera-view to its contents, inserting the camera-view
+in the message thread. X, Y is the absolute screen coordinates of the bottom-left
+corner of the camera-view. This is important for calculating the correct display
+mask for the contents of the view. *)
+ PROCEDURE Send (from: View; X, Y: INTEGER; to: Display.Frame; VAR M: Display.FrameMsg);
+
+(* Bind an object to a library. Nothing happens if obj is already bound to a
+public library, or is already bound to lib. This is the default behavior when
+an object received the Objects.BindMsg. *)
+ PROCEDURE BindObj (obj: Objects.Object; lib: Objects.Library);
+
+(* Execute the attribute with name attr of F as an Oberon command. Sends a Objects.AttrMsg
+to retrieve the attribute attr of F. The attributed must be of the string class.
+*)
+ PROCEDURE ExecuteAttr (F: Frame; attr: ARRAY OF CHAR; dlink, sender, receiver: Objects.Object);
+
+(* Standard mouse tracking behavior of visual gadgets. Calls ExecuteAttr for
+the "Cmd" attribute, calls MoveFrame and SizeFrame.*)
+ PROCEDURE TrackFrame (F: Display.Frame; VAR M: Oberon.InputMsg);
+
+(* Look up value of the name alias. Empty string is returned if name is not
+aliased. *)
+ PROCEDURE GetAlias (name: ARRAY OF CHAR; VAR value: ARRAY OF CHAR);
+
+(* Create an object from the generator procedure or alias objname. *)
+ PROCEDURE CreateObject (objname: ARRAY OF CHAR): Objects.Object;
+
+(* Create a View/Model pair from the generator procedures viewnewproc and modelnewproc.
+Aliasing is supported. *)
+ PROCEDURE CreateViewModel (viewnewproc, modelnewproc: ARRAY OF CHAR): Display.Frame;
+
+(* Adds a generator alias. *)
+ PROCEDURE AddAlias (name, value: ARRAY OF CHAR);
+
+(* Command to insert a newly allocated gadget at the caret. Used in the form:
+
+ Gadgets.Insert <generatorproc> ~  for a single object
+  or
+ Gadgets.Insert <viewgeneratorproc> <modelgeneratorproc> ~ for a model-view
+pair
+ 
+ Aliasing is supported.
+*)
+ PROCEDURE Insert;
+
+(* Returns the latest object selection. Time < 0 indicates no selection. *)
+ PROCEDURE GetSelection (VAR objs: Objects.Object; VAR time: LONGINT);
+
+(* Search for the object "O" in the public library "L.Lib" where the name is
+specified as "L.O" and return a deep copy or shallow copy. *)
+ PROCEDURE CopyPublicObject (name: ARRAY OF CHAR; deep: BOOLEAN): Objects.Object;
+
+(* Changes the selected frame into a new frame type. Used in the form
+
+ Gadgets.Change <generatorproc>
+ 
+ Aliasing is supported.
+*)
+ PROCEDURE Change;
+
+(* Make a deep copy of the object selection and insert the result at the caret.
+*)
+ PROCEDURE Copy;
+
+(* Change the value(s) of (an) attribute(s) in the object selection. Used in
+the form:
+
+  Gadgets.ChangeAttr <AttributeName> <AttributeValue> ~
+ 
+ AttributeValue can take several forms, depending on the type of the attribute:
+
+ names  For string attributes
+ Yes/No      For boolean attributes  
+ 1234    For number attributes
+ "strings" For string attributes
+*)
+ PROCEDURE ChangeAttr;
+
+(* Set an attribute value of a named object. Used in the form:
+
+ Gadgets.Set O.A <AttributeValue> ~  for attribute A of named object O in the
+current context
+*)
+ PROCEDURE Set;
+
+(* Create a new Model gadget and link it to all the visual objects in the current
+selection. Used in the form:
+
+ Gadgets.Link <modelgenerator> 
+ 
+ Aliasing is supported. An Objects.LinkMsg is sent behind the scenes.
+*)
+ PROCEDURE Link;
+END Gadgets.
+
+(* Remarks:
+
+1. Objects
+The type Gadgets.Object forms the base class of all model gadgets. Examples
+of these are the Integer, Boolean, Real, String and Complex gadgets.
+
+2. Frames
+The Frame definition is the base type of all displayable gadgets (sometimes
+called views when discussed in relation to the MVC model). The state variable
+(a SET) plays an important role in controlling the gadget frame. It remembers
+state information and controls editing abilities by setting flags. A flag is
+represented by a small integer value (a flag is set if that number is a member
+of the state set). The selected flag indicates if the gadget is selected or
+not. The lockedsize flag prevents resizing of the gadget. The transparent flag
+indicates that a gadget is transparent. It is possible to "see through" parts
+of a transparent gadget to gadgets lying behind it. The lockchildren flag locks
+the direct children of a container gadget. A locked gadget cannot be moved or
+resized. The lockchildren flag is inspected by the IsLocked function and also
+used by the InActiveArea function to determine if a gadget can be moved or resized.
+This flag is normally visible to the outside world through a "Locked" attribute.
+The obj field points to the model of the gadget (if it has one). The mask field
+contains the gadget cached mask. This mask is calculated by the parent of a
+gadget, and transfered from parent to child through the Display3.OverlapMsg.
+During editing operations in the display space, the mask might become invalid
+due to new gadgets overlapping the gadget. In this case, a parent will invalidate
+the mask by setting no (i.e. NIL) mask. This results in the cached mask to be
+set to NIL. However, as soon as a gadget wants to display itself, the MakeMask
+procedure will notice the invalidated mask and request its parent to inform
+it of the correct mask (using Display3.UpdateMaskMsg). The mask is located in
+the fourth quadrant, with the top left corner of the gadget positioned at the
+origin (0, 0) of the mask. Before displaying a visual gadget, the cached mask
+is translated to the correct position on the display. This is done by a call
+to Gadgets.MakeMask.
+
+3. Views
+The View type forms the base of a special class of gadgets called camera-views.
+A camera-view displays other displayable gadgets. Different camera views may
+display the same gadget, where each camera view may display a different part
+of it. The View base type is used to calculate the actual visible area of the
+object being viewed. This operation is hidden behind the secens in Gadgets.MakeMask.
+The absX, absY pair indicate the absolute position of the camera view on the
+display. This is set by the camera view itself when it forwards a message down
+to its model (i.e. the thing it is displaying). The border field indicates how
+wide the border of the camera view is (the border clips away parts of the model).
+ The display mask generation of Gadgets.MakeMask is intimitely coupled with
+the structure of the display space. The remainder of this paragraph is for those
+curious about how mask calculation is done. The display space is organized in
+a DAG-like structure. Messages travel through the DAG, possibly passing to the
+same frame through different messages paths Conceptually, we take the DAG and
+partition it into separate display groups. This is done by removing all the
+edges in the DAG that connect a camera view with its model, and eliminating
+all the non-visual gadgets and their corresponding edges. As no multiple views
+of the same visual gadget through camera views are involved, the mask of each
+gadget in a display group only takes into account the overlapping between gadgets
+in the same display group. These masks remain static, and can be cached for
+each gadget. This is under the assumption that the root object of a display-group
+is completely visible. In practice, display groups corresponds to panels and
+their contents.
+ The display groups are used to determine the visibility of a gadget when it
+calls Gadgets.MakeMask. Using the message thread, all camera-views from the
+root of the display space to the displayed frame are visited. For each of these,
+the camera-view can influence the visibility of its descendants. By intersecting
+the cached mask of a gadget with all of the masks of the camera-views located
+in the message path, we can determine exactly what area of a gadget is visible.
+
+4. UpdateMsg
+The Smalltalk MVC framework is supported with the UpdateMsg. This message must
+always be broadcast to inform everybody of a change of a model gadget. It contains
+a pointer to the object that has changed. All gadgets that have this object
+as a model, has to update themselves. The object that changes need not always
+be a model gadget; it can also be a frame (this indicates that the frame's parent
+should redraw the frame). In the latter case, a whole list of frames may be
+updated (the frames are linked through the slink field). By convention, all
+the frames updated should belong to one single parent.
+
+5. PriorityMsg
+The Priority message allows the changing of the overlapping order of gadgets.
+Each container gadget contains a list of children gadgets, where the position
+in the dsc-next list specifies the overlapping priority (from back to front).
+Changing the position of a child in the list has the affect of moving it to
+the front or the back in the container. When the PriorityMsg is broadcast the
+destination F indicates the child that wants to change its display priority.
+The top, bottom and visible flags are used to move the child to the front, to
+the back or to make it visible when not. The visible flag has the affect of
+moving the child to the front only when it is overlapped by a sibling. Otherwise,
+no action is undertaken. The passon flag indicates if the priority change should
+be recursive, meaning that the parent of F and onwards should also change priority,
+and thus bring a whole hierarchy to the front or back.
+
+6. Default message handlers
+To simplify programming, default handlers for model and visual gadgets are provided.
+These may be called to handle messages a default way. The default frame handler
+(framehandle) responds to the Objects.FileMsg (storing/loading X, Y, W, H, state,
+obj and attr), Objects.CopyMsg (calls CopyFrame), BindMsg (calls BindObj), Objects.AttrMsg,
+Objects.FindMsg (returning itself or the model), Display.DisplayMsg (simply
+draws rectangle), Display3.OverlapMsg, Display.LocateMsg, Display.ModifyMsg
+(calls Adjust), Display.SelectMsg (only flips the selected flag), Display.ConsumeMsg
+(executes the ConsumeCmd attribute if the gadget has one), Display.ControlMsg
+(forwards it to the gadgets model), and Oberon.InputMsg (calling TrackFrame
+on a mouse track event). The default model gadget handler (objecthandle) respond
+to the Objects.FileMsg (storing/loading attr), Objects.AttrMsg, Objects.BindMsg
+(calls BindObj), Objects.CopyMsg (calling CopyObject), and Objects.FindMsg (returning
+the model if the names match).
+
+7. The Imaging Model
+Two important relationships exist between gadgets: the view relationship and
+parent-child relationship. A panel may display several gadgets contained inside
+of it. This is the parent-child relationship, where the children are displayed
+and managed by the parent. The parent does not assume anything about the type
+of its children, and the children do not assume to be contained in an object
+of a specified type. This allows a gadget to be integrated in all environments,
+and for parents to manage children that are unknown to it. This is the principle
+of complete integration and plays a central role in the gadgets system.
+  The view relationship allows one gadget to display or view another gadget.
+The first (the viewer) may either visualize the state of the viewed gadget (for
+example, a slider representing an integer value), or display the viewed gadget.
+In the first case, a model is viewed, while in the latter, a displayable object
+is viewed (a camera-view). Models form the interface to the application, and
+displayable models allow the same gadget to be displayed many times on the display.
+Many different views of the same object (model or displayable) may be possible,
+where each view can visualize the viewed object in a different manner. Views
+may be nested to an arbitrary depth, as long as no recursive views are created.
+Messages travel through the system informing views that a model has changed.
+These Update messages indicate the model involved, which the views may check
+to find out if it needs to redisplay or recalculate itself. The model-view framework
+is open; it is also possible for one model gadget to be dependent on another
+model gadget.You may have different representations of the same data, allow
+objects to depend on others, and allow data or objects to be shared between
+different documents.
+ It is this flexible model-view framework combined with the ability to have
+gadgets overlapping each other and edited-in-place, that complicates the imaging
+model. A displayable gadget may be partially visible through one camera-view,
+and partially visible through another. The same object, can be seen and edited
+two or more times on different areas of the display. Also, some of these camera-views
+may be partially overlapped by other displayable gadgets. The problem is compounded
+when camera-views are nested inside camera-views, increasing the number of display
+instances. Thus a gadget may potentially have to display itself in many different
+ways. Clearly, with a single displayable gadget having so many different display
+instances (one for each view, in the simplest case), the gadget cannot have
+one unique display coordinate. The gadgets system uses relative coordinates,
+where the coordinate of a gadget is always relative to its parent. All displayable
+frame are connected to a data structure called the display root. Broadcasting
+a message through the display space causes all displayable objects in the structure
+to be reached. If we assume that views relay the message to the objects they
+display, the display space forms a directed a-cyclic graph (DAG). There are
+certain objects where two or more message paths converges. Such a convergence
+point can occur when two or more camera-views display the same object. Thus
+during a single message broadcast, the message may arrive twice or more times
+at the same object. If this object is displayable, it receives the message exactly
+once for each of its display instances. For each of these message arrivals,
+the gadget should have different coordinates on the display.
+ In practice, the coordinates of a gadget is determined by the path the message
+follows to reach that gadget. Each message relay operation may change the coordinate
+system. This is reflected in the origin stored in the message. The display coordinates
+of a display instance of a gadget is thus the combination of the current origin
+(in the message) and the relative coordinates of the gadget itself. A gadget
+can be prompted into displaying itself on many different locations on the display
+by varying the origin of the message. This is called the multiple view model
+of the gadgets system.
+ The main disadvantage of the multiple view model is that potentially each display
+instance of a frame may have a different visible area. Theoretically, the visible
+area of a display instance is a function of the message path to that instance.
+A data structure is used to indicate what part of a gadget is visible. Such
+a data structure is called a display mask. The mask can be constructed as the
+message travels through the display space, continually being reduced and expanded
+as the message travels. It consists of a set of non-overlapping rectangles which
+indicate which areas of the gadget are visible. Drawing primitives are issued
+through this mask, which has the effect of clipping them only to the visible
+areas in the mask. Operations on masks are also provided. You can, for example,
+calculate the intersection or union between masks, or enumerate all the visible
+areas in a mask.
+ Implementing the sketched procedure is inefficient. Masks may be calculated
+that are not used at all (not all broadcasts are display related). Also, masks
+should be cached for each display instance, rather being recalculated each time.
+In practice, a imaging model is used that is based on these observations. The
+following remarks give an idea of how things have actually been implemented.
+
+8. Masks
+Each gadget has a mask that shows which areas of it are visible. The mask field
+can be set to NIL, to indicates that no mask exists. A gadget can only be displayed
+once it becomes a mask. Should no mask exist, the Display3.UpdateMaskMsg is
+broadcast, with F set the maskless gadget. The parent of F is responsible for
+creating a new mask for F. The Display3.OverlapMsg is used to inform the gadget
+of its new mask. It is sent directly from the parent to the gadget (the above
+protocol is explained in the section about the Display3 module).
+ The mask generation is hidden from gadget programmers. When displaying a gadget,
+the mask's relative coordinates have to be converted into absolute screen coordinates,
+or possibly even a new mask created (as described above). The whole process
+is hidden behind the procedures MakeMask and MakePrinterMask. G is the frame
+for which a mask is needed, X and Y indicate the absolute screen position of
+the left-bottom corner of G, and dlink is the context of G. The context of G
+can be found in the dlink field of the received frame message. The MakePrinterMask
+procedure variable functions in the same way, except that a mask for the printer
+is created. For the latter X, Y should be the absolute printer coordinates of
+the gadget. The resulting masks are return in variable parameter M, and can
+immediately be used for displaying or printing the gadget.
+ 
+9. Mask Calculations
+ Masks are calculated from the intersection of the cached mask of a gadget and
+all the camera-views through which a message travels. We need a backward traversal
+from the gadget through all the display groups. On receiving a frame message,
+the dlink field in the message points to the first frame in the message thread.
+The list can be traversed further backwards with the dlink field of the frame.
+The backward traversal can continue by following the dlink fields through all
+frames in the thread. Thus when masks are generated one should distinguish between
+normal frames and camera-views, as we are only interested in camera-views when
+generating masks. Broadcast messages travel from one display group to another
+(through views) to reach a gadget. Thus the actual visible area of a gadget
+is the intersection of its static/cached mask plus all the masks of views through
+which the message travelled. This calculation only need to be made on demand.
+For example, when a gadget decides to display itself, it calls MakeMask to build
+it's visibility mask. MakeMask has to find out the path the message traveled
+to reach the gadget, extract all the camera-views, and build the intersection
+of the static mask plus all the masks of the views. This can be done by following
+the message path back from the receiver gadget to the root of the display.
+ Typically we don't want to modify the static mask of a gadget. However, this
+mask will be changed by the intersection process during mask calculation. Observations
+shows that the masks of views are mostly rectangular, i.e they are seldomly
+partially overlapped. If we assume that this is always the case, the mask calculation
+is nothing more than reducing the static mask by rectangular areas (clipping
+windows or ports). For this situation, the mask is provided with a rectangular
+clipping port, to which all output primitives are clipped after they have been
+clipped by the mask itself. The simple structure of the clipping port means
+that it can easily be saved, modified and restored, without affecting the static
+portion of the mask. Of course, the latter condition fails when the views are
+also partially obscured. In this case, the mask calculation has to be done in
+the less efficient way.
+
+10. Command Execution
+Gadgets may execute Oberon commands (procedures Execute and ExecuteAttr) specified
+by their command attributes. Commands can take their parameters from the user
+interface. For this purpose, several global variables are exported from the
+gadgets module. The variable context identifies the context, normally the parent,
+of the gadget executing the command. The context of a gadget is found in the
+dlink field of a Display.FrameMsg the gadget receives. The variable executorObj
+identifies the gadget executing the command, which is always the same as Oberon.Par.obj.
+The senderObj and receiverObj identifies the objects involved in consume operations,
+and may be NIL.
+
+11. Aliasing
+The Gadgets module implements a simple aliasing feature. This allows the user
+to give more meaningful abbreviations or names to the not so easy to remember
+object generator procedures. The principle client of aliasing are the Gadgets.Insert
+and Gadgets.Link commands. The aliases are found in the Oberon.Text/Registry
+section called Aliases. The aliases are read into an internal lookup table when
+the Gadgets module is loaded for the first time. The format of each line of
+the Aliases section is:
+
+   Alias=GeneratorProc
+
+*)
