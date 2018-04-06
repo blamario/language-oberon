@@ -3,6 +3,7 @@
 module Language.Oberon.Pretty where
 
 import Data.Functor.Identity (Identity(..))
+import Data.List (intersperse)
 import Data.List.NonEmpty (NonEmpty((:|)), fromList, toList)
 import Data.Text.Prettyprint.Doc
 import Numeric (showHex)
@@ -11,13 +12,13 @@ import Language.Oberon.AST
 
 instance Pretty (Module Identity) where
    pretty (Module name imports declarations body name') =
-      vsep ["MODULE" <+> pretty name <> ";",
-            if null imports then mempty
-            else "IMPORT" <+> align (vsep (punctuate comma $ prettyImport <$> imports)) <> semi,
-            vsep (pretty <$> declarations),
-            maybe mempty (\statements-> vsep ["BEGIN", prettyBlock statements]) body,
-            "END" <+> pretty name' <> ".",
-            mempty]
+      vsep $ intersperse mempty $
+      ["MODULE" <+> pretty name <> semi,
+       if null imports then mempty
+       else "IMPORT" <+> align (fillSep (punctuate comma $ prettyImport <$> imports)) <> semi]
+      <> (pretty <$> declarations)
+      <> [vsep (foldMap (\statements-> ["BEGIN" <#> prettyBlock statements]) body
+                <> ["END" <+> pretty name' <> "." <> line])]
       where prettyImport (Nothing, mod) = pretty mod
             prettyImport (Just inner, mod) = pretty inner <> ":=" <+> pretty mod
 
@@ -25,11 +26,11 @@ instance Pretty (Declaration Identity) where
    pretty (ConstantDeclaration ident (Identity expr)) = "CONST" <+> pretty ident <+> "=" <+> pretty expr <> semi
    pretty (TypeDeclaration ident typeDef) = "TYPE" <+> pretty ident <+> "=" <+> pretty typeDef <> semi
    pretty (VariableDeclaration idents varType) =
-      "VAR" <+> hsep (punctuate comma $ pretty <$> toList idents) <+> colon <+> pretty varType
+      "VAR" <+> hsep (punctuate comma $ pretty <$> toList idents) <+> colon <+> pretty varType <> semi
    pretty (ProcedureDeclaration heading body name) = vsep [pretty heading <> semi,
                                                            pretty body,
-                                                           "END" <+> pretty name]
-   pretty (ForwardDeclaration ident parameters) = "PROCEDURE" <+> "^" <+> pretty ident <+> pretty parameters
+                                                           "END" <+> pretty name <> semi]
+   pretty (ForwardDeclaration ident parameters) = "PROCEDURE" <+> "^" <+> pretty ident <+> pretty parameters <> semi
 
 instance Pretty IdentDef where
    pretty (IdentDef name Exported) = pretty name <> "*"
@@ -79,7 +80,7 @@ instance Pretty (Element Identity) where
 instance Pretty (Designator Identity) where
    pretty (Variable q) = pretty q
    pretty (Field record name) = pretty record <> dot <> pretty name
-   pretty (Index array index) = pretty array <> brackets (pretty index)
+   pretty (Index array indexes) = pretty array <> brackets (hsep $ punctuate comma $ pretty <$> toList indexes)
    pretty (TypeGuard scrutinee typeName) = pretty scrutinee <> parens (pretty typeName)
    pretty (Dereference pointer) = pretty pointer <> "^"
 
@@ -87,7 +88,7 @@ instance Pretty (Type Identity) where
    pretty (TypeReference q) = pretty q
    pretty (ArrayType dimensions itemType) =
       "ARRAY" <+> hsep (punctuate comma $ pretty . runIdentity <$> dimensions) <+> "OF" <+> pretty itemType
-   pretty (RecordType baseType fields) = vsep ["RECORD" <+> maybe mempty (parens . pretty) baseType,
+   pretty (RecordType baseType fields) = vsep ["RECORD" <+> foldMap (parens . pretty) baseType,
                                                indent 3 (vsep $ punctuate semi $ pretty <$> toList fields),
                                                "END"]
    pretty (PointerType pointed) = "POINTER" <+> "TO" <+> pretty pointed
@@ -103,59 +104,66 @@ instance Pretty (FieldList Identity) where
 
 instance Pretty (ProcedureHeading Identity) where
    pretty (ProcedureHeading receiver indirect ident parameters) =
-      "PROCEDURE" <> (if indirect then "*" else mempty) <+> pretty ident <> pretty parameters
+      "PROCEDURE" <> (if indirect then "* " else space) <> foldMap prettyReceiver receiver
+      <> pretty ident <> pretty parameters
+      where prettyReceiver (var, name, t) = parens ((if var then "VAR " else mempty)
+                                                        <> pretty name <> colon <+> pretty t)
+                                            <> space
 
 instance Pretty (FormalParameters Identity) where
    pretty (FormalParameters sections result) =
-      prettyList sections <+> maybe mempty (colon <+>) (pretty <$> result)
+      prettyList sections <> foldMap (colon <+>) (pretty <$> result)
 
 instance Pretty (FPSection Identity) where
-   prettyList sections = lparen <> hsep (punctuate comma $ pretty <$> sections) <> rparen
+   prettyList sections = lparen <> hsep (punctuate semi $ pretty <$> sections) <> rparen
    pretty (FPSection var names t) =
       (if var then ("VAR" <+>) else id) $ hsep (punctuate comma $ pretty <$> toList names) <+> colon <+> pretty t
    
 instance Pretty (ProcedureBody Identity) where
    pretty (ProcedureBody declarations body) =
       vsep ((indent 3 . pretty <$> declarations)
-            ++ [maybe mempty (\statements-> vsep ["BEGIN", prettyBlock statements]) body])
+            ++ foldMap (\statements-> ["BEGIN", prettyBlock statements]) body)
 
 instance Pretty (Statement Identity) where
-   prettyList = vsep . punctuate semi . (pretty <$>)
+   prettyList l = vsep (dropEmptyTail $ punctuate semi $ pretty <$> l)
+      where dropEmptyTail
+               | not (null l), EmptyStatement <- last l = init
+               | otherwise = id
    pretty EmptyStatement = mempty
    pretty (Assignment (Identity destination) expression) = pretty destination <+> ":=" <+> pretty expression
    pretty (ProcedureCall (Identity procedure) parameters) =
-      pretty procedure <> maybe mempty (parens . hsep . punctuate comma . (pretty <$>)) parameters
-   pretty (If (ifThen :| elsifs) fallback) = vsep [branch "IF" ifThen,
-                                                   vsep (branch "ELSIF" <$> elsifs),
-                                                   maybe mempty ("ELSE" <#>) (prettyBlock <$> fallback),
-                                                   "END"]
+      pretty procedure <> foldMap (parens . hsep . punctuate comma . (pretty <$>)) parameters
+   pretty (If (ifThen :| elsifs) fallback) = vsep (branch "IF" ifThen
+                                                   : (branch "ELSIF" <$> elsifs)
+                                                    ++ foldMap (\x-> ["ELSE", prettyBlock x]) fallback
+                                                    ++ ["END"])
       where branch kwd (condition, body) = vsep [kwd <+> pretty condition <+> "THEN",
                                                  prettyBlock body]
    pretty (CaseStatement scrutinee cases fallback) = vsep ["CASE" <+> pretty scrutinee <+> "OF",
                                                            pretty cases,
-                                                           maybe mempty ("ELSE" <#>) (prettyBlock <$> fallback),
+                                                           foldMap ("ELSE" <#>) (prettyBlock <$> fallback),
                                                            "END"]
                                                            
-   pretty (While condition body) = vsep ["WHILE" <+> pretty condition,
+   pretty (While condition body) = vsep ["WHILE" <+> pretty condition <+> "DO",
                                          prettyBlock body,
                                          "END"]
    pretty (Repeat body condition) = vsep ["REPEAT",
                                           prettyBlock body,
                                           "UNTIL" <+> pretty condition]
    pretty (For index from to by body) = vsep ["FOR" <+> pretty index <+> ":=" <+> pretty from <+> "TO" <+> pretty to
-                                              <+> maybe mempty ("BY" <+>) (pretty <$> by),
+                                              <+> foldMap ("BY" <+>) (pretty <$> by) <+> "DO",
                                               prettyBlock body,
                                               "END"]
    pretty (Loop body) = vsep ["LOOP",
                               prettyBlock body,
                               "END"]
    pretty (With alternatives fallback) =
-      vsep ["WITH",
-            pretty alternatives,
-            maybe mempty ("ELSE" <#>) (prettyBlock <$> fallback),
-            "END"]
+      "WITH" <+>
+      vsep (punctuate pipe (pretty <$> toList alternatives) ++ 
+            foldMap (\x-> ["ELSE", prettyBlock x]) fallback ++
+            ["END"])
    pretty Exit = "EXIT"
-   pretty (Return result) = "RETURN" <+> maybe mempty pretty result
+   pretty (Return result) = "RETURN" <+> foldMap pretty result
    
 instance Pretty (Case Identity) where
    pretty (Case labels body) = vsep ["|" <+> pretty labels <+> colon,
@@ -163,7 +171,7 @@ instance Pretty (Case Identity) where
    pretty EmptyCase = mempty
    
 instance Pretty (WithAlternative Identity) where
-   pretty (WithAlternative name t body) = vsep ["|" <+> pretty name <+> colon <+> pretty t <+> "DO",
+   pretty (WithAlternative name t body) = vsep [pretty name <+> colon <+> pretty t <+> "DO",
                                                 prettyBlock body]
 
 instance Pretty (CaseLabels Identity) where
