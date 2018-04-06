@@ -2,7 +2,7 @@
 
 module Main where
 
-import Language.Oberon (parseAndResolveModuleFile)
+import Language.Oberon (parseAndResolveModule)
 import Language.Oberon.AST (Module(..), Statement, Expression)
 import qualified Language.Oberon.Grammar as Grammar
 import qualified Language.Oberon.Resolver as Resolver
@@ -17,17 +17,18 @@ import Data.Functor.Identity (Identity)
 import Data.Functor.Compose (getCompose)
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.Map.Lazy as Map
+import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text, unpack)
-import Data.Text.IO (getLine, readFile)
+import Data.Text.IO (getLine, readFile, getContents)
 import Data.Typeable (Typeable)
 import Options.Applicative
 import Text.Grampa (Ambiguous, Grammar, ParseResults, parseComplete)
 import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
 import ReprTree
-import System.FilePath (FilePath)
+import System.FilePath (FilePath, takeDirectory)
 
-import Prelude hiding (getLine, readFile)
+import Prelude hiding (getLine, getContents, readFile)
 
 data GrammarMode = ModuleWithImportsMode | ModuleMode | AmbiguousModuleMode | DefinitionMode | StatementsMode | StatementMode | ExpressionMode
     deriving Show
@@ -40,6 +41,7 @@ data Opts = Opts
     , optsOberon2     :: Bool
     , optsIndex       :: Int
     , optsOutput      :: Output
+    , optsInclude     :: Maybe FilePath
     , optsFile        :: Maybe FilePath
     } deriving Show
 
@@ -59,6 +61,8 @@ main = execParser opts >>= main'
         <*> (Pretty <$> option auto (long "pretty" <> help "Pretty-print output" <> metavar "WIDTH")
              <|> Tree <$ switch (long "tree" <> help "Print the output as an abstract syntax tree")
              <|> pure Plain)
+        <*> optional (strOption (short 'i' <> long "include" <> metavar "DIRECTORY"
+                                 <> help "Where to look for imports"))
         <*> optional (strArgument
             ( metavar "FILE"
               <> help "Oberon file to parse"))
@@ -75,10 +79,12 @@ main = execParser opts >>= main'
 main' :: Opts -> IO ()
 main' Opts{..} =
     case optsFile of
-        Just file -> readFile file
+        Just file -> (if file == "-" then getContents else readFile file)
                      >>= case optsMode
-                         of ModuleWithImportsMode -> \_-> parseAndResolveModuleFile optsOberon2 file
-                                                          >>= succeed optsOutput
+                         of ModuleWithImportsMode ->
+                               \source-> parseAndResolveModule optsOberon2
+                                                               (fromMaybe (takeDirectory file) optsInclude) source
+                                         >>= succeed optsOutput
                             ModuleMode          -> go (Resolver.resolveModule predefined mempty) Grammar.module_prod
                                                    chosenGrammar file
                             DefinitionMode      -> go (Resolver.resolveModule predefined mempty) Grammar.module_prod
