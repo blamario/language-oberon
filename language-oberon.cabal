@@ -35,3 +35,12 @@ executable parse
                        rank2classes < 1.1, grammatical-parsers == 0.3.*, language-oberon,
                        optparse-applicative
   default-language:    Haskell2010
+
+test-suite           examples
+  type:              exitcode-stdio-1.0
+  build-depends:     base >= 4.7 && < 5,
+                     either == 5.*, directory < 2, filepath < 1.5,
+                     tasty >= 0.7, tasty-hunit,
+                     language-oberon
+  main-is:           test/Test.hs
+  default-language:  Haskell2010
