@@ -248,12 +248,9 @@ resolveModule predefinedScope modules (Module moduleName imports declarations bo
                Success DeclaredType{} -> Success q
                Success _ -> Failure (NotAType q :| [])
 
-         resolveTypeReference scope (TypeReference name) =
-            case resolveName scope name
-            of Failure err ->  Failure err
-               Success (DeclaredType t) -> resolveTypeReference scope t
-               Success _ -> Failure (NotAType name :| [])
-         resolveTypeReference scope t = pure t
+         resolveBaseType scope t = case resolveType scope t
+                                   of Failure err -> Failure err
+                                      Success t' -> resolveTypeReference scope t'
 
          resolveProcedure scope d@(Variable q) =
             case resolveName scope q
@@ -290,17 +287,17 @@ resolveModule predefinedScope modules (Module moduleName imports declarations bo
             of Nothing -> Failure (UnknownModule moduleName :| [])
                Just exports -> case Map.lookup name exports
                                of Just (Success rhs) -> Success rhs
+                                  Just (Failure err) -> Failure err
                                   Nothing -> Failure (UnknownImport q :| [])
          resolveName scope (NonQualIdent name) =
             case Map.lookup name scope
             of Just (Success rhs) -> Success rhs
                _ -> Failure (UnknownLocal name :| [])
                
-
          resolveBinding scope (DeclaredConstant (Ambiguous expression)) =
             DeclaredConstant . Identity <$> uniqueExpression (resolveExpression scope <$> expression)
-         resolveBinding scope (DeclaredType typeDef) = DeclaredType <$> resolveType scope typeDef
-         resolveBinding scope (DeclaredVariable typeDef) = DeclaredVariable <$> resolveType scope typeDef
+         resolveBinding scope (DeclaredType typeDef) = DeclaredType <$> resolveBaseType scope typeDef
+         resolveBinding scope (DeclaredVariable typeDef) = DeclaredVariable <$> resolveBaseType scope typeDef
          resolveBinding scope (DeclaredProcedure special parameters) =
             DeclaredProcedure special <$> traverse (resolveParameters scope) parameters
          
@@ -391,14 +388,29 @@ predefined2 = predefined <>
              FormalParameters [FPSection False (pure "s") $ TypeReference $ NonQualIdent "ARRAY",
                                FPSection False (pure "n") $ TypeReference $ NonQualIdent "ARRAY"] Nothing)])
 
+resolveTypeReferenceIn scope (DeclaredType t) = DeclaredType <$> resolveTypeReference scope t
+resolveTypeReferenceIn scope (DeclaredVariable t) = DeclaredVariable <$> resolveTypeReference scope t
+resolveTypeReferenceIn scope d = pure d
+
+resolveTypeReference scope t@(TypeReference q@(NonQualIdent name)) =
+   case Map.lookup name scope
+   of Nothing -> pure t
+      Just (Failure err) ->  Failure err
+      Just (Success (DeclaredType t'@(TypeReference q')))
+         | q == q' -> pure t' -- built-in type
+      Just (Success (DeclaredType t')) -> resolveTypeReference scope t'
+      Just {} -> Failure (NotAType q :| [])
+resolveTypeReference scope t = pure t
+
 exportsOfModule :: Module Identity -> Scope
 exportsOfModule = Map.mapMaybe isExported . globalsOfModule
    where isExported (PrivateOnly, _) = Nothing
          isExported (_, binding) = Just binding
 
 globalsOfModule :: Module Identity -> Map Ident (AccessMode, Validation (NonEmpty Error) (DeclarationRHS Identity))
-globalsOfModule (Module name imports declarations _ _) = scope'
-   where scope' = (Success <$>) <$> Map.fromList declarationBindings
+globalsOfModule (Module name imports declarations _ _) = scope
+   where scope = (resolveTypeReferenceIn scope' <$>) <$> Map.fromList declarationBindings
+         scope' = snd <$> scope
          declarationBindings = concatMap (declarationBinding name) declarations
 
 uniqueDesignator = unique InvalidDesignator AmbiguousDesignator

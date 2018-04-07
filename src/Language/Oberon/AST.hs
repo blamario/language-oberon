@@ -29,10 +29,10 @@ deriving instance Data (Declaration Ambiguous)
 deriving instance (Show (f (Designator f)), Show (f (Expression f)), Show (f (Statement f))) => Show (Declaration f)
 
 data IdentDef = IdentDef Ident AccessMode
-   deriving (Data, Show)
+   deriving (Data, Eq, Ord, Show)
 
 data AccessMode = Exported | ReadOnly | PrivateOnly
-   deriving (Data, Show)
+   deriving (Data, Eq, Ord, Show)
 
 type ConstExpression = Expression
 
@@ -98,7 +98,7 @@ deriving instance (Show (f (Designator f)), Show (f (Expression f))) => Show (Ty
 
 data QualIdent = QualIdent Ident Ident 
                | NonQualIdent Ident
-   deriving (Data, Show)
+   deriving (Data, Eq, Ord, Show)
 
 type BaseType  =  QualIdent
 
