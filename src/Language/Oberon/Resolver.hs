@@ -280,11 +280,6 @@ resolveModule predefinedScope modules (Module moduleName imports declarations bo
                Success DeclaredType{} -> Failure (NotAValue q :| [])
                Success DeclaredProcedure{} -> Failure (NotAValue q :| [])
                Success (DeclaredVariable t) -> resolveDesignator scope d
-               Success (DeclaredVariable t)
-                  | Success RecordType{} <- resolveTypeReference scope t -> resolveDesignator scope d
-                  | Success (PointerType t') <- resolveTypeReference scope t,
-                    Success RecordType{} <- resolveTypeReference scope t' -> resolveDesignator scope d
-                  | otherwise -> Failure (NotARecord q :| [])
          resolveRecord scope d = resolveDesignator scope d
 
          resolveArray = resolveDesignator
