@@ -1,5 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances, UndecidableInstances, StandaloneDeriving #-}
 
+-- | Oberon Abstract Syntax Tree definitions
+
 module Language.Oberon.AST where
 
 import Data.Data (Data)

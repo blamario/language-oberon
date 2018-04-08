@@ -1,9 +1,10 @@
 {-# Language OverloadedStrings, Rank2Types, RecordWildCards, TypeFamilies, TemplateHaskell #-}
 
--- * From http://www.ethoberon.ethz.ch/EBNF.html
---   Extracted from the book Programmieren in Oberon - Das neue Pascal by N. Wirth and M. Reiser and translated by J. Templ.
+-- | Oberon grammar adapted from http://www.ethoberon.ethz.ch/EBNF.html
+-- Extracted from the book Programmieren in Oberon - Das neue Pascal by N. Wirth and M. Reiser and translated by J. Templ.
 
-module Language.Oberon.Grammar where
+module Language.Oberon.Grammar (OberonGrammar(..),
+                                oberonGrammar, oberon2Grammar, oberonDefinitionGrammar, oberon2DefinitionGrammar) where
 
 import Control.Applicative
 import Control.Monad (guard)
@@ -24,6 +25,7 @@ import Language.Oberon.AST
 
 import Prelude hiding (length, takeWhile)
 
+-- | All the productions of the Oberon grammar
 data OberonGrammar f p = OberonGrammar {
    module_prod :: p (Module f),
    ident :: p Ident,
@@ -112,14 +114,19 @@ instance Lexical (OberonGrammar f) where
 
 oberonGrammar, oberon2Grammar, oberonDefinitionGrammar, oberon2DefinitionGrammar
    :: Grammar (OberonGrammar Ambiguous) Parser Text
+-- | Grammar of an Oberon module
 oberonGrammar = fixGrammar grammar
+-- | Grammar of an Oberon-2 module
 oberon2Grammar = fixGrammar grammar2
+-- | Grammar of an Oberon definition module
 oberonDefinitionGrammar = fixGrammar definitionGrammar
+-- | Grammar of an Oberon-2 definition module
 oberon2DefinitionGrammar = fixGrammar definitionGrammar2
 
 grammar, definitionGrammar :: GrammarBuilder (OberonGrammar Ambiguous) (OberonGrammar Ambiguous) Parser Text
 
 definitionGrammar g@OberonGrammar{..} = definitionMixin (grammar g)
+
 definitionGrammar2 g@OberonGrammar{..} = definitionMixin (grammar2 g)
 
 definitionMixin g@OberonGrammar{..} = g{

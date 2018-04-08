@@ -1,6 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Language.Oberon.Resolver where
+-- | This module exports functions for resolving the syntactic ambiguities in a parsed module. For example, an Oberon
+-- expression @foo(bar)@ may be a call to function @foo@ with a parameter @bar@, or it may be type guard on variable
+-- @foo@ casting it to type @bar@.
+
+module Language.Oberon.Resolver (Error, Predefined, predefined, predefined2, resolveModule, resolveModules) where
 
 import Control.Applicative (Alternative)
 import Control.Monad ((>=>))
@@ -24,6 +28,7 @@ data DeclarationRHS f = DeclaredConstant (f (ConstExpression f))
                       | DeclaredVariable (Type f)
                       | DeclaredProcedure Bool (Maybe (FormalParameters f))
 
+-- | All possible resultion errors
 data Error = UnknownModule Ident
            | UnknownLocal Ident
            | UnknownImport QualIdent
@@ -42,16 +47,24 @@ data Error = UnknownModule Ident
            | ClashingImports
            deriving (Show)
 
-type Scope = Map Ident (Validation (NonEmpty Error) (DeclarationRHS Identity))
+type Scope = Predefined
 
-resolveModules :: Scope -> Map Ident (Module Ambiguous)
-                  -> Validation (NonEmpty (Ident, NonEmpty Error)) (Map Ident (Module Identity))
+-- | A set of 'Predefined' declarations.
+type Predefined = Map Ident (Validation (NonEmpty Error) (DeclarationRHS Identity))
+
+-- | Eliminate the ambiguites in the given map of module names to their parsed syntax trees. The first argument is a set
+-- of 'Predefined' declarations, such as 'predefined' or 'predefined2'.
+resolveModules :: Predefined -> Map Ident (Module Ambiguous)
+               -> Validation (NonEmpty (Ident, NonEmpty Error)) (Map Ident (Module Identity))
 resolveModules predefinedScope modules = traverseWithKey extractErrors modules'
    where modules' = resolveModule predefinedScope modules' <$> modules
          extractErrors moduleKey (Failure e)   = Failure ((moduleKey, e) :| [])
          extractErrors _         (Success mod) = Success mod
 
-resolveModule :: Scope -> Map Ident (Validation (NonEmpty Error) (Module Identity)) -> Module Ambiguous
+-- | Eliminate the ambiguites in the parsed syntax tree of a single module. The first argument is a set of 'Predefined'
+-- declarations, such as 'predefined' or 'predefined2'. The second is a mapping of imported module names to their
+-- already resolved syntax trees.
+resolveModule :: Predefined -> Map Ident (Validation (NonEmpty Error) (Module Identity)) -> Module Ambiguous
               -> Validation (NonEmpty Error) (Module Identity)
 resolveModule predefinedScope modules (Module moduleName imports declarations body name') = module'
    where moduleExports      :: Map Ident Scope
@@ -313,7 +326,8 @@ declarationBinding moduleName (ProcedureDeclaration (ProcedureHeading _ _ (Ident
 declarationBinding _ (ForwardDeclaration (IdentDef name export) parameters) =
    [(name, (export, DeclaredProcedure False parameters))]
 
-predefined, predefined2 :: Scope
+predefined, predefined2 :: Predefined
+-- | The set of 'Predefined' types and procedures defined in the Oberon Language Report.
 predefined = Success <$> Map.fromList
    [("BOOLEAN", DeclaredType (TypeReference $ NonQualIdent "BOOLEAN")),
     ("CHAR", DeclaredType (TypeReference $ NonQualIdent "CHAR")),
@@ -382,6 +396,7 @@ predefined = Success <$> Map.fromList
     ("HALT", DeclaredProcedure False $ Just $
              FormalParameters [FPSection False (pure "n") $ TypeReference $ NonQualIdent "INTEGER"] Nothing)]
 
+-- | The set of 'Predefined' types and procedures defined in the Oberon-2 Language Report.
 predefined2 = predefined <>
    (Success <$> Map.fromList
     [("ASSERT", DeclaredProcedure False $ Just $

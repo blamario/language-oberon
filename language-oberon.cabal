@@ -3,7 +3,7 @@
 
 name:                language-oberon
 version:             0.1
-synopsis:            Parser for the Oberon programming language
+synopsis:            Parser and pretty-printer for the programming languages Oberon and Oberon-2
 -- description:         
 homepage:            https://github.com/blamario/language-oberon
 license:             GPL-3

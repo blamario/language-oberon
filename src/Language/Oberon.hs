@@ -1,4 +1,6 @@
-module Language.Oberon where
+-- | Every function in this module takes a flag that determines whether the input is an Oberon or Oberon-2 module.
+
+module Language.Oberon (parseModule, parseAndResolveModule, parseAndResolveModuleFile) where
 
 import Language.Oberon.AST (Module(..))
 import qualified Language.Oberon.Grammar as Grammar
@@ -20,10 +22,12 @@ import System.FilePath (FilePath, addExtension, combine, takeDirectory)
 
 import Prelude hiding (readFile)
 
+-- | Parse the given text of a single module, without resolving the syntactic ambiguities.
 parseModule :: Bool -> Text -> ParseResults [Module Ambiguous]
 parseModule oberon2 = getCompose . Grammar.module_prod
                       . parseComplete (if oberon2 then Grammar.oberon2Grammar else Grammar.oberonGrammar)
 
+-- | Parse the given text of a single /definition/ module, without resolving the syntactic ambiguities.
 parseDefinitionModule :: Bool -> Text -> ParseResults [Module Ambiguous]
 parseDefinitionModule oberon2 = getCompose . Grammar.module_prod
                                 . parseComplete (if oberon2 then Grammar.oberon2DefinitionGrammar
@@ -52,6 +56,8 @@ parseImportsOf oberon2 path modules =
          assertSuccess (m, Right [p]) = (m, p)
          assertSuccess (m, Right _) = error ("Ambiguous parses of module " <> unpack m)
 
+-- | Given a directory path for module imports, parse the given module text and all the module files it imports, then
+-- use all the information to resolve the syntactic ambiguities.
 parseAndResolveModule :: Bool -> FilePath -> Text -> IO (Validation (NonEmpty Resolver.Error) (Module Identity))
 parseAndResolveModule oberon2 path source =
    case parseModule oberon2 source
@@ -63,5 +69,6 @@ parseAndResolveModule oberon2 path source =
             return $ Resolver.resolveModule predefinedScope resolvedImportMap rootModule
       Right _ -> error "Ambiguous parsings"
 
+-- | Parse the module file at the given path, assuming all its imports are in the same directory.
 parseAndResolveModuleFile :: Bool -> FilePath -> IO (Validation (NonEmpty Resolver.Error) (Module Identity))
 parseAndResolveModuleFile oberon2 path = readFile path >>= parseAndResolveModule oberon2 (takeDirectory path)
