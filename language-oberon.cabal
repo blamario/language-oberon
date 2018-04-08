@@ -18,6 +18,7 @@ description:
    <http://hackage.haskell.org/package/grammatical-parsers grammatical-parsers> library. The experiment succeeded, so    the package can be used in practice.
 
 homepage:            https://github.com/blamario/language-oberon
+bug-reports:         https://github.com/blamario/language-oberon/issues
 license:             GPL-3
 license-file:        LICENSE
 author:              Mario Blažević
