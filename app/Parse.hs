@@ -15,7 +15,7 @@ import Data.Data (Data)
 import Data.Either.Validation (Validation(..), validationToEither)
 import Data.Functor.Identity (Identity)
 import Data.Functor.Compose (getCompose)
-import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.Map.Lazy as Map
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
@@ -23,7 +23,7 @@ import Data.Text (Text, unpack)
 import Data.Text.IO (getLine, readFile, getContents)
 import Data.Typeable (Typeable)
 import Options.Applicative
-import Text.Grampa (Ambiguous, Grammar, ParseResults, parseComplete)
+import Text.Grampa (Ambiguous, Grammar, ParseResults, parseComplete, showFailure)
 import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
 import ReprTree
 import System.FilePath (FilePath, takeDirectory)
@@ -84,7 +84,7 @@ main' Opts{..} =
                          of ModuleWithImportsMode ->
                                \source-> parseAndResolveModule optsOberon2
                                                                (fromMaybe (takeDirectory file) optsInclude) source
-                                         >>= succeed optsOutput
+                                         >>= succeed optsOutput source
                             ModuleMode          -> go (Resolver.resolveModule predefined mempty) Grammar.module_prod
                                                    chosenGrammar file
                             DefinitionMode      -> go (Resolver.resolveModule predefined mempty) Grammar.module_prod
@@ -114,15 +114,18 @@ main' Opts{..} =
        -> String -> Text -> IO ()
     go resolve production grammar filename contents =
        case getCompose (production $ parseComplete grammar contents)
-       of Right [x] -> succeed optsOutput (resolve x)
+       of Right [x] -> succeed optsOutput contents (resolve x)
           Right l -> putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
-                     >> succeed optsOutput (resolve $ l !! optsIndex)
-          Left err -> error (show err)
+                     >> succeed optsOutput contents (resolve $ l !! optsIndex)
+          Left err -> putStrLn (showFailure contents err 3)
 
-succeed out x = case out
-                of Pretty width -> either print (putDocW width . pretty) (validationToEither x)
-                   Tree -> either print (putStrLn . reprTreeString) (validationToEither x)
-                   Plain -> print x
+succeed out contents x = either reportFailure showSuccess (validationToEither x)
+   where reportFailure (Resolver.UnparseableModule err :| []) = putStrLn (showFailure contents err 3)
+         reportFailure errs = print errs
+         showSuccess = case out
+                       of Pretty width -> putDocW width . pretty
+                          Tree -> putStrLn . reprTreeString
+                          Plain -> print
 
 instance Pretty (Module Ambiguous) where
    pretty _ = error "Disambiguate before pretty-printing"

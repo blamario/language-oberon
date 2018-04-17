@@ -9,7 +9,7 @@ import qualified Language.Oberon.Resolver as Resolver
 import Data.Either.Validation (Validation(..))
 import Data.Functor.Identity (Identity)
 import Data.Functor.Compose (getCompose)
-import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.Map.Lazy as Map
 import Data.Map.Lazy (Map)
 import Data.Monoid ((<>))
@@ -61,13 +61,13 @@ parseImportsOf oberon2 path modules =
 parseAndResolveModule :: Bool -> FilePath -> Text -> IO (Validation (NonEmpty Resolver.Error) (Module Identity))
 parseAndResolveModule oberon2 path source =
    case parseModule oberon2 source
-   of Left err -> error (show err)
+   of Left err -> return (Failure $ Resolver.UnparseableModule err :| [])
       Right [rootModule@(Module moduleName imports _ _ _)] ->
          do importedModules <- parseImportsOf oberon2 path (Map.singleton moduleName rootModule)
             let resolvedImportMap = Resolver.resolveModule predefinedScope resolvedImportMap <$> importedModules
                 predefinedScope = if oberon2 then Resolver.predefined2 else Resolver.predefined
             return $ Resolver.resolveModule predefinedScope resolvedImportMap rootModule
-      Right _ -> error "Ambiguous parsings"
+      Right _ -> return (Failure $ Resolver.AmbiguousParses :| [])
 
 -- | Parse the module file at the given path, assuming all its imports are in the same directory.
 parseAndResolveModuleFile :: Bool -> FilePath -> IO (Validation (NonEmpty Resolver.Error) (Module Identity))

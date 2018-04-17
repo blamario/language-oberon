@@ -4,7 +4,8 @@
 -- expression @foo(bar)@ may be a call to function @foo@ with a parameter @bar@, or it may be type guard on variable
 -- @foo@ casting it to type @bar@.
 
-module Language.Oberon.Resolver (Error, Predefined, predefined, predefined2, resolveModule, resolveModules) where
+module Language.Oberon.Resolver (Error(..),
+                                 Predefined, predefined, predefined2, resolveModule, resolveModules) where
 
 import Control.Applicative (Alternative)
 import Control.Monad ((>=>))
@@ -19,7 +20,7 @@ import Data.Map.Lazy (Map, traverseWithKey)
 import qualified Data.Map.Lazy as Map
 import Data.Semigroup (Semigroup(..), sconcat)
 
-import Text.Grampa (Ambiguous(..))
+import Text.Grampa (Ambiguous(..), ParseFailure)
 
 import Language.Oberon.AST
 
@@ -32,6 +33,7 @@ data DeclarationRHS f = DeclaredConstant (f (ConstExpression f))
 data Error = UnknownModule Ident
            | UnknownLocal Ident
            | UnknownImport QualIdent
+           | AmbiguousParses
            | AmbiguousDesignator [Designator Identity]
            | AmbiguousExpression [Expression Identity]
            | AmbiguousStatement [Statement Identity]
@@ -45,6 +47,7 @@ data Error = UnknownModule Ident
            | NotAValue QualIdent
            | NotWriteable QualIdent
            | ClashingImports
+           | UnparseableModule ParseFailure
            deriving (Show)
 
 type Scope = Predefined
