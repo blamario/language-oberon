@@ -15,7 +15,7 @@ import Numeric (readHex)
 import Data.Text (Text, unpack)
 import Text.Grampa
 import Text.Grampa.ContextFree.LeftRecursive (Parser)
-import Text.Parser.Combinators (sepBy, sepBy1, sepByNonEmpty)
+import Text.Parser.Combinators (sepBy, sepBy1, sepByNonEmpty, try)
 import Text.Parser.Token (braces, brackets, parens)
 
 import qualified Rank2
@@ -100,10 +100,11 @@ $(Rank2.TH.deriveAll ''OberonGrammar)
 
 instance Lexical (OberonGrammar f) where
    type LexicalConstraint p (OberonGrammar f) s = (s ~ Text, p ~ Parser)
-   lexicalComment = string "(*"
-                    *> skipMany (lexicalComment
-                                 <|> notFollowedBy (string "*)") <* anyToken <* takeCharsWhile isCommentChar)
-                    <* string "*)"
+   lexicalComment = try (string "(*"
+                         *> skipMany (lexicalComment
+                                      <|> notFollowedBy (string "*)") <* anyToken <* takeCharsWhile isCommentChar)
+                         <* string "*)"
+                         <?> "comment")
       where isCommentChar c = c /= '*' && c /= '('
    lexicalWhiteSpace = takeCharsWhile isSpace *> skipMany (lexicalComment *> takeCharsWhile isSpace)
    isIdentifierStartChar = isLetter
@@ -169,11 +170,13 @@ grammar OberonGrammar{..} = OberonGrammar{
                                      <|> keyword "TYPE" *> many (typeDeclaration <* delimiter ";")
                                      <|> keyword "VAR" *> many (variableDeclaration <* delimiter ";"))
                          <> many (procedureDeclaration <* delimiter ";"
-                                  <|> forwardDeclaration <* delimiter ";"),
+                                  <|> forwardDeclaration <* delimiter ";")
+                         <?> "declarations",
    constantDeclaration = ConstantDeclaration <$> identdef <* delimiter "=" <*> ambiguous constExpression,
    identdef = IdentDef <$> ident <*> (Exported <$ delimiter "*" <|> pure PrivateOnly),
    constExpression = expression,
-   expression = simpleExpression <**> (pure id <|> (flip . Relation) <$> relation <*> simpleExpression),
+   expression = simpleExpression <**> (pure id <|> (flip . Relation) <$> relation <*> simpleExpression)
+                <?> "expression",
    simpleExpression = (Positive <$ operator "+" <|> Negative <$ operator "-" <|> pure id)
                       <*> (term <**> (appEndo <$> concatMany (Endo <$> (flip . applyBinOp <$> addOperator <*> term)))),
    term = factor <**> (appEndo <$> concatMany (Endo <$> (flip . applyBinOp <$> mulOperator <*> factor))),
@@ -253,7 +256,8 @@ grammar OberonGrammar{..} = OberonGrammar{
                <|> whileStatement <|> repeatStatement <|> loopStatement <|> withStatement 
                <|> Exit <$ keyword "EXIT" 
                <|> Return <$ keyword "RETURN" <*> optional expression
-               <|> pure EmptyStatement,
+               <|> pure EmptyStatement
+               <?> "statement",
    assignment  =  Assignment <$> ambiguous designator <* delimiter ":=" <*> expression,
    procedureCall = ProcedureCall <$> ambiguous designator <*> optional actualParameters,
    ifStatement = If <$ keyword "IF"
