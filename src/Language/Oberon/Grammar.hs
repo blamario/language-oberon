@@ -103,8 +103,7 @@ instance Lexical (OberonGrammar f) where
    lexicalComment = try (string "(*"
                          *> skipMany (lexicalComment
                                       <|> notFollowedBy (string "*)") <* anyToken <* takeCharsWhile isCommentChar)
-                         <* string "*)"
-                         <?> "comment")
+                         <* string "*)")
       where isCommentChar c = c /= '*' && c /= '('
    lexicalWhiteSpace = takeCharsWhile isSpace *> skipMany (lexicalComment *> takeCharsWhile isSpace)
    isIdentifierStartChar = isLetter
@@ -231,7 +230,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                 <*> fieldListSequence <* keyword "END",
    baseType = qualident,
    fieldListSequence = sepByNonEmpty fieldList (delimiter ";"),
-   fieldList = FieldList <$> identList <* delimiter ":" <*> type_prod
+   fieldList = (FieldList <$> identList <* delimiter ":" <*> type_prod <?> "record field declarations")
                <|> pure EmptyFieldList,
    identList = sepByNonEmpty identdef (delimiter ","),
    pointerType = PointerType <$ keyword "POINTER" <* keyword "TO" <*> type_prod,
@@ -285,8 +284,8 @@ moptional p = p <|> mempty
 
 delimiter, operator :: Text -> Parser (OberonGrammar f) Text Text
 
-delimiter s = lexicalToken (string s)
-operator = delimiter
+delimiter s = lexicalToken (string s) <?> ("delimiter " <> show s)
+operator s = lexicalToken (string s) <?> ("operator " <> show s)
 
 reservedWords :: [Text]
 reservedWords = ["ARRAY", "IMPORT", "RETURN",
