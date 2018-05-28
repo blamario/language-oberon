@@ -4,7 +4,7 @@
 
 module Language.Oberon.AST where
 
-import Data.Data (Data)
+import Data.Data (Data, Typeable)
 import Data.Functor.Identity (Identity)
 import Data.List.NonEmpty
 import Data.Text
@@ -12,8 +12,8 @@ import Text.Grampa (Ambiguous)
 
 data Module f = Module Ident [Import] [Declaration f] (Maybe (StatementSequence f)) Ident
 
-deriving instance Data (Module Identity)
-deriving instance Data (Module Ambiguous)
+deriving instance (Typeable f, Data (f (Designator f)), Data (f (Expression f)), Data (f (Statement f))) =>
+                  Data (Module f)
 deriving instance (Show (f (Designator f)), Show (f (Expression f)), Show (f (Statement f))) => Show (Module f)
 
 type Ident = Text
@@ -26,8 +26,8 @@ data Declaration f  = ConstantDeclaration IdentDef (f (ConstExpression f))
                     | ProcedureDeclaration (ProcedureHeading f) (ProcedureBody f) Ident
                     | ForwardDeclaration IdentDef (Maybe (FormalParameters f))
 
-deriving instance Data (Declaration Identity)
-deriving instance Data (Declaration Ambiguous)
+deriving instance (Typeable f, Data (f (Designator f)), Data (f (Expression f)), Data (f (Statement f))) =>
+                  Data (Declaration f)
 deriving instance (Show (f (Designator f)), Show (f (Expression f)), Show (f (Statement f))) => Show (Declaration f)
 
 data IdentDef = IdentDef Ident AccessMode
@@ -60,8 +60,7 @@ data Expression f = Relation RelOp (Expression f) (Expression f)
                   | FunctionCall (AmbDesignator f) (ActualParameters f)
                   | Not (Expression f)
 
-deriving instance Data (Expression Identity)
-deriving instance Data (Expression Ambiguous)
+deriving instance (Typeable f, Data (f (Designator f))) => Data (Expression f)
 deriving instance Show (f (Designator f)) => Show (Expression f)
 
 data RelOp = Equal | Unequal | Less | LessOrEqual | Greater | GreaterOrEqual | In | Is
@@ -70,8 +69,7 @@ data RelOp = Equal | Unequal | Less | LessOrEqual | Greater | GreaterOrEqual | I
 data Element f = Element (Expression f)
                | Range (Expression f) (Expression f)
 
-deriving instance Data (Element Identity)
-deriving instance Data (Element Ambiguous)
+deriving instance (Typeable f, Data (f (Designator f))) => Data (Element f)
 deriving instance Show (f (Designator f)) => Show (Element f)
 
 type AmbDesignator f = f (Designator f)
@@ -82,8 +80,7 @@ data Designator f = Variable QualIdent
                   | TypeGuard (Designator f) QualIdent 
                   | Dereference (Designator f)
 
-deriving instance Data (Designator Identity)
-deriving instance Data (Designator Ambiguous)
+deriving instance (Typeable f, Data (f (Designator f))) => Data (Designator f)
 deriving instance Show (f (Designator f)) => Show (Designator f)
 
 type ActualParameters f = [Expression f]
@@ -94,8 +91,7 @@ data Type f = TypeReference QualIdent
             | PointerType (Type f)
             | ProcedureType (Maybe (FormalParameters f))
 
-deriving instance Data (Type Identity)
-deriving instance Data (Type Ambiguous)
+deriving instance (Typeable f, Data (f (Designator f)), Data (f (Expression f))) => Data (Type f)
 deriving instance (Show (f (Designator f)), Show (f (Expression f))) => Show (Type f)
 
 data QualIdent = QualIdent Ident Ident 
@@ -109,8 +105,7 @@ type FieldListSequence f = NonEmpty (FieldList f)
 data FieldList f = FieldList IdentList (Type f)
                  | EmptyFieldList
 
-deriving instance Data (FieldList Identity)
-deriving instance Data (FieldList Ambiguous)
+deriving instance (Typeable f, Data (f (Designator f)), Data (f (Expression f))) => Data (FieldList f)
 deriving instance (Show (f (Designator f)), Show (f (Expression f))) => Show (FieldList f)
 
 type IdentList = NonEmpty IdentDef
@@ -119,22 +114,19 @@ data ProcedureHeading f =  ProcedureHeading (Maybe (Bool, Ident, Ident)) Bool Id
 data FormalParameters f  = FormalParameters [FPSection f] (Maybe QualIdent)
 data FPSection f  =  FPSection Bool (NonEmpty Ident) (Type f)
 
-deriving instance Data (ProcedureHeading Identity)
-deriving instance Data (ProcedureHeading Ambiguous)
+deriving instance (Typeable f, Data (f (Designator f)),  Data (f (Expression f))) => Data (ProcedureHeading f)
 deriving instance (Show (f (Designator f)),  Show (f (Expression f))) => Show (ProcedureHeading f)
 
-deriving instance Data (FormalParameters Identity)
-deriving instance Data (FormalParameters Ambiguous)
+deriving instance (Typeable f, Data (f (Designator f)),  Data (f (Expression f))) => Data (FormalParameters f)
 deriving instance (Show (f (Designator f)),  Show (f (Expression f))) => Show (FormalParameters f)
 
-deriving instance Data (FPSection Identity)
-deriving instance Data (FPSection Ambiguous)
+deriving instance (Typeable f, Data (f (Designator f)),  Data (f (Expression f))) => Data (FPSection f)
 deriving instance (Show (f (Designator f)),  Show (f (Expression f))) => Show (FPSection f)
 
 data ProcedureBody f =  ProcedureBody [Declaration f] (Maybe (StatementSequence f))
 
-deriving instance Data (ProcedureBody Identity)
-deriving instance Data (ProcedureBody Ambiguous)
+deriving instance (Typeable f, Data (f (Designator f)), Data (f (Expression f)), Data (f (Statement f))) =>
+                  Data (ProcedureBody f)
 deriving instance (Show (f (Designator f)), Show (f (Expression f)), Show (f (Statement f))) => Show (ProcedureBody f)
 
 type StatementSequence f  = NonEmpty (f (Statement f))
@@ -152,8 +144,7 @@ data Statement f = EmptyStatement
                  | Exit 
                  | Return (Maybe (Expression f))
 
-deriving instance Data (Statement Identity)
-deriving instance Data (Statement Ambiguous)
+deriving instance (Typeable f, Data (f (Designator f)), Data (f (Statement f))) => Data (Statement f)
 deriving instance (Show (f (Designator f)), Show (f (Statement f))) => Show (Statement f)
 
 data WithAlternative f = WithAlternative QualIdent QualIdent (StatementSequence f)
@@ -164,14 +155,11 @@ data Case f = Case (NonEmpty (CaseLabels f)) (StatementSequence f)
 data CaseLabels f = SingleLabel (ConstExpression f)
                   | LabelRange (ConstExpression f) (ConstExpression f)
 
-deriving instance Data (WithAlternative Identity)
-deriving instance Data (WithAlternative Ambiguous)
+deriving instance (Typeable f, Data (f (Designator f)), Data (f (Statement f))) => Data (WithAlternative f)
 deriving instance (Show (f (Designator f)), Show (f (Statement f))) => Show (WithAlternative f)
 
-deriving instance Data (Case Identity)
-deriving instance Data (Case Ambiguous)
+deriving instance (Typeable f, Data (f (Designator f)), Data (f (Statement f))) => Data (Case f)
 deriving instance (Show (f (Designator f)), Show (f (Statement f))) => Show (Case f)
 
-deriving instance Data (CaseLabels Identity)
-deriving instance Data (CaseLabels Ambiguous)
+deriving instance (Typeable f, Data (f (Designator f))) => Data (CaseLabels f)
 deriving instance Show (f (Designator f)) => Show (CaseLabels f)
