@@ -139,6 +139,8 @@ definitionMixin g@OberonGrammar{..} = g{
 
 grammar2 g@OberonGrammar{..} = g1{
    identdef = IdentDef <$> ident <*> (Exported <$ delimiter "*" <|> ReadOnly <$ delimiter "-" <|> pure PrivateOnly),
+   
+   string_prod = string_prod1 <|> lexicalToken (char '\'' *> takeWhile (/= "'") <* char '\''),
    procedureHeading = ProcedureHeading <$ keyword "PROCEDURE"
                       <*> optional (parens
                                     ((,,) <$> (True <$ keyword "VAR" <|> pure False)
@@ -152,7 +154,7 @@ grammar2 g@OberonGrammar{..} = g1{
                   <*> statementSequence <* keyword "END",
    withStatement = With <$ keyword "WITH" <*> sepByNonEmpty withAlternative (delimiter "|")
                         <*> optional (keyword "ELSE" *> statementSequence) <* keyword "END"}
-   where g1@OberonGrammar{statement= statement1} = grammar g
+   where g1@OberonGrammar{statement= statement1, string_prod= string_prod1} = grammar g
          withAlternative = WithAlternative <$> qualident <* delimiter ":" <*> qualident
                                            <*  keyword "DO" <*> statementSequence
    
@@ -197,8 +199,7 @@ grammar OberonGrammar{..} = OberonGrammar{
    charConstant = lexicalToken (empty -- CharConstant <$ char '"' <*> anyChar <* char '"'
                                 <|> CharCode . fst . head . readHex . unpack
                                 <$> (digit <> takeCharsWhile isHexDigit <* string "X")),
-   string_prod = lexicalToken (char '"' *> takeWhile (/= "\"") <* char '"'
-                               <|> char '\'' *> takeWhile (/= "'") <* char '\''),   -- Oberon2
+   string_prod = lexicalToken (char '"' *> takeWhile (/= "\"") <* char '"'),
    set = Set <$> braces (sepBy element (delimiter ",")),
    element = Element <$> expression 
              <|> Range <$> expression <* delimiter ".." <*> expression,
