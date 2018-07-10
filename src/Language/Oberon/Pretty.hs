@@ -8,6 +8,7 @@ module Language.Oberon.Pretty () where
 import Data.Functor.Identity (Identity(..))
 import Data.List (intersperse)
 import Data.List.NonEmpty (NonEmpty((:|)), fromList, toList)
+import qualified Data.Text as Text
 import Data.Text.Prettyprint.Doc
 import Numeric (showHex)
 
@@ -55,9 +56,12 @@ instance Pretty (Expression Identity) where
             prettyPrec p (And left right) | p < 4 = prettyPrec 4 left <+> "&" <+> prettyPrec 4 right
             prettyPrec _ (Integer n) = pretty n
             prettyPrec _ (Real r) = pretty r
+            prettyPrec _ (CharConstant c@'"') = squotes (pretty c)
             prettyPrec _ (CharConstant c) = dquotes (pretty c)
             prettyPrec _ (CharCode c) = "0" <> pretty (showHex c "") <> "X"
-            prettyPrec _ (String s) = dquotes (pretty s)
+            prettyPrec _ (String s)
+               | Text.any (== '"') s = squotes (pretty s)
+               | otherwise = dquotes (pretty s)
             prettyPrec _ Nil = "NIL"
             prettyPrec _ (Set elements) = braces (hsep $ punctuate comma $ pretty <$> elements)
             prettyPrec _ (Read (Identity var)) = pretty var
@@ -143,7 +147,8 @@ instance Pretty (Statement Identity) where
       where branch kwd (condition, body) = vsep [kwd <+> pretty condition <+> "THEN",
                                                  prettyBlock body]
    pretty (CaseStatement scrutinee cases fallback) = vsep ["CASE" <+> pretty scrutinee <+> "OF",
-                                                           pretty cases,
+                                                           align (encloseSep mempty mempty "| "
+                                                                  $ pretty <$> toList cases),
                                                            foldMap ("ELSE" <#>) (prettyBlock <$> fallback),
                                                            "END"]
                                                            
@@ -169,7 +174,7 @@ instance Pretty (Statement Identity) where
    pretty (Return result) = "RETURN" <+> foldMap pretty result
    
 instance Pretty (Case Identity) where
-   pretty (Case labels body) = vsep ["|" <+> pretty labels <+> colon,
+   pretty (Case labels body) = vsep [hsep (punctuate comma (pretty <$> toList labels)) <+> colon,
                                      prettyBlock body]
    pretty EmptyCase = mempty
    
