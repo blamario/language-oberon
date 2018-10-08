@@ -127,11 +127,11 @@ succeed out contents x = either reportFailure showSuccess (validationToEither x)
                           Tree -> putStrLn . reprTreeString
                           Plain -> print
 
-instance Pretty (Module Ambiguous) where
+instance Pretty (Module Ambiguous Ambiguous) where
    pretty _ = error "Disambiguate before pretty-printing"
-instance Pretty (Ambiguous (Statement Ambiguous)) where
+instance Pretty (Ambiguous (Statement Ambiguous Ambiguous)) where
    pretty _ = error "Disambiguate before pretty-printing"
-instance Pretty (Statement Ambiguous) where
+instance Pretty (Statement Ambiguous Ambiguous) where
    pretty _ = error "Disambiguate before pretty-printing"
-instance Pretty (Expression Ambiguous) where
+instance Pretty (Expression Ambiguous Ambiguous) where
    pretty _ = error "Disambiguate before pretty-printing"

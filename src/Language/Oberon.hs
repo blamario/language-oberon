@@ -23,17 +23,17 @@ import System.FilePath (FilePath, addExtension, combine, takeDirectory)
 import Prelude hiding (readFile)
 
 -- | Parse the given text of a single module, without resolving the syntactic ambiguities.
-parseModule :: Bool -> Text -> ParseResults [Module Ambiguous]
+parseModule :: Bool -> Text -> ParseResults [Module Ambiguous Ambiguous]
 parseModule oberon2 = getCompose . Grammar.module_prod
                       . parseComplete (if oberon2 then Grammar.oberon2Grammar else Grammar.oberonGrammar)
 
 -- | Parse the given text of a single /definition/ module, without resolving the syntactic ambiguities.
-parseDefinitionModule :: Bool -> Text -> ParseResults [Module Ambiguous]
+parseDefinitionModule :: Bool -> Text -> ParseResults [Module Ambiguous Ambiguous]
 parseDefinitionModule oberon2 = getCompose . Grammar.module_prod
                                 . parseComplete (if oberon2 then Grammar.oberon2DefinitionGrammar
                                                  else Grammar.oberonDefinitionGrammar)
 
-parseNamedModule :: Bool -> FilePath -> Text -> IO (ParseResults [Module Ambiguous])
+parseNamedModule :: Bool -> FilePath -> Text -> IO (ParseResults [Module Ambiguous Ambiguous])
 parseNamedModule oberon2 path name =
    do let basePath = combine path (unpack name)
       isDefn <- doesFileExist (addExtension basePath "Def")
@@ -43,7 +43,7 @@ parseNamedModule oberon2 path name =
       getCompose . Grammar.module_prod . parseComplete grammar
          <$> readFile (addExtension basePath $ if isDefn then "Def" else "Mod")
 
-parseImportsOf :: Bool -> FilePath -> Map Text (Module Ambiguous) -> IO (Map Text (Module Ambiguous))
+parseImportsOf :: Bool -> FilePath -> Map Text (Module Ambiguous Ambiguous) -> IO (Map Text (Module Ambiguous Ambiguous))
 parseImportsOf oberon2 path modules =
    case filter (`Map.notMember` modules) moduleImports
    of [] -> return modules
@@ -58,7 +58,7 @@ parseImportsOf oberon2 path modules =
 
 -- | Given a directory path for module imports, parse the given module text and all the module files it imports, then
 -- use all the information to resolve the syntactic ambiguities.
-parseAndResolveModule :: Bool -> FilePath -> Text -> IO (Validation (NonEmpty Resolver.Error) (Module Identity))
+parseAndResolveModule :: Bool -> FilePath -> Text -> IO (Validation (NonEmpty Resolver.Error) (Module Identity Identity))
 parseAndResolveModule oberon2 path source =
    case parseModule oberon2 source
    of Left err -> return (Failure $ Resolver.UnparseableModule err :| [])
@@ -70,5 +70,5 @@ parseAndResolveModule oberon2 path source =
       Right _ -> return (Failure $ Resolver.AmbiguousParses :| [])
 
 -- | Parse the module file at the given path, assuming all its imports are in the same directory.
-parseAndResolveModuleFile :: Bool -> FilePath -> IO (Validation (NonEmpty Resolver.Error) (Module Identity))
+parseAndResolveModuleFile :: Bool -> FilePath -> IO (Validation (NonEmpty Resolver.Error) (Module Identity Identity))
 parseAndResolveModuleFile oberon2 path = readFile path >>= parseAndResolveModule oberon2 (takeDirectory path)

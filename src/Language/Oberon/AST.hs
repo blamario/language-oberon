@@ -8,27 +8,28 @@ import Data.Data (Data, Typeable)
 import Data.Functor.Identity (Identity)
 import Data.List.NonEmpty
 import Data.Text
-import Text.Grampa (Ambiguous)
 
-data Module f = Module Ident [Import] [Declaration f] (Maybe (StatementSequence f)) Ident
+data Module f' f = Module Ident [Import] ([f (Declaration f' f')]) (Maybe (f (StatementSequence f' f'))) Ident
 
-deriving instance (Typeable f, Data (f (Designator f)), Data (f (Expression f)), Data (f (Statement f))) =>
-                  Data (Module f)
-deriving instance (Show (f (Designator f)), Show (f (Expression f)), Show (f (Statement f))) => Show (Module f)
+deriving instance (Typeable f, Typeable f',
+                   Data (f (Declaration f' f')), Data (f (StatementSequence f' f'))) => Data (Module f' f)
+deriving instance (Show (f (Declaration f' f')), Show (f (StatementSequence f' f'))) => Show (Module f' f)
 
 type Ident = Text
 
 type Import = (Maybe Ident, Ident)
 
-data Declaration f  = ConstantDeclaration IdentDef (f (ConstExpression f))
-                    | TypeDeclaration IdentDef (Type f)
-                    | VariableDeclaration IdentList (Type f)
-                    | ProcedureDeclaration (ProcedureHeading f) (ProcedureBody f) Ident
-                    | ForwardDeclaration IdentDef (Maybe (FormalParameters f))
+data Declaration f' f = ConstantDeclaration IdentDef (f (ConstExpression f' f'))
+                      | TypeDeclaration IdentDef (f (Type f' f'))
+                      | VariableDeclaration IdentList (f (Type f' f'))
+                      | ProcedureDeclaration (ProcedureHeading f' f) (ProcedureBody f' f) Ident
+                      | ForwardDeclaration IdentDef (Maybe (f (FormalParameters f' f')))
 
-deriving instance (Typeable f, Data (f (Designator f)), Data (f (Expression f)), Data (f (Statement f))) =>
-                  Data (Declaration f)
-deriving instance (Show (f (Designator f)), Show (f (Expression f)), Show (f (Statement f))) => Show (Declaration f)
+deriving instance (Typeable f, Typeable f',
+                   Data (f (Type f' f')), Data (f (ConstExpression f' f')), Data (f (FormalParameters f' f')),
+                   Data (ProcedureHeading f' f), Data (ProcedureBody f' f)) => Data (Declaration f' f)
+deriving instance (Show (f (Type f' f')), Show (f (ConstExpression f' f')), Show (f (FormalParameters f' f')),
+                   Show (ProcedureHeading f' f), Show (ProcedureBody f' f)) => Show (Declaration f' f)
 
 data IdentDef = IdentDef Ident AccessMode
    deriving (Data, Eq, Ord, Show)
@@ -38,128 +39,149 @@ data AccessMode = Exported | ReadOnly | PrivateOnly
 
 type ConstExpression = Expression
 
-data Expression f = Relation RelOp (Expression f) (Expression f)
-                  | Positive (Expression f)
-                  | Negative (Expression f)
-                  | Add (Expression f) (Expression f)
-                  | Subtract (Expression f) (Expression f)
-                  | Or (Expression f) (Expression f)
-                  | Multiply (Expression f) (Expression f)
-                  | Divide (Expression f) (Expression f)
-                  | IntegerDivide (Expression f) (Expression f)
-                  | Modulo (Expression f) (Expression f)
-                  | And (Expression f) (Expression f)
-                  | Integer Text
-                  | Real Text
-                  | CharConstant Char
-                  | CharCode Int
-                  | String Text
-                  | Nil 
-                  | Set [Element f]
-                  | Read (AmbDesignator f)
-                  | FunctionCall (AmbDesignator f) (ActualParameters f)
-                  | Not (Expression f)
+data Expression f' f = Relation RelOp (f (Expression f' f')) (f (Expression f' f'))
+                     | Positive (f (Expression f' f'))
+                     | Negative (f (Expression f' f'))
+                     | Add (f (Expression f' f')) (f (Expression f' f'))
+                     | Subtract (f (Expression f' f')) (f (Expression f' f'))
+                     | Or (f (Expression f' f')) (f (Expression f' f'))
+                     | Multiply (f (Expression f' f')) (f (Expression f' f'))
+                     | Divide (f (Expression f' f')) (f (Expression f' f'))
+                     | IntegerDivide (f (Expression f' f')) (f (Expression f' f'))
+                     | Modulo (f (Expression f' f')) (f (Expression f' f'))
+                     | And (f (Expression f' f')) (f (Expression f' f'))
+                     | Integer Text
+                     | Real Text
+                     | CharConstant Char
+                     | CharCode Int
+                     | String Text
+                     | Nil 
+                     | Set [f (Element f' f')]
+                     | Read (f (Designator f' f'))
+                     | FunctionCall (f (Designator f' f')) (ActualParameters f' f)
+                     | Not (f (Expression f' f'))
 
-deriving instance (Typeable f, Data (f (Designator f))) => Data (Expression f)
-deriving instance Show (f (Designator f)) => Show (Expression f)
+deriving instance (Typeable f, Typeable f', Data (f (Designator f' f')),
+                   Data (f (Element f' f')), Data (f (Expression f' f'))) => Data (Expression f' f)
+deriving instance (Show (f (Designator f' f')),
+                   Show (f (Element f' f')), Show (f (Expression f' f'))) => Show (Expression f' f)
 
 data RelOp = Equal | Unequal | Less | LessOrEqual | Greater | GreaterOrEqual | In | Is
    deriving (Data, Show)
 
-data Element f = Element (Expression f)
-               | Range (Expression f) (Expression f)
+data Element f' f = Element (f (Expression f' f'))
+                  | Range (f (Expression f' f')) (f (Expression f' f'))
 
-deriving instance (Typeable f, Data (f (Designator f))) => Data (Element f)
-deriving instance Show (f (Designator f)) => Show (Element f)
+deriving instance (Typeable f, Typeable f', Data (f (Expression f' f'))) => Data (Element f' f)
+deriving instance Show (f (Expression f' f')) => Show (Element f' f)
 
-type AmbDesignator f = f (Designator f)
+data Designator f' f = Variable QualIdent
+                     | Field (f (Designator f' f')) Ident 
+                     | Index (f (Designator f' f')) (NonEmpty (f (Expression f' f')))
+                     | TypeGuard (f (Designator f' f')) QualIdent 
+                     | Dereference (f (Designator f' f'))
 
-data Designator f = Variable QualIdent
-                  | Field (Designator f) Ident 
-                  | Index (Designator f) (NonEmpty (Expression f))
-                  | TypeGuard (Designator f) QualIdent 
-                  | Dereference (Designator f)
+deriving instance (Typeable f, Typeable f', Data (f (Designator f' f')), Data (f (Expression f' f'))) =>
+                  Data (Designator f' f)
+deriving instance (Show (f (Designator f' f')), Show (f (Expression f' f'))) => Show (Designator f' f)
 
-deriving instance (Typeable f, Data (f (Designator f))) => Data (Designator f)
-deriving instance Show (f (Designator f)) => Show (Designator f)
+type ActualParameters f' f = [f (Expression f' f')]
 
-type ActualParameters f = [Expression f]
+data Type f' f = TypeReference QualIdent 
+               | ArrayType [f (ConstExpression f' f')] (f (Type f' f'))
+               | RecordType (Maybe BaseType) (f (FieldListSequence f' f'))
+               | PointerType (f (Type f' f'))
+               | ProcedureType (Maybe (f (FormalParameters f' f')))
 
-data Type f = TypeReference QualIdent 
-            | ArrayType [f (ConstExpression f)] (Type f)
-            | RecordType (Maybe BaseType) (FieldListSequence f)
-            | PointerType (Type f)
-            | ProcedureType (Maybe (FormalParameters f))
-
-deriving instance (Typeable f, Data (f (Designator f)), Data (f (Expression f))) => Data (Type f)
-deriving instance (Show (f (Designator f)), Show (f (Expression f))) => Show (Type f)
+deriving instance (Typeable f, Typeable f', Data (f (Type f' f')), Data (f (ConstExpression f' f')),
+                   Data (f (FormalParameters f' f')), Data (f (FieldListSequence f' f'))) => Data (Type f' f)
+deriving instance (Show (f (Type f' f')), Show (f (ConstExpression f' f')),
+                   Show (f (FormalParameters f' f')), Show (f (FieldListSequence f' f'))) => Show (Type f' f)
 
 data QualIdent = QualIdent Ident Ident 
                | NonQualIdent Ident
    deriving (Data, Eq, Ord, Show)
 
-type BaseType  =  QualIdent
+type BaseType  = QualIdent
 
-type FieldListSequence f = NonEmpty (FieldList f)
+type FieldListSequence f' f = NonEmpty (f (FieldList f' f'))
 
-data FieldList f = FieldList IdentList (Type f)
-                 | EmptyFieldList
+data FieldList f' f = FieldList IdentList (f (Type f' f'))
+                    | EmptyFieldList
 
-deriving instance (Typeable f, Data (f (Designator f)), Data (f (Expression f))) => Data (FieldList f)
-deriving instance (Show (f (Designator f)), Show (f (Expression f))) => Show (FieldList f)
+deriving instance (Typeable f, Typeable f', Data (f (Type f' f')), Data (f (Expression f' f'))) => Data (FieldList f' f)
+deriving instance (Show (f (Type f' f')), Show (f (Expression f' f'))) => Show (FieldList f' f)
 
 type IdentList = NonEmpty IdentDef
 
-data ProcedureHeading f =  ProcedureHeading (Maybe (Bool, Ident, Ident)) Bool IdentDef (Maybe (FormalParameters f))
-data FormalParameters f  = FormalParameters [FPSection f] (Maybe QualIdent)
-data FPSection f  =  FPSection Bool (NonEmpty Ident) (Type f)
+data ProcedureHeading f' f = 
+   ProcedureHeading (Maybe (Bool, Ident, Ident)) Bool IdentDef (Maybe (f (FormalParameters f' f')))
+data FormalParameters f' f = FormalParameters [f (FPSection f' f')] (Maybe QualIdent)
 
-deriving instance (Typeable f, Data (f (Designator f)),  Data (f (Expression f))) => Data (ProcedureHeading f)
-deriving instance (Show (f (Designator f)),  Show (f (Expression f))) => Show (ProcedureHeading f)
+data FPSection f' f = FPSection Bool (NonEmpty Ident) (f (Type f' f'))
 
-deriving instance (Typeable f, Data (f (Designator f)),  Data (f (Expression f))) => Data (FormalParameters f)
-deriving instance (Show (f (Designator f)),  Show (f (Expression f))) => Show (FormalParameters f)
+deriving instance (Typeable f, Typeable f', Data (f (FormalParameters f' f'))) => Data (ProcedureHeading f' f)
+deriving instance (Show (f (FormalParameters f' f'))) => Show (ProcedureHeading f' f)
 
-deriving instance (Typeable f, Data (f (Designator f)),  Data (f (Expression f))) => Data (FPSection f)
-deriving instance (Show (f (Designator f)),  Show (f (Expression f))) => Show (FPSection f)
+deriving instance (Typeable f, Typeable f', Data (f (FPSection f' f')),  Data (f (Expression f' f'))) =>
+                  Data (FormalParameters f' f)
+deriving instance (Show (f (FPSection f' f')), Show (f (Expression f' f'))) => Show (FormalParameters f' f)
 
-data ProcedureBody f =  ProcedureBody [Declaration f] (Maybe (StatementSequence f))
+deriving instance (Typeable f, Typeable f', Data (f (Type f' f')),  Data (f (Expression f' f'))) =>
+                  Data (FPSection f' f)
+deriving instance (Show (f (Type f' f')), Show (f (Expression f' f'))) => Show (FPSection f' f)
 
-deriving instance (Typeable f, Data (f (Designator f)), Data (f (Expression f)), Data (f (Statement f))) =>
-                  Data (ProcedureBody f)
-deriving instance (Show (f (Designator f)), Show (f (Expression f)), Show (f (Statement f))) => Show (ProcedureBody f)
+data ProcedureBody f' f =  ProcedureBody [f (Declaration f' f')] (Maybe (f (StatementSequence f' f')))
 
-type StatementSequence f  = NonEmpty (f (Statement f))
+deriving instance (Typeable f, Typeable f', Data (f (Declaration f' f')), Data (f (Designator f' f')),
+                   Data (f (Expression f' f')), Data (f (StatementSequence f' f'))) =>
+                  Data (ProcedureBody f' f)
+deriving instance (Show (f (Declaration f' f')), Show (f (Designator f' f')),
+                   Show (f (Expression f' f')), Show (f (StatementSequence f' f'))) => Show (ProcedureBody f' f)
 
-data Statement f = EmptyStatement
-                 | Assignment (AmbDesignator f) (Expression f)
-                 | ProcedureCall (AmbDesignator f) (Maybe (ActualParameters f))
-                 | If (NonEmpty (Expression f, StatementSequence f)) (Maybe (StatementSequence f))
-                 | CaseStatement (Expression f) (NonEmpty (Case f)) (Maybe (StatementSequence f))
-                 | While (Expression f) (StatementSequence f)
-                 | Repeat (StatementSequence f) (Expression f)
-                 | For Ident (Expression f) (Expression f) (Maybe (Expression f)) (StatementSequence f)  -- Oberon2
-                 | Loop (StatementSequence f)
-                 | With (NonEmpty (WithAlternative f)) (Maybe (StatementSequence f))
-                 | Exit 
-                 | Return (Maybe (Expression f))
+type StatementSequence f' f = NonEmpty (f (Statement f' f'))
 
-deriving instance (Typeable f, Data (f (Designator f)), Data (f (Statement f))) => Data (Statement f)
-deriving instance (Show (f (Designator f)), Show (f (Statement f))) => Show (Statement f)
+data Statement f' f = EmptyStatement
+                    | Assignment (f (Designator f' f')) (f (Expression f' f'))
+                    | ProcedureCall (f (Designator f' f')) (Maybe (f (ActualParameters f' f')))
+                    | If (NonEmpty (f (Expression f' f', StatementSequence f' f'))) 
+                         (Maybe (f (StatementSequence f' f')))
+                    | CaseStatement (f (Expression f' f')) 
+                                    (NonEmpty (f (Case f' f'))) 
+                                    (Maybe (f (StatementSequence f' f')))
+                    | While (f (Expression f' f')) (f (StatementSequence f' f'))
+                    | Repeat (f (StatementSequence f' f')) (f (Expression f' f'))
+                    | For Ident (f (Expression f' f')) (f (Expression f' f')) 
+                          (Maybe (f (Expression f' f'))) (f (StatementSequence f' f'))  -- Oberon2
+                    | Loop (f (StatementSequence f' f'))
+                    | With (NonEmpty (f (WithAlternative f' f'))) (Maybe (f (StatementSequence f' f')))
+                    | Exit 
+                    | Return (Maybe (f (Expression f' f')))
 
-data WithAlternative f = WithAlternative QualIdent QualIdent (StatementSequence f)
+deriving instance (Typeable f, Typeable f', Data (f (Designator f' f')), Data (f (Expression f' f')),
+                   Data (f (Expression f' f', StatementSequence f' f')),
+                   Data (f (ActualParameters f' f')), Data (f (Case f' f')), Data (f (WithAlternative f' f')),
+                   Data (f (Statement f' f')), Data (f (StatementSequence f' f'))) => Data (Statement f' f)
+deriving instance (Show (f (Designator f' f')), Show (f (Expression f' f')),
+                   Show (f (Expression f' f', StatementSequence f' f')),
+                   Show (f (ActualParameters f' f')), Show (f (Case f' f')), Show (f (WithAlternative f' f')),
+                   Show (f (Statement f' f')), Show (f (StatementSequence f' f'))) => Show (Statement f' f)
 
-data Case f = Case (NonEmpty (CaseLabels f)) (StatementSequence f)
-            | EmptyCase
+data WithAlternative f' f = WithAlternative QualIdent QualIdent (f (StatementSequence f' f'))
 
-data CaseLabels f = SingleLabel (ConstExpression f)
-                  | LabelRange (ConstExpression f) (ConstExpression f)
+data Case f' f = Case (NonEmpty (f (CaseLabels f' f'))) (f (StatementSequence f' f'))
+               | EmptyCase
 
-deriving instance (Typeable f, Data (f (Designator f)), Data (f (Statement f))) => Data (WithAlternative f)
-deriving instance (Show (f (Designator f)), Show (f (Statement f))) => Show (WithAlternative f)
+data CaseLabels f' f = SingleLabel (f (ConstExpression f' f'))
+                     | LabelRange (f (ConstExpression f' f')) (f (ConstExpression f' f'))
 
-deriving instance (Typeable f, Data (f (Designator f)), Data (f (Statement f))) => Data (Case f)
-deriving instance (Show (f (Designator f)), Show (f (Statement f))) => Show (Case f)
+deriving instance (Typeable f, Typeable f', Data (f (Designator f' f')), Data (f (StatementSequence f' f'))) =>
+                  Data (WithAlternative f' f)
+deriving instance (Show (f (StatementSequence f' f'))) => Show (WithAlternative f' f)
 
-deriving instance (Typeable f, Data (f (Designator f))) => Data (CaseLabels f)
-deriving instance Show (f (Designator f)) => Show (CaseLabels f)
+deriving instance (Typeable f, Typeable f', Data (f (CaseLabels f' f')), Data (f (StatementSequence f' f'))) =>
+                  Data (Case f' f)
+deriving instance (Show (f (CaseLabels f' f')), Show (f (StatementSequence f' f'))) => Show (Case f' f)
+
+deriving instance (Typeable f, Typeable f', Data (f (ConstExpression f' f'))) => Data (CaseLabels f' f)
+deriving instance Show (f (ConstExpression f' f')) => Show (CaseLabels f' f)

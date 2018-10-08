@@ -27,71 +27,71 @@ import Prelude hiding (length, takeWhile)
 
 -- | All the productions of the Oberon grammar
 data OberonGrammar f p = OberonGrammar {
-   module_prod :: p (Module f),
+   module_prod :: p (Module f f),
    ident :: p Ident,
    letter :: p Text,
    digit :: p Text,
    importList :: p [Import],
    import_prod :: p Import,
-   declarationSequence :: p [Declaration f],
-   constantDeclaration :: p (Declaration f),
+   declarationSequence :: p [f (Declaration f f)],
+   constantDeclaration :: p (Declaration f f),
    identdef :: p IdentDef,
-   constExpression :: p (Expression f),
-   expression :: p (Expression f),
-   simpleExpression :: p (Expression f),
-   term :: p (Expression f),
-   factor :: p (Expression f),
-   number :: p (Expression f),
-   integer :: p (Expression f),
+   constExpression :: p (Expression f f),
+   expression :: p (Expression f f),
+   simpleExpression :: p (Expression f f),
+   term :: p (Expression f f),
+   factor :: p (Expression f f),
+   number :: p (Expression f f),
+   integer :: p (Expression f f),
    hexDigit :: p Text,
-   real :: p (Expression f),
+   real :: p (Expression f f),
    scaleFactor :: p Text,
-   charConstant :: p (Expression f),
+   charConstant :: p (Expression f f),
    string_prod :: p Text,
-   set :: p (Expression f),
-   element :: p (Element f),
-   designator :: p (Designator f),
-   expList :: p (NonEmpty (Expression f)),
-   actualParameters :: p [(Expression f)],
+   set :: p (Expression f f),
+   element :: p (Element f f),
+   designator :: p (Designator f f),
+   expList :: p (NonEmpty (f (Expression f f))),
+   actualParameters :: p [f (Expression f f)],
    mulOperator :: p (BinOp f),
    addOperator :: p (BinOp f),
    relation :: p RelOp,
-   typeDeclaration :: p (Declaration f),
-   type_prod :: p (Type f),
+   typeDeclaration :: p (Declaration f f),
+   type_prod :: p (Type f f),
    qualident :: p QualIdent,
-   arrayType :: p (Type f),
-   length :: p (Expression f),
-   recordType :: p (Type f),
+   arrayType :: p (Type f f),
+   length :: p (Expression f f),
+   recordType :: p (Type f f),
    baseType :: p QualIdent,
-   fieldListSequence :: p (FieldListSequence f),
-   fieldList :: p (FieldList f),
+   fieldListSequence :: p (FieldListSequence f f),
+   fieldList :: p (FieldList f f),
    identList :: p IdentList,
-   pointerType :: p (Type f),
-   procedureType :: p (Type f),
-   variableDeclaration :: p (Declaration f),
-   procedureDeclaration :: p (Declaration f),
-   procedureHeading :: p (ProcedureHeading f),
-   formalParameters :: p (FormalParameters f),
-   fPSection :: p (FPSection f),
-   formalType :: p (Type f),
-   procedureBody :: p (ProcedureBody f),
-   forwardDeclaration :: p (Declaration f),
-   statementSequence :: p (NonEmpty (Ambiguous (Statement f))),
-   statement :: p (Statement f),
-   assignment :: p (Statement f),
-   procedureCall :: p (Statement f),
-   ifStatement :: p (Statement f),
-   caseStatement :: p (Statement f),
-   case_prod :: p (Case f),
-   caseLabelList :: p (NonEmpty (CaseLabels f)),
-   caseLabels :: p (CaseLabels f),
-   whileStatement :: p (Statement f),
-   repeatStatement :: p (Statement f),
-   forStatement :: p (Statement f),
-   loopStatement :: p (Statement f),
-   withStatement :: p (Statement f)}
+   pointerType :: p (Type f f),
+   procedureType :: p (Type f f),
+   variableDeclaration :: p (Declaration f f),
+   procedureDeclaration :: p (Declaration f f),
+   procedureHeading :: p (ProcedureHeading f f),
+   formalParameters :: p (FormalParameters f f),
+   fPSection :: p (FPSection f f),
+   formalType :: p (Type f f),
+   procedureBody :: p (ProcedureBody f f),
+   forwardDeclaration :: p (Declaration f f),
+   statementSequence :: p (NonEmpty (Ambiguous (Statement f f))),
+   statement :: p (Statement f f),
+   assignment :: p (Statement f f),
+   procedureCall :: p (Statement f f),
+   ifStatement :: p (Statement f f),
+   caseStatement :: p (Statement f f),
+   case_prod :: p (Case f f),
+   caseLabelList :: p (NonEmpty (f (CaseLabels f f))),
+   caseLabels :: p (CaseLabels f f),
+   whileStatement :: p (Statement f f),
+   repeatStatement :: p (Statement f f),
+   forStatement :: p (Statement f f),
+   loopStatement :: p (Statement f f),
+   withStatement :: p (Statement f f)}
 
-newtype BinOp f = BinOp {applyBinOp :: (Expression f -> Expression f -> Expression f)}
+newtype BinOp f = BinOp {applyBinOp :: (f (Expression f f) -> f (Expression f f) -> Expression f f)}
 
 instance Show (BinOp f) where
    show = const "BinOp{}"
@@ -146,41 +146,44 @@ grammar2 g@OberonGrammar{..} = g1{
                                     ((,,) <$> (True <$ keyword "VAR" <|> pure False)
                                           <*> ident <* delimiter ":" <*> ident))
                       <*> (True <$ delimiter "*" <|> pure False) 
-                      <*> identdef <*> optional formalParameters,
-   arrayType = ArrayType <$ keyword "ARRAY" <*> sepBy (ambiguous length) (delimiter ",") <* keyword "OF" <*> type_prod,
+                      <*> identdef <*> optional (wrap formalParameters),
+   arrayType = 
+      ArrayType <$ keyword "ARRAY" <*> sepBy (ambiguous length) (delimiter ",") <* keyword "OF" <*> wrap type_prod,
    statement = statement1 <|> forStatement,
-   forStatement = For <$ keyword "FOR" <*> ident <* delimiter ":=" <*> expression <* keyword "TO" <*> expression 
-                  <*> optional (keyword "BY" *> constExpression) <* keyword "DO"
-                  <*> statementSequence <* keyword "END",
-   withStatement = With <$ keyword "WITH" <*> sepByNonEmpty withAlternative (delimiter "|")
-                        <*> optional (keyword "ELSE" *> statementSequence) <* keyword "END"}
+   forStatement = 
+      For <$ keyword "FOR" <*> ident <* delimiter ":=" <*> wrap expression <* keyword "TO" <*> wrap expression 
+      <*> optional (keyword "BY" *> wrap constExpression) <* keyword "DO"
+      <*> wrap statementSequence <* keyword "END",
+   withStatement = With <$ keyword "WITH" <*> sepByNonEmpty (wrap withAlternative) (delimiter "|")
+                        <*> optional (keyword "ELSE" *> wrap statementSequence) <* keyword "END"}
    where g1@OberonGrammar{statement= statement1, string_prod= string_prod1} = grammar g
          withAlternative = WithAlternative <$> qualident <* delimiter ":" <*> qualident
-                                           <*  keyword "DO" <*> statementSequence
+                                           <*  keyword "DO" <*> wrap statementSequence
    
 grammar OberonGrammar{..} = OberonGrammar{
    module_prod = Module <$ (lexicalWhiteSpace *> keyword "MODULE") <*> ident <* delimiter ";"
                  <*> moptional importList <*> declarationSequence
-                 <*> optional (keyword "BEGIN" *> statementSequence) <* keyword "END" <*> ident <* delimiter ".",
+                 <*> optional (keyword "BEGIN" *> wrap statementSequence) <* keyword "END" <*> ident <* delimiter ".",
    ident = identifier,
    letter = satisfyCharInput isLetter,
    digit = satisfyCharInput isDigit,
    importList = keyword "IMPORT" *> sepBy1 import_prod (delimiter ",") <* delimiter ";",
    import_prod = (,) <$> optional (ident <* delimiter ":=") <*> ident,
-   declarationSequence = concatMany (keyword "CONST" *> many (constantDeclaration <* delimiter ";")
-                                     <|> keyword "TYPE" *> many (typeDeclaration <* delimiter ";")
-                                     <|> keyword "VAR" *> many (variableDeclaration <* delimiter ";"))
-                         <> many (procedureDeclaration <* delimiter ";"
-                                  <|> forwardDeclaration <* delimiter ";")
+   declarationSequence = concatMany (keyword "CONST" *> many (wrap constantDeclaration <* delimiter ";")
+                                     <|> keyword "TYPE" *> many (wrap typeDeclaration <* delimiter ";")
+                                     <|> keyword "VAR" *> many (wrap variableDeclaration <* delimiter ";"))
+                         <> many (wrap procedureDeclaration <* delimiter ";"
+                                  <|> wrap forwardDeclaration <* delimiter ";")
                          <?> "declarations",
    constantDeclaration = ConstantDeclaration <$> identdef <* delimiter "=" <*> ambiguous constExpression,
    identdef = IdentDef <$> ident <*> (Exported <$ delimiter "*" <|> pure PrivateOnly),
    constExpression = expression,
-   expression = simpleExpression <**> (pure id <|> (flip . Relation) <$> relation <*> simpleExpression)
+   expression = simpleExpression <**> (pure id <|> (flip . (. pure) . Relation) <$> relation <*> wrap simpleExpression)
                 <?> "expression",
-   simpleExpression = (Positive <$ operator "+" <|> Negative <$ operator "-" <|> pure id)
-                      <*> (term <**> (appEndo <$> concatMany (Endo <$> (flip . applyBinOp <$> addOperator <*> term)))),
-   term = factor <**> (appEndo <$> concatMany (Endo <$> (flip . applyBinOp <$> mulOperator <*> factor))),
+   simpleExpression = 
+      (Positive . pure <$ operator "+" <|> Negative . pure <$ operator "-" <|> pure id)
+      <*> (term <**> (appEndo <$> concatMany (Endo <$> (flip . (. pure) . applyBinOp <$> addOperator <*> wrap term)))),
+   term = factor <**> (appEndo <$> concatMany (Endo <$> (flip . (. pure) . applyBinOp <$> mulOperator <*> wrap factor))),
    factor  =  number
               <|> charConstant
               <|> String <$> string_prod
@@ -189,7 +192,7 @@ grammar OberonGrammar{..} = OberonGrammar{
               <|> Read <$> ambiguous designator
               <|> FunctionCall <$> ambiguous designator <*> actualParameters
               <|> parens expression
-              <|> Not <$ operator "~" <*> factor,
+              <|> Not <$ operator "~" <*> wrap factor,
    number  =  integer <|> real,
    integer = Integer <$> lexicalToken (digit <> (takeCharsWhile isDigit <|> takeCharsWhile isHexDigit <> string "H")),
    hexDigit = satisfyCharInput isHexDigit,
@@ -200,16 +203,16 @@ grammar OberonGrammar{..} = OberonGrammar{
                                 <|> CharCode . fst . head . readHex . unpack
                                 <$> (digit <> takeCharsWhile isHexDigit <* string "X")),
    string_prod = lexicalToken (char '"' *> takeWhile (/= "\"") <* char '"'),
-   set = Set <$> braces (sepBy element (delimiter ",")),
-   element = Element <$> expression 
-             <|> Range <$> expression <* delimiter ".." <*> expression,
+   set = Set <$> braces (sepBy (wrap element) (delimiter ",")),
+   element = Element <$> wrap expression 
+             <|> Range <$> wrap expression <* delimiter ".." <*> wrap expression,
    designator = Variable <$> qualident 
-                <|> Field <$> designator <* delimiter "." <*> ident
-                <|> Index <$> designator <*> brackets expList
-                <|> TypeGuard <$> designator <*> parens qualident
-                <|> Dereference <$> designator <* operator "^",
-   expList = sepByNonEmpty expression (delimiter ","),
-   actualParameters = parens (sepBy expression (delimiter ",")),
+                <|> Field <$> wrap designator <* delimiter "." <*> ident
+                <|> Index <$> wrap designator <*> brackets expList
+                <|> TypeGuard <$> wrap designator <*> parens qualident
+                <|> Dereference <$> wrap designator <* operator "^",
+   expList = sepByNonEmpty (wrap expression) (delimiter ","),
+   actualParameters = parens (sepBy (wrap expression) (delimiter ",")),
    mulOperator = BinOp <$> (Multiply <$ operator "*" <|> Divide <$ operator "/"
                             <|> IntegerDivide <$ keyword "DIV" <|> Modulo <$ keyword "MOD" <|> And <$ operator "&"),
    addOperator = BinOp <$> (Add <$ operator "+" <|> Subtract <$ operator "-" <|> Or <$ keyword "OR"),
@@ -217,69 +220,72 @@ grammar OberonGrammar{..} = OberonGrammar{
               <|> Less <$ operator "<" <|> LessOrEqual <$ operator "<=" 
               <|> Greater <$ operator ">" <|> GreaterOrEqual <$ operator ">=" 
               <|> In <$ keyword "IN" <|> Is <$ keyword "IS",
-   typeDeclaration = TypeDeclaration <$> identdef <* delimiter "=" <*> type_prod,
+   typeDeclaration = TypeDeclaration <$> identdef <* delimiter "=" <*> wrap type_prod,
    type_prod = TypeReference <$> qualident 
                <|> arrayType 
                <|> recordType 
                <|> pointerType 
                <|> procedureType,
-   qualident = QualIdent <$> ident <* delimiter "." <*> ident 
+   qualident = QualIdent <$> ident <* delimiter "." <*> ident
                <|> NonQualIdent <$> ident,
-   arrayType = ArrayType <$ keyword "ARRAY" <*> sepBy1 (ambiguous length) (delimiter ",") <* keyword "OF" <*> type_prod,
+   arrayType = ArrayType <$ keyword "ARRAY" <*> sepBy1 (ambiguous length) (delimiter ",") <* keyword "OF" <*> wrap type_prod,
    length = constExpression,
    recordType = RecordType <$ keyword "RECORD" <*> optional (parens baseType)
-                <*> fieldListSequence <* keyword "END",
+                <*> wrap fieldListSequence <* keyword "END",
    baseType = qualident,
-   fieldListSequence = sepByNonEmpty fieldList (delimiter ";"),
-   fieldList = (FieldList <$> identList <* delimiter ":" <*> type_prod <?> "record field declarations")
+   fieldListSequence = sepByNonEmpty (wrap fieldList) (delimiter ";"),
+   fieldList = (FieldList <$> identList <* delimiter ":" <*> wrap type_prod <?> "record field declarations")
                <|> pure EmptyFieldList,
    identList = sepByNonEmpty identdef (delimiter ","),
-   pointerType = PointerType <$ keyword "POINTER" <* keyword "TO" <*> type_prod,
-   procedureType = ProcedureType <$ keyword "PROCEDURE" <*> optional formalParameters,
-   variableDeclaration = VariableDeclaration <$> identList <* delimiter ":" <*> type_prod,
+   pointerType = PointerType <$ keyword "POINTER" <* keyword "TO" <*> wrap type_prod,
+   procedureType = ProcedureType <$ keyword "PROCEDURE" <*> optional (wrap formalParameters),
+   variableDeclaration = VariableDeclaration <$> identList <* delimiter ":" <*> wrap type_prod,
    procedureDeclaration = ProcedureDeclaration <$> procedureHeading <* delimiter ";" <*> procedureBody <*> ident,
    procedureHeading = ProcedureHeading Nothing <$ keyword "PROCEDURE" <*> (True <$ delimiter "*" <|> pure False) 
-                      <*> identdef <*> optional formalParameters,
-   formalParameters = FormalParameters <$> parens (sepBy fPSection (delimiter ";"))
+                      <*> identdef <*> optional (wrap formalParameters),
+   formalParameters = FormalParameters <$> parens (sepBy (wrap fPSection) (delimiter ";"))
                       <*> optional (delimiter ":" *> qualident),
    fPSection = FPSection <$> (True <$ keyword "VAR" <|> pure False) 
-               <*> sepByNonEmpty ident (delimiter ",") <* delimiter ":" <*> formalType,
-   formalType = ArrayType [] <$ keyword "ARRAY" <* keyword "OF" <*> formalType 
-                <|> TypeReference <$> qualident 
-                <|> ProcedureType <$ keyword "PROCEDURE" <*> optional formalParameters,
-   procedureBody = ProcedureBody <$> declarationSequence 
-                   <*> optional (keyword "BEGIN" *> statementSequence) <* keyword "END",
+               <*> sepByNonEmpty ident (delimiter ",") <* delimiter ":" <*> wrap formalType,
+   formalType = ArrayType [] <$ keyword "ARRAY" <* keyword "OF" <*> wrap formalType 
+                <|> TypeReference <$> qualident
+                <|> ProcedureType <$ keyword "PROCEDURE" <*> optional (wrap formalParameters),
+   procedureBody = ProcedureBody <$> declarationSequence
+                   <*> optional (keyword "BEGIN" *> wrap statementSequence) <* keyword "END",
    forwardDeclaration = ForwardDeclaration <$ keyword "PROCEDURE" <* delimiter "^"
-                        <*> identdef <*> optional formalParameters,
+                        <*> identdef <*> optional (wrap formalParameters),
    statementSequence = sepByNonEmpty (ambiguous statement) (delimiter ";"),
    statement = assignment <|> procedureCall <|> ifStatement <|> caseStatement 
                <|> whileStatement <|> repeatStatement <|> loopStatement <|> withStatement 
                <|> Exit <$ keyword "EXIT" 
-               <|> Return <$ keyword "RETURN" <*> optional expression
+               <|> Return <$ keyword "RETURN" <*> optional (wrap expression)
                <|> pure EmptyStatement
                <?> "statement",
-   assignment  =  Assignment <$> ambiguous designator <* delimiter ":=" <*> expression,
-   procedureCall = ProcedureCall <$> ambiguous designator <*> optional actualParameters,
+   assignment  =  Assignment <$> ambiguous designator <* delimiter ":=" <*> wrap expression,
+   procedureCall = ProcedureCall <$> ambiguous designator <*> optional (wrap actualParameters),
    ifStatement = If <$ keyword "IF"
-       <*> sepByNonEmpty ((,) <$> expression <* keyword "THEN" <*> statementSequence) (keyword "ELSIF")
-       <*> optional (keyword "ELSE" *> statementSequence) <* keyword "END",
-   caseStatement = CaseStatement <$ keyword "CASE" <*> expression
-       <*  keyword "OF" <*> sepByNonEmpty case_prod (delimiter "|")
-       <*> optional (keyword "ELSE" *> statementSequence) <* keyword "END",
-   case_prod  =  Case <$> caseLabelList <* delimiter ":" <*> statementSequence
+       <*> sepByNonEmpty (wrap $ (,) <$> expression <* keyword "THEN" <*> statementSequence) (keyword "ELSIF")
+       <*> optional (keyword "ELSE" *> wrap statementSequence) <* keyword "END",
+   caseStatement = CaseStatement <$ keyword "CASE" <*> wrap expression
+       <*  keyword "OF" <*> sepByNonEmpty (wrap case_prod) (delimiter "|")
+       <*> optional (keyword "ELSE" *> wrap statementSequence) <* keyword "END",
+   case_prod  =  Case <$> caseLabelList <* delimiter ":" <*> wrap statementSequence
                  <|> pure EmptyCase,
-   caseLabelList  =  sepByNonEmpty caseLabels (delimiter ","),
-   caseLabels = SingleLabel <$> constExpression 
-                <|> LabelRange <$> constExpression <* delimiter ".." <*> constExpression,
-   whileStatement = While <$ keyword "WHILE" <*> expression <* keyword "DO" <*> statementSequence <* keyword "END",
-   repeatStatement = Repeat <$ keyword "REPEAT" <*> statementSequence <* keyword "UNTIL" <*> expression,
-   loopStatement = Loop <$ keyword "LOOP" <*> statementSequence <* keyword "END",
+   caseLabelList  =  sepByNonEmpty (wrap caseLabels) (delimiter ","),
+   caseLabels = SingleLabel <$> wrap constExpression 
+                <|> LabelRange <$> wrap constExpression <* delimiter ".." <*> wrap constExpression,
+   whileStatement = While <$ keyword "WHILE" <*> wrap expression <* keyword "DO" 
+                    <*> wrap statementSequence <* keyword "END",
+   repeatStatement = Repeat <$ keyword "REPEAT" <*> wrap statementSequence <* keyword "UNTIL" <*> wrap expression,
+   loopStatement = Loop <$ keyword "LOOP" <*> wrap statementSequence <* keyword "END",
    forStatement = empty,
    withStatement = With <$ keyword "WITH"
                         <*> ((:| [])
-                             <$> (WithAlternative <$> qualident <* delimiter ":" <*> qualident
-                                  <* keyword "DO" <*> statementSequence))
+                             <$> wrap (WithAlternative <$> qualident <* delimiter ":" <*> qualident
+                                       <* keyword "DO" <*> wrap statementSequence))
                         <*> pure Nothing <* keyword "END"}
+
+wrap = ambiguous
 
 moptional p = p <|> mempty
 
