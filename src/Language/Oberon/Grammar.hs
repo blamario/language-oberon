@@ -63,7 +63,7 @@ data OberonGrammar f p = OberonGrammar {
    length :: p (Expression f f),
    recordType :: p (Type f f),
    baseType :: p QualIdent,
-   fieldListSequence :: p (FieldListSequence f f),
+   fieldListSequence :: p (NonEmpty (f (FieldList f f))),
    fieldList :: p (FieldList f f),
    identList :: p IdentList,
    pointerType :: p (Type f f),
@@ -76,7 +76,7 @@ data OberonGrammar f p = OberonGrammar {
    formalType :: p (Type f f),
    procedureBody :: p (ProcedureBody f f),
    forwardDeclaration :: p (Declaration f f),
-   statementSequence :: p (NonEmpty (Ambiguous (Statement f f))),
+   statementSequence :: p (StatementSequence f f),
    statement :: p (Statement f f),
    assignment :: p (Statement f f),
    procedureCall :: p (Statement f f),
@@ -231,7 +231,7 @@ grammar OberonGrammar{..} = OberonGrammar{
    arrayType = ArrayType <$ keyword "ARRAY" <*> sepBy1 (ambiguous length) (delimiter ",") <* keyword "OF" <*> wrap type_prod,
    length = constExpression,
    recordType = RecordType <$ keyword "RECORD" <*> optional (parens baseType)
-                <*> wrap fieldListSequence <* keyword "END",
+                <*> fieldListSequence <* keyword "END",
    baseType = qualident,
    fieldListSequence = sepByNonEmpty (wrap fieldList) (delimiter ";"),
    fieldList = (FieldList <$> identList <* delimiter ":" <*> wrap type_prod <?> "record field declarations")
@@ -254,7 +254,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                    <*> optional (keyword "BEGIN" *> wrap statementSequence) <* keyword "END",
    forwardDeclaration = ForwardDeclaration <$ keyword "PROCEDURE" <* delimiter "^"
                         <*> identdef <*> optional (wrap formalParameters),
-   statementSequence = sepByNonEmpty (ambiguous statement) (delimiter ";"),
+   statementSequence = StatementSequence <$> sepByNonEmpty (ambiguous statement) (delimiter ";"),
    statement = assignment <|> procedureCall <|> ifStatement <|> caseStatement 
                <|> whileStatement <|> repeatStatement <|> loopStatement <|> withStatement 
                <|> Exit <$ keyword "EXIT" 
@@ -262,7 +262,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                <|> pure EmptyStatement
                <?> "statement",
    assignment  =  Assignment <$> ambiguous designator <* delimiter ":=" <*> wrap expression,
-   procedureCall = ProcedureCall <$> ambiguous designator <*> optional (wrap actualParameters),
+   procedureCall = ProcedureCall <$> ambiguous designator <*> optional actualParameters,
    ifStatement = If <$ keyword "IF"
        <*> sepByNonEmpty (wrap $ (,) <$> expression <* keyword "THEN" <*> statementSequence) (keyword "ELSIF")
        <*> optional (keyword "ELSE" *> wrap statementSequence) <* keyword "END",

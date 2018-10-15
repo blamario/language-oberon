@@ -96,9 +96,9 @@ instance Pretty (Type Identity Identity) where
    pretty (TypeReference q) = pretty q
    pretty (ArrayType dimensions itemType) =
       "ARRAY" <+> hsep (punctuate comma $ pretty . runIdentity <$> dimensions) <+> "OF" <+> pretty itemType
-   pretty (RecordType baseType (Identity fields)) = vsep ["RECORD" <+> foldMap (parens . pretty) baseType,
-                                                          indent 3 (vsep $ punctuate semi $ pretty <$> toList fields),
-                                                          "END"]
+   pretty (RecordType baseType fields) = vsep ["RECORD" <+> foldMap (parens . pretty) baseType,
+                                               indent 3 (vsep $ punctuate semi $ pretty <$> toList fields),
+                                               "END"]
    pretty (PointerType pointed) = "POINTER" <+> "TO" <+> pretty pointed
    pretty (ProcedureType parameters) = "PROCEDURE" <+> pretty parameters
 
@@ -131,6 +131,9 @@ instance Pretty (ProcedureBody Identity Identity) where
       vsep ((indent 3 . pretty <$> declarations)
             ++ foldMap (\statements-> ["BEGIN", prettyBlock statements]) body)
 
+instance Pretty (StatementSequence Identity Identity) where
+   pretty (StatementSequence statements) = pretty (runIdentity <$> statements)
+           
 instance Pretty (Statement Identity Identity) where
    prettyList l = vsep (dropEmptyTail $ punctuate semi $ pretty <$> l)
       where dropEmptyTail
@@ -139,7 +142,7 @@ instance Pretty (Statement Identity Identity) where
    pretty EmptyStatement = mempty
    pretty (Assignment (Identity destination) expression) = pretty destination <+> ":=" <+> pretty expression
    pretty (ProcedureCall (Identity procedure) parameters) =
-      pretty procedure <> foldMap (parens . hsep . punctuate comma . (pretty <$>) . runIdentity) parameters
+      pretty procedure <> foldMap (parens . hsep . punctuate comma . (pretty <$>)) parameters
    pretty (If (ifThen :| elsifs) fallback) = vsep (branch "IF" ifThen
                                                    : (branch "ELSIF" <$> elsifs)
                                                     ++ foldMap (\x-> ["ELSE", prettyBlock x]) fallback
@@ -189,5 +192,7 @@ instance Pretty (CaseLabels Identity Identity) where
 instance Pretty a => Pretty (Identity a) where
    pretty (Identity a) = pretty a
 
-prettyBlock (Identity statements) = indent 3 (pretty $ runIdentity <$> statements)
+prettyBlock :: Identity (StatementSequence Identity Identity) -> Doc ann
+prettyBlock (Identity (StatementSequence statements)) = indent 3 (pretty $ runIdentity <$> statements)
+
 a <#> b = vsep [a, b]

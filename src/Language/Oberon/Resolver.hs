@@ -36,7 +36,6 @@ data Error = UnknownModule Ident
            | UnknownLocal Ident
            | UnknownImport QualIdent
            | AmbiguousParses
-           | AmbiguousActualParameters [ActualParameters Identity Identity]
            | AmbiguousBinding [(Ident, (AccessMode, DeclarationRHS Ambiguous))]
            | AmbiguousBranch [(Expression Identity Identity, StatementSequence Identity Identity)]
            | AmbiguousCase [Case Identity Identity]
@@ -44,7 +43,6 @@ data Error = UnknownModule Ident
            | AmbiguousDesignator [Designator Identity Identity]
            | AmbiguousExpression [Expression Identity Identity]
            | AmbiguousElement [Element Identity Identity]
-           | AmbiguousFieldSequence [FieldListSequence Identity Identity]
            | AmbiguousFields [FieldList Identity Identity]
            | AmbiguousLabels [CaseLabels Identity Identity]
            | AmbiguousParameters [FormalParameters Identity Identity]
@@ -167,7 +165,7 @@ resolveModule predefinedScope modules (Module moduleName imports declarations bo
             ArrayType <$> (traverse (uniqueExpression . (resolveExpression scope <$>)) dimensions)
                       <*> uniqueType (resolveType scope <$> itemType)
          resolveType scope (RecordType baseType fields) =
-            RecordType baseType <$> uniqueFieldSequence (traverse (uniqueFields . (resolveFields scope <$>)) <$> fields)
+            RecordType baseType <$> traverse (uniqueFields . (resolveFields scope <$>)) fields
          resolveType scope (PointerType baseType) = PointerType <$> uniqueType (resolveType scope <$> baseType)
          resolveType scope (ProcedureType parameters) =
             ProcedureType <$> traverse (uniqueParameters . (resolveParameters scope <$>)) parameters
@@ -180,7 +178,7 @@ resolveModule predefinedScope modules (Module moduleName imports declarations bo
             FormalParameters <$> traverse (uniqueSection . fmap resolveSection) sections <*> pure result
             where resolveSection (FPSection var names t) = FPSection var names <$> uniqueType (resolveType scope <$> t)
 
-         resolveStatements scope = traverse resolveOne
+         resolveStatements scope (StatementSequence statements) = StatementSequence <$> traverse resolveOne statements
             where resolveOne :: Ambiguous (Statement Ambiguous Ambiguous)
                              -> Validation (NonEmpty Error) (Identity (Statement Identity Identity))
                   resolveOne statements = uniqueStatement (resolveStatement scope <$> statements)
@@ -191,8 +189,7 @@ resolveModule predefinedScope modules (Module moduleName imports declarations bo
                        <*> uniqueExpression (resolveExpression scope <$> exp)
          resolveStatement scope (ProcedureCall designators parameters) =
             ProcedureCall <$> (uniqueDesignator (resolveProcedure scope <$> designators))
-                          <*> traverse (uniqueActualParameters . (resolveParameters <$>)) parameters
-            where resolveParameters = traverse (uniqueExpression . (resolveExpressionOrType scope <$>))
+                          <*> traverse (traverse (uniqueExpression . (resolveExpressionOrType scope <$>))) parameters
          resolveStatement scope (If branches fallback) =
             If <$> traverse (uniqueBranch . fmap resolveBranch) branches
                <*> traverse (uniqueStatements . (resolveStatements scope <$>)) fallback
@@ -497,7 +494,6 @@ globalsOfModule (Module name imports declarations _ _) = scope
          scope' = snd <$> scope
          declarationBindings = concatMap (declarationBinding name . runIdentity) declarations
 
-uniqueActualParameters = unique InvalidStatement AmbiguousActualParameters
 uniqueBinding = unique InvalidDeclaration AmbiguousBinding
 uniqueBranch = unique InvalidStatement AmbiguousBranch
 uniqueCase = unique InvalidStatement AmbiguousCase
@@ -505,7 +501,6 @@ uniqueDeclaration = unique InvalidDeclaration AmbiguousDeclaration
 uniqueDesignator = unique InvalidDesignator AmbiguousDesignator
 uniqueExpression = unique InvalidExpression AmbiguousExpression
 uniqueElement = unique InvalidExpression AmbiguousElement
-uniqueFieldSequence = unique InvalidExpression AmbiguousFieldSequence
 uniqueFields = unique InvalidExpression AmbiguousFields
 uniqueLabels = unique InvalidExpression AmbiguousLabels
 uniqueParameters = unique InvalidDeclaration AmbiguousParameters

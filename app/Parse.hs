@@ -3,7 +3,7 @@
 module Main where
 
 import Language.Oberon (parseAndResolveModule)
-import Language.Oberon.AST (Module(..), Statement, Expression)
+import Language.Oberon.AST (Module(..), StatementSequence, Statement, Expression)
 import qualified Language.Oberon.Grammar as Grammar
 import qualified Language.Oberon.Resolver as Resolver
 import qualified Language.Oberon.Pretty ()
@@ -128,6 +128,8 @@ succeed out contents x = either reportFailure showSuccess (validationToEither x)
                           Plain -> print
 
 instance Pretty (Module Ambiguous Ambiguous) where
+   pretty _ = error "Disambiguate before pretty-printing"
+instance Pretty (StatementSequence Ambiguous Ambiguous) where
    pretty _ = error "Disambiguate before pretty-printing"
 instance Pretty (Ambiguous (Statement Ambiguous Ambiguous)) where
    pretty _ = error "Disambiguate before pretty-printing"

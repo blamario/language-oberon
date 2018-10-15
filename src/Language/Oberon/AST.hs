@@ -58,7 +58,7 @@ data Expression f' f = Relation RelOp (f (Expression f' f')) (f (Expression f' f
                      | Nil 
                      | Set [f (Element f' f')]
                      | Read (f (Designator f' f'))
-                     | FunctionCall (f (Designator f' f')) (ActualParameters f' f)
+                     | FunctionCall (f (Designator f' f')) [f (Expression f' f')]
                      | Not (f (Expression f' f'))
 
 deriving instance (Typeable f, Typeable f', Data (f (Designator f' f')),
@@ -85,26 +85,22 @@ deriving instance (Typeable f, Typeable f', Data (f (Designator f' f')), Data (f
                   Data (Designator f' f)
 deriving instance (Show (f (Designator f' f')), Show (f (Expression f' f'))) => Show (Designator f' f)
 
-type ActualParameters f' f = [f (Expression f' f')]
-
 data Type f' f = TypeReference QualIdent 
                | ArrayType [f (ConstExpression f' f')] (f (Type f' f'))
-               | RecordType (Maybe BaseType) (f (FieldListSequence f' f'))
+               | RecordType (Maybe BaseType) (NonEmpty (f (FieldList f' f')))
                | PointerType (f (Type f' f'))
                | ProcedureType (Maybe (f (FormalParameters f' f')))
 
 deriving instance (Typeable f, Typeable f', Data (f (Type f' f')), Data (f (ConstExpression f' f')),
-                   Data (f (FormalParameters f' f')), Data (f (FieldListSequence f' f'))) => Data (Type f' f)
+                   Data (f (FormalParameters f' f')), Data (f (FieldList f' f'))) => Data (Type f' f)
 deriving instance (Show (f (Type f' f')), Show (f (ConstExpression f' f')),
-                   Show (f (FormalParameters f' f')), Show (f (FieldListSequence f' f'))) => Show (Type f' f)
+                   Show (f (FormalParameters f' f')), Show (f (FieldList f' f'))) => Show (Type f' f)
 
 data QualIdent = QualIdent Ident Ident 
                | NonQualIdent Ident
    deriving (Data, Eq, Ord, Show)
 
 type BaseType  = QualIdent
-
-type FieldListSequence f' f = NonEmpty (f (FieldList f' f'))
 
 data FieldList f' f = FieldList IdentList (f (Type f' f'))
                     | EmptyFieldList
@@ -139,11 +135,14 @@ deriving instance (Typeable f, Typeable f', Data (f (Declaration f' f')), Data (
 deriving instance (Show (f (Declaration f' f')), Show (f (Designator f' f')),
                    Show (f (Expression f' f')), Show (f (StatementSequence f' f'))) => Show (ProcedureBody f' f)
 
-type StatementSequence f' f = NonEmpty (f (Statement f' f'))
+newtype StatementSequence f' f = StatementSequence (NonEmpty (f (Statement f' f')))
+
+deriving instance (Typeable f, Typeable f', Data (f (Statement f' f'))) => Data (StatementSequence f' f)
+deriving instance Show (f (Statement f' f')) => Show (StatementSequence f' f)
 
 data Statement f' f = EmptyStatement
                     | Assignment (f (Designator f' f')) (f (Expression f' f'))
-                    | ProcedureCall (f (Designator f' f')) (Maybe (f (ActualParameters f' f')))
+                    | ProcedureCall (f (Designator f' f')) (Maybe [f (Expression f' f')])
                     | If (NonEmpty (f (Expression f' f', StatementSequence f' f'))) 
                          (Maybe (f (StatementSequence f' f')))
                     | CaseStatement (f (Expression f' f')) 
@@ -160,11 +159,11 @@ data Statement f' f = EmptyStatement
 
 deriving instance (Typeable f, Typeable f', Data (f (Designator f' f')), Data (f (Expression f' f')),
                    Data (f (Expression f' f', StatementSequence f' f')),
-                   Data (f (ActualParameters f' f')), Data (f (Case f' f')), Data (f (WithAlternative f' f')),
+                   Data (f (Case f' f')), Data (f (WithAlternative f' f')),
                    Data (f (Statement f' f')), Data (f (StatementSequence f' f'))) => Data (Statement f' f)
 deriving instance (Show (f (Designator f' f')), Show (f (Expression f' f')),
                    Show (f (Expression f' f', StatementSequence f' f')),
-                   Show (f (ActualParameters f' f')), Show (f (Case f' f')), Show (f (WithAlternative f' f')),
+                   Show (f (Case f' f')), Show (f (WithAlternative f' f')),
                    Show (f (Statement f' f')), Show (f (StatementSequence f' f'))) => Show (Statement f' f)
 
 data WithAlternative f' f = WithAlternative QualIdent QualIdent (f (StatementSequence f' f'))
