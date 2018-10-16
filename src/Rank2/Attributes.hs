@@ -49,7 +49,7 @@ knitmap t (Identity sem) = Rank2.Arrow (knit (attribution t) sem)
 
 data Product g1 g2 (p :: * -> *) (q :: * -> *) = Pair (q (g1 p p)) (q (g2 p p))
 
-instance (Functor p, Transformation t p q (g1 q q), Transformation t p q (g2 q q), 
+instance (Functor p, Transformation t p q (g1 q q), Transformation t p q (g2 q q),
           DeepTransformation t g1 p q, DeepTransformation t g2 p q) => DeepTransformation t (Product g1 g2) p q where
    deepmap t (Pair left right) = Pair (remap t $ deepmap t <$> left) (remap t $ deepmap t <$> right)
 

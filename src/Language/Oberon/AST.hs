@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances, MultiParamTypeClasses, UndecidableInstances,
              StandaloneDeriving, TemplateHaskell #-}
+{-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 
 -- | Oberon Abstract Syntax Tree definitions
 
@@ -188,3 +189,9 @@ deriving instance (Show (f (CaseLabels f' f')), Show (f (StatementSequence f' f'
 
 deriving instance (Typeable f, Typeable f', Data (f (ConstExpression f' f'))) => Data (CaseLabels f' f)
 deriving instance Show (f (ConstExpression f' f')) => Show (CaseLabels f' f)
+
+$(mconcat <$> mapM Rank2.Attributes.TH.deriveDeepTransformation
+  [''Module, ''Declaration, ''Type, ''Expression,
+   ''Element, ''Designator, ''FieldList,
+   ''ProcedureHeading, ''FormalParameters, ''FPSection, ''ProcedureBody,
+   ''Statement, ''WithAlternative, ''Case, ''CaseLabels])
