@@ -20,6 +20,7 @@ import Data.Map.Lazy (Map, traverseWithKey)
 import qualified Data.Map.Lazy as Map
 import Data.Semigroup (Semigroup(..), sconcat)
 
+import qualified Rank2.Attributes as Rank2A (Product(Pair))
 import Text.Grampa (Ambiguous(..), ParseFailure)
 
 import Language.Oberon.AST
@@ -37,7 +38,7 @@ data Error = UnknownModule Ident
            | UnknownImport QualIdent
            | AmbiguousParses
            | AmbiguousBinding [(Ident, (AccessMode, DeclarationRHS Ambiguous))]
-           | AmbiguousBranch [(Expression Identity Identity, StatementSequence Identity Identity)]
+           | AmbiguousBranch [Rank2A.Product Expression StatementSequence Identity Identity]
            | AmbiguousCase [Case Identity Identity]
            | AmbiguousDeclaration [Declaration Identity Identity]
            | AmbiguousDesignator [Designator Identity Identity]
@@ -193,8 +194,9 @@ resolveModule predefinedScope modules (Module moduleName imports declarations bo
          resolveStatement scope (If branches fallback) =
             If <$> traverse (uniqueBranch . fmap resolveBranch) branches
                <*> traverse (uniqueStatements . (resolveStatements scope <$>)) fallback
-            where resolveBranch (condition, action) = (,) <$> resolveExpression scope condition
-                                                          <*> resolveStatements scope action
+            where resolveBranch (Rank2A.Pair condition action) =
+                     Rank2A.Pair <$> uniqueExpression (resolveExpression scope <$> condition)
+                                 <*> uniqueStatements (resolveStatements scope <$> action)
          resolveStatement scope (CaseStatement expression cases fallback) =
             CaseStatement <$> uniqueExpression (resolveExpression scope <$> expression)
                           <*> traverse (uniqueCase . fmap resolveCase) cases

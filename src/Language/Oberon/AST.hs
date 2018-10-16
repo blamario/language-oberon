@@ -1,4 +1,5 @@
-{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, UndecidableInstances, StandaloneDeriving #-}
+{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, MultiParamTypeClasses, UndecidableInstances,
+             StandaloneDeriving, TemplateHaskell #-}
 
 -- | Oberon Abstract Syntax Tree definitions
 
@@ -8,6 +9,9 @@ import Data.Data (Data, Typeable)
 import Data.Functor.Identity (Identity)
 import Data.List.NonEmpty
 import Data.Text
+
+import Rank2.Attributes (Transformation(remap), DeepTransformation(deepmap), Product)
+import qualified Rank2.Attributes.TH
 
 data Module f' f = Module Ident [Import] ([f (Declaration f' f')]) (Maybe (f (StatementSequence f' f'))) Ident
 
@@ -143,7 +147,7 @@ deriving instance Show (f (Statement f' f')) => Show (StatementSequence f' f)
 data Statement f' f = EmptyStatement
                     | Assignment (f (Designator f' f')) (f (Expression f' f'))
                     | ProcedureCall (f (Designator f' f')) (Maybe [f (Expression f' f')])
-                    | If (NonEmpty (f (Expression f' f', StatementSequence f' f'))) 
+                    | If (NonEmpty (f (Product Expression StatementSequence f' f')))
                          (Maybe (f (StatementSequence f' f')))
                     | CaseStatement (f (Expression f' f')) 
                                     (NonEmpty (f (Case f' f'))) 
@@ -158,11 +162,11 @@ data Statement f' f = EmptyStatement
                     | Return (Maybe (f (Expression f' f')))
 
 deriving instance (Typeable f, Typeable f', Data (f (Designator f' f')), Data (f (Expression f' f')),
-                   Data (f (Expression f' f', StatementSequence f' f')),
+                   Data (f (Product Expression StatementSequence f' f')),
                    Data (f (Case f' f')), Data (f (WithAlternative f' f')),
                    Data (f (Statement f' f')), Data (f (StatementSequence f' f'))) => Data (Statement f' f)
 deriving instance (Show (f (Designator f' f')), Show (f (Expression f' f')),
-                   Show (f (Expression f' f', StatementSequence f' f')),
+                   Show (f (Product Expression StatementSequence f' f')),
                    Show (f (Case f' f')), Show (f (WithAlternative f' f')),
                    Show (f (Statement f' f')), Show (f (StatementSequence f' f'))) => Show (Statement f' f)
 
