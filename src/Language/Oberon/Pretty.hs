@@ -11,7 +11,7 @@ import Data.List.NonEmpty (NonEmpty((:|)), fromList, toList)
 import qualified Data.Text as Text
 import Data.Text.Prettyprint.Doc
 import Numeric (showHex)
-import qualified Rank2.Attributes as Rank2A (Product(Pair))
+import Transformation.Deep as Deep (Product(Pair))
 
 import Language.Oberon.AST
 
@@ -148,7 +148,7 @@ instance Pretty (Statement Identity Identity) where
                                                    : (branch "ELSIF" <$> elsifs)
                                                     ++ foldMap (\x-> ["ELSE", prettyBlock x]) fallback
                                                     ++ ["END"])
-      where branch kwd (Identity (Rank2A.Pair (Identity condition) (Identity body))) =
+      where branch kwd (Identity (Deep.Pair (Identity condition) (Identity body))) =
                vsep [kwd <+> pretty condition <+> "THEN",
                      prettyBlock (Identity body)]
    pretty (CaseStatement scrutinee cases fallback) = vsep ["CASE" <+> pretty scrutinee <+> "OF",

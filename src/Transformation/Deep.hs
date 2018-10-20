@@ -28,3 +28,6 @@ instance (Data.Functor.Functor p, Shallow.Functor t p q (g1 q q), Shallow.Functo
 deriving instance (Typeable p, Typeable q, Typeable g1, Typeable g2,
                    Data (q (g1 p p)), Data (q (g2 p p))) => Data (Product g1 g2 p q)
 deriving instance (Show (q (g1 p p)), Show (q (g2 p p))) => Show (Product g1 g2 p q)
+
+fmap :: Functor t g p q => t -> g p p -> g q q
+fmap = (<$>)

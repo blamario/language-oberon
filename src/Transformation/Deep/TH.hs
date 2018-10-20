@@ -1,22 +1,23 @@
--- | This module exports the templates for automatic instance deriving of "Rank2.Attributes" type classes. The most
+-- | This module exports the templates for automatic instance deriving of "Transformation.Deep" type classes. The most
 -- common way to use it would be
 --
--- > import qualified Rank2.Attributes.TH
+-- > import qualified Transformation.Deep.TH
 -- > data MyDataType f' f = ...
--- > $(Rank2.Attributes.TH.deriveDeepTransformation ''MyDataType)
+-- > $(Transformation.Deep.TH.deriveFunctor ''MyDataType)
 --
 
 {-# Language TemplateHaskell #-}
 -- Adapted from https://wiki.haskell.org/A_practical_Template_Haskell_Tutorial
 
-module Rank2.Attributes.TH (deriveAll, deriveDeepTransformation)
+module Transformation.Deep.TH (deriveAll, deriveFunctor)
 where
 
 import Control.Monad (replicateM)
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax (BangType, VarBangType, getQ, putQ)
 
-import qualified Rank2.Attributes
+import qualified Transformation
+import qualified Transformation.Deep
 import qualified Rank2.TH
 
 
@@ -24,17 +25,17 @@ data Deriving = Deriving { _constructor :: Name, _variableN :: Name, _variable1 
 
 deriveAll :: Name -> Q [Dec]
 deriveAll ty = foldr f (pure []) [Rank2.TH.deriveFunctor, Rank2.TH.deriveFoldable, Rank2.TH.deriveTraversable,
-                                  deriveDeepTransformation]
+                                  Transformation.Deep.TH.deriveFunctor]
    where f derive rest = (<>) <$> derive ty <*> rest
 
-deriveDeepTransformation :: Name -> Q [Dec]
-deriveDeepTransformation ty = do
+deriveFunctor :: Name -> Q [Dec]
+deriveFunctor ty = do
    t <- varT <$> newName "t"
    p <- varT <$> newName "p"
    q <- varT <$> newName "q"
-   let deepConstraint ty = conT ''Rank2.Attributes.DeepTransformation `appT` t `appT` ty `appT` p `appT` q
+   let deepConstraint ty = conT ''Transformation.Deep.Functor `appT` t `appT` ty `appT` p `appT` q
        shallowConstraint ty =
-          conT ''Rank2.Attributes.Transformation `appT` t `appT` p `appT` q `appT` (ty `appT` q `appT` q)
+          conT ''Transformation.Functor `appT` t `appT` p `appT` q `appT` (ty `appT` q `appT` q)
    (instanceType, cs) <- reifyConstructors ty
    (constraints, dec) <- genDeepmap deepConstraint shallowConstraint cs
    sequence [instanceD (cxt (appT (conT ''Functor) p : map pure constraints))
@@ -61,7 +62,7 @@ reifyConstructors ty = do
 genDeepmap :: (Q Type -> Q Type) -> (Q Type -> Q Type) -> [Con] -> Q ([Type], Dec)
 genDeepmap deepConstraint shallowConstraint cs = do
    (constraints, clauses) <- unzip <$> mapM (genDeepmapClause deepConstraint shallowConstraint) cs
-   return (concat constraints, FunD 'Rank2.Attributes.deepmap clauses)
+   return (concat constraints, FunD '(Transformation.Deep.<$>) clauses)
 
 genDeepmapClause :: (Q Type -> Q Type) -> (Q Type -> Q Type) -> Con -> Q ([Type], Clause)
 genDeepmapClause deepConstraint shallowConstraint (NormalC name fieldTypes) = do
@@ -94,12 +95,12 @@ genDeepmapField trans fieldType deepConstraint shallowConstraint fieldAccess wra
    case fieldType of
      AppT ty (AppT (AppT con v1) v2) | ty == VarT typeVar1, v1 == VarT typeVarN, v2 == VarT typeVarN ->
         (,) <$> ((:) <$> deepConstraint (pure con) <*> ((:[]) <$> shallowConstraint (pure con)))
-            <*> appE (wrap [| (Rank2.Attributes.remap $trans . (Rank2.Attributes.deepmap $trans <$>)) |]) fieldAccess
+            <*> appE (wrap [| (Transformation.fmap $trans . (Transformation.Deep.fmap $trans <$>)) |]) fieldAccess
      AppT ty _  | ty == VarT typeVar1 ->
-                  (,) [] <$> (wrap (varE 'Rank2.Attributes.remap `appE` trans) `appE` fieldAccess)
+                  (,) [] <$> (wrap (varE 'Transformation.fmap `appE` trans) `appE` fieldAccess)
      AppT (AppT con v1) v2  | v1 == VarT typeVarN, v2 == VarT typeVar1 ->
         (,) <$> ((:[]) <$> deepConstraint (pure con))
-            <*> appE (wrap [| Rank2.Attributes.deepmap $trans |]) fieldAccess
+            <*> appE (wrap [| Transformation.Deep.fmap $trans |]) fieldAccess
      AppT t1 t2 | t1 /= VarT typeVar1 ->
         genDeepmapField trans t2 deepConstraint shallowConstraint fieldAccess (wrap . appE (varE '(<$>)))
      SigT ty _kind -> genDeepmapField trans ty deepConstraint shallowConstraint fieldAccess wrap
