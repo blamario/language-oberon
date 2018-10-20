@@ -9,7 +9,7 @@ module Language.Oberon.AST where
 import Data.Data (Data, Typeable)
 import Data.Functor.Identity (Identity)
 import Data.List.NonEmpty
-import Data.Text
+import Data.Text (Text)
 
 import Rank2.Attributes (Transformation(remap), DeepTransformation(deepmap), Product)
 import qualified Rank2.Attributes.TH
@@ -190,7 +190,7 @@ deriving instance (Show (f (CaseLabels f' f')), Show (f (StatementSequence f' f'
 deriving instance (Typeable f, Typeable f', Data (f (ConstExpression f' f'))) => Data (CaseLabels f' f)
 deriving instance Show (f (ConstExpression f' f')) => Show (CaseLabels f' f)
 
-$(mconcat <$> mapM Rank2.Attributes.TH.deriveDeepTransformation
+$(mconcat <$> mapM Rank2.Attributes.TH.deriveAll
   [''Module, ''Declaration, ''Type, ''Expression,
    ''Element, ''Designator, ''FieldList,
    ''ProcedureHeading, ''FormalParameters, ''FPSection, ''ProcedureBody,

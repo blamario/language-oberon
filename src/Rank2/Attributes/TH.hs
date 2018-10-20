@@ -9,7 +9,7 @@
 {-# Language TemplateHaskell #-}
 -- Adapted from https://wiki.haskell.org/A_practical_Template_Haskell_Tutorial
 
-module Rank2.Attributes.TH (deriveDeepTransformation)
+module Rank2.Attributes.TH (deriveAll, deriveDeepTransformation)
 where
 
 import Control.Monad (replicateM)
@@ -17,9 +17,29 @@ import Language.Haskell.TH
 import Language.Haskell.TH.Syntax (BangType, VarBangType, getQ, putQ)
 
 import qualified Rank2.Attributes
+import qualified Rank2.TH
 
 
 data Deriving = Deriving { _constructor :: Name, _variableN :: Name, _variable1 :: Name }
+
+deriveAll :: Name -> Q [Dec]
+deriveAll ty = foldr f (pure []) [Rank2.TH.deriveFunctor, Rank2.TH.deriveFoldable, Rank2.TH.deriveTraversable,
+                                  deriveDeepTransformation]
+   where f derive rest = (<>) <$> derive ty <*> rest
+
+deriveDeepTransformation :: Name -> Q [Dec]
+deriveDeepTransformation ty = do
+   t <- varT <$> newName "t"
+   p <- varT <$> newName "p"
+   q <- varT <$> newName "q"
+   let deepConstraint ty = conT ''Rank2.Attributes.DeepTransformation `appT` t `appT` ty `appT` p `appT` q
+       shallowConstraint ty =
+          conT ''Rank2.Attributes.Transformation `appT` t `appT` p `appT` q `appT` (ty `appT` q `appT` q)
+   (instanceType, cs) <- reifyConstructors ty
+   (constraints, dec) <- genDeepmap deepConstraint shallowConstraint cs
+   sequence [instanceD (cxt (appT (conT ''Functor) p : map pure constraints))
+                       (deepConstraint instanceType)
+                       [pure dec]]
 
 reifyConstructors :: Name -> Q (TypeQ, [Con])
 reifyConstructors ty = do
@@ -37,20 +57,6 @@ reifyConstructors ty = do
 
    putQ (Deriving tyConName tyVar' tyVar)
    return (instanceType, cs)
-
-deriveDeepTransformation :: Name -> Q [Dec]
-deriveDeepTransformation ty = do
-   t <- varT <$> newName "t"
-   p <- varT <$> newName "p"
-   q <- varT <$> newName "q"
-   let deepConstraint ty = conT ''Rank2.Attributes.DeepTransformation `appT` t `appT` ty `appT` p `appT` q
-       shallowConstraint ty =
-          conT ''Rank2.Attributes.Transformation `appT` t `appT` p `appT` q `appT` (ty `appT` q `appT` q)
-   (instanceType, cs) <- reifyConstructors ty
-   (constraints, dec) <- genDeepmap deepConstraint shallowConstraint cs
-   sequence [instanceD (cxt (appT (conT ''Functor) p : map pure constraints))
-                       (deepConstraint instanceType)
-                       [pure dec]]
 
 genDeepmap :: (Q Type -> Q Type) -> (Q Type -> Q Type) -> [Con] -> Q ([Type], Dec)
 genDeepmap deepConstraint shallowConstraint cs = do
