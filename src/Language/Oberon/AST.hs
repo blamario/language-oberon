@@ -194,4 +194,4 @@ $(mconcat <$> mapM Transformation.Deep.TH.deriveAll
   [''Module, ''Declaration, ''Type, ''Expression,
    ''Element, ''Designator, ''FieldList,
    ''ProcedureHeading, ''FormalParameters, ''FPSection, ''ProcedureBody,
-   ''Statement, ''WithAlternative, ''Case, ''CaseLabels])
+   ''Statement, ''StatementSequence, ''WithAlternative, ''Case, ''CaseLabels])

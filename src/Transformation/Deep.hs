@@ -3,8 +3,12 @@
 
 module Transformation.Deep where
 
+import Control.Applicative ((<*>))
 import Data.Data (Data, Typeable)
+import Data.Monoid (Monoid, (<>))
+import qualified Data.Foldable
 import qualified Data.Functor
+import qualified Data.Traversable
 import qualified Transformation as Shallow
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
@@ -24,6 +28,18 @@ instance (Data.Functor.Functor p, Shallow.Functor t p q (g1 q q), Shallow.Functo
           Functor t g1 p q, Functor t g2 p q) => Functor t (Product g1 g2) p q where
    t <$> Pair left right = Pair (t Shallow.<$> ((t <$>) Data.Functor.<$> left)) 
                                 (t Shallow.<$> ((t <$>) Data.Functor.<$> right))
+
+instance (Monoid m, Data.Foldable.Foldable p,
+          Foldable t g1 p m, Foldable t g2 p m) => Foldable t (Product g1 g2) p m where
+   foldMap t (Pair left right) = Data.Foldable.foldMap (foldMap t) left
+                                 <> Data.Foldable.foldMap (foldMap t) right
+
+instance (Monad m, Data.Traversable.Traversable p,
+          Shallow.Traversable t p q m (g1 q q), Shallow.Traversable t p q m (g2 q q),
+          Traversable t g1 p q m, Traversable t g2 p q m) => Traversable t (Product g1 g2) p q m where
+   traverse t (Pair left right) =
+      Pair        Data.Functor.<$> (Data.Traversable.traverse (traverse t) left >>= Shallow.traverse t)
+           Control.Applicative.<*> (Data.Traversable.traverse (traverse t) right >>= Shallow.traverse t)
 
 deriving instance (Typeable p, Typeable q, Typeable g1, Typeable g2,
                    Data (q (g1 p p)), Data (q (g2 p p))) => Data (Product g1 g2 p q)
