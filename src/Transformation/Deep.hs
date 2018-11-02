@@ -19,8 +19,11 @@ class Functor t g (p :: * -> *) (q :: * -> *) where
 class Foldable t g (p :: * -> *) m where
    foldMap :: t -> g p p -> m
 
-class Traversable t g (p :: * -> *) (q :: * -> *) m where
-   traverse :: t -> g p p -> m (g q q)
+class UpTraversable t g (p :: * -> *) (q :: * -> *) m where
+   traverseUp :: t -> g p p -> m (g q q)
+
+class DownTraversable t g (p :: * -> *) (q :: * -> *) m where
+   traverseDown :: t -> g p p -> m (g q q)
 
 data Product g1 g2 (p :: * -> *) (q :: * -> *) = Pair (q (g1 p p)) (q (g2 p p))
 
@@ -36,10 +39,17 @@ instance (Monoid m, Data.Foldable.Foldable p,
 
 instance (Monad m, Data.Traversable.Traversable p,
           Shallow.Traversable t p q m (g1 q q), Shallow.Traversable t p q m (g2 q q),
-          Traversable t g1 p q m, Traversable t g2 p q m) => Traversable t (Product g1 g2) p q m where
-   traverse t (Pair left right) =
-      Pair        Data.Functor.<$> (Data.Traversable.traverse (traverse t) left >>= Shallow.traverse t)
-           Control.Applicative.<*> (Data.Traversable.traverse (traverse t) right >>= Shallow.traverse t)
+          UpTraversable t g1 p q m, UpTraversable t g2 p q m) => UpTraversable t (Product g1 g2) p q m where
+   traverseUp t (Pair left right) =
+      Pair        Data.Functor.<$> (Data.Traversable.traverse (traverseUp t) left >>= Shallow.traverse t)
+           Control.Applicative.<*> (Data.Traversable.traverse (traverseUp t) right >>= Shallow.traverse t)
+
+instance (Monad m, Data.Traversable.Traversable q,
+          Shallow.Traversable t p q m (g1 p p), Shallow.Traversable t p q m (g2 p p),
+          DownTraversable t g1 p q m, DownTraversable t g2 p q m) => DownTraversable t (Product g1 g2) p q m where
+   traverseDown t (Pair left right) =
+      Pair        Data.Functor.<$> (Shallow.traverse t left >>= Data.Traversable.traverse (traverseDown t))
+           Control.Applicative.<*> (Shallow.traverse t right >>= Data.Traversable.traverse (traverseDown t))
 
 deriving instance (Typeable p, Typeable q, Typeable g1, Typeable g2,
                    Data (q (g1 p p)), Data (q (g2 p p))) => Data (Product g1 g2 p q)
