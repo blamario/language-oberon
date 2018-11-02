@@ -137,3 +137,5 @@ instance Pretty (Statement Ambiguous Ambiguous) where
    pretty _ = error "Disambiguate before pretty-printing"
 instance Pretty (Expression Ambiguous Ambiguous) where
    pretty _ = error "Disambiguate before pretty-printing"
+instance Pretty (Ambiguous (Expression Ambiguous Ambiguous)) where
+   pretty _ = error "Disambiguate before pretty-printing"
