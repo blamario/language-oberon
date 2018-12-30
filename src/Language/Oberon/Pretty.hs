@@ -191,9 +191,6 @@ instance Pretty (CaseLabels Identity Identity) where
    pretty (SingleLabel expression) = pretty expression
    pretty (LabelRange from to) = pretty from <+> ".." <+> pretty to
 
-instance Pretty a => Pretty (Identity a) where
-   pretty (Identity a) = pretty a
-
 prettyBlock :: Identity (StatementSequence Identity Identity) -> Doc ann
 prettyBlock (Identity (StatementSequence statements)) = indent 3 (pretty $ runIdentity <$> statements)
 
