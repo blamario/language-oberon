@@ -1,11 +1,12 @@
-{-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, FunctionalDependencies, MultiParamTypeClasses, 
+{-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, FunctionalDependencies, MultiParamTypeClasses,
              PolyKinds, RankNTypes, StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 module Transformation.Deep where
 
-import Control.Applicative ((<*>))
+import Control.Applicative ((<*>), liftA2)
 import Data.Data (Data, Typeable)
 import Data.Monoid (Monoid, (<>))
+import qualified Rank2
 import qualified Data.Foldable
 import qualified Data.Functor
 import qualified Data.Traversable
@@ -25,7 +26,30 @@ class UpTraversable t g (p :: * -> *) (q :: * -> *) m where
 class DownTraversable t g (p :: * -> *) (q :: * -> *) m where
    traverseDown :: t -> g p p -> m (g q q)
 
-data Product g1 g2 (p :: * -> *) (q :: * -> *) = Pair (q (g1 p p)) (q (g2 p p))
+data Product g1 g2 (p :: * -> *) (q :: * -> *) = Pair{fst :: q (g1 p p),
+                                                      snd :: q (g2 p p)}
+
+instance Rank2.Functor (Product g1 g2 p) where
+   f <$> ~(Pair left right) = Pair (f left) (f right)
+
+instance Rank2.Apply (Product g h p) where
+   ~(Pair g1 h1) <*> ~(Pair g2 h2) = Pair (Rank2.apply g1 g2) (Rank2.apply h1 h2)
+   liftA2 f ~(Pair g1 h1) ~(Pair g2 h2) = Pair (f g1 g2) (f h1 h2)
+
+instance Rank2.Applicative (Product g h p) where
+   pure f = Pair f f
+
+instance Rank2.Foldable (Product g h p) where
+   foldMap f ~(Pair g h) = f g `mappend` f h
+
+instance Rank2.Traversable (Product g h p) where
+   traverse f ~(Pair g h) = liftA2 Pair (f g) (f h)
+
+instance Rank2.DistributiveTraversable (Product g h p)
+
+instance Rank2.Distributive (Product g h p) where
+   cotraverse w f = Pair{fst= w (fst Data.Functor.<$> f),
+                         snd= w (snd Data.Functor.<$> f)}
 
 instance (Data.Functor.Functor p, Shallow.Functor t p q (g1 q q), Shallow.Functor t p q (g2 q q),
           Functor t g1 p q, Functor t g2 p q) => Functor t (Product g1 g2) p q where

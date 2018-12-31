@@ -13,6 +13,7 @@ import Data.Text (Text)
 
 import Transformation.Deep (Product)
 import qualified Transformation.Deep.TH
+import qualified Rank2.TH
 
 data Module f' f = Module Ident [Import] ([f (Declaration f' f')]) (Maybe (f (StatementSequence f' f'))) Ident
 
