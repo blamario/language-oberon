@@ -1,9 +1,10 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
              TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
-module Language.Oberon.TypeChecker (Error(..), checkModules) where
+module Language.Oberon.TypeChecker (Error(..), checkModules, predefined, predefined2) where
 
 import Control.Applicative (liftA2)
+import Control.Arrow (first)
 import Data.Coerce (coerce)
 import Data.Either (partitionEithers)
 import Data.Either.Validation (Validation(..), validationToEither)
@@ -659,6 +660,50 @@ checkModules predef modules =
    errors (syn (TypeCheck Shallow.<$> Identity (TypeCheck Deep.<$> Modules (Identity <$> modules))
                 `Rank2.apply`
                 Inherited (InhTC predef)))
+
+predefined, predefined2 :: Environment
+-- | The set of 'Predefined' types and procedures defined in the Oberon Language Report.
+predefined = Map.fromList $ map (first AST.NonQualIdent) $
+   [("BOOLEAN", NominalType (AST.NonQualIdent "BOOLEAN")),
+    ("CHAR", NominalType (AST.NonQualIdent "CHAR")),
+    ("SHORTINT", NominalType (AST.NonQualIdent "SHORTINT")),
+    ("INTEGER", NominalType (AST.NonQualIdent "INTEGER")),
+    ("LONGINT", NominalType (AST.NonQualIdent "LONGINT")),
+    ("REAL", NominalType (AST.NonQualIdent "REAL")),
+    ("LONGREAL", NominalType (AST.NonQualIdent "LONGREAL")),
+    ("SET", NominalType (AST.NonQualIdent "SET")),
+    ("TRUE", NominalType (AST.NonQualIdent "BOOLEAN")),
+    ("FALSE", NominalType (AST.NonQualIdent "BOOLEAN")),
+    ("ABS", ProcedureType [NominalType $ AST.NonQualIdent "INTEGER"] $ Just $ NominalType $ AST.NonQualIdent "INTEGER"),
+    ("ASH", ProcedureType [NominalType $ AST.NonQualIdent "INTEGER"] $ Just $ NominalType $ AST.NonQualIdent "INTEGER"),
+    ("CAP", ProcedureType [NominalType $ AST.NonQualIdent "INTEGER"] $ Just $ NominalType $ AST.NonQualIdent "CAP"),
+    ("LEN", ProcedureType [NominalType $ AST.NonQualIdent "ARRAY"] $ Just $ NominalType $ AST.NonQualIdent "LONGINT"),
+    ("MAX", ProcedureType [NominalType $ AST.NonQualIdent "SET"] $ Just $ NominalType $ AST.NonQualIdent "INTEGER"),
+    ("MIN", ProcedureType [NominalType $ AST.NonQualIdent "SET"] $ Just $ NominalType $ AST.NonQualIdent "INTEGER"),
+    ("ODD", ProcedureType [NominalType $ AST.NonQualIdent "CHAR"] $ Just $ NominalType $ AST.NonQualIdent "BOOLEAN"),
+    ("SIZE", ProcedureType [NominalType $ AST.NonQualIdent "CHAR"] $ Just $ NominalType $ AST.NonQualIdent "INTEGER"),
+    ("ORD", ProcedureType [NominalType $ AST.NonQualIdent "CHAR"] $ Just $ NominalType $ AST.NonQualIdent "INTEGER"),
+    ("CHR", ProcedureType [NominalType $ AST.NonQualIdent "INTEGER"] $ Just $ NominalType $ AST.NonQualIdent "CHAR"),
+    ("SHORT", ProcedureType [NominalType $ AST.NonQualIdent "INTEGER"]
+              $ Just $ NominalType $ AST.NonQualIdent "INTEGER"),
+    ("LONG", ProcedureType [NominalType $ AST.NonQualIdent "INTEGER"] $ Just $ NominalType $ AST.NonQualIdent "INTEGER"),
+    ("ENTIER", ProcedureType [NominalType $ AST.NonQualIdent "REAL"] $ Just $ NominalType $ AST.NonQualIdent "INTEGER"),
+    ("INC", ProcedureType [NominalType $ AST.NonQualIdent "INTEGER"] Nothing),
+    ("DEC", ProcedureType [NominalType $ AST.NonQualIdent "INTEGER"] Nothing),
+    ("INCL", ProcedureType [NominalType $ AST.NonQualIdent "SET",
+                            NominalType $ AST.NonQualIdent "INTEGER"] Nothing),
+    ("EXCL", ProcedureType [NominalType $ AST.NonQualIdent "SET",
+                            NominalType $ AST.NonQualIdent "INTEGER"] Nothing),
+    ("COPY", ProcedureType [NominalType $ AST.NonQualIdent "ARRAY",
+                            NominalType $ AST.NonQualIdent "ARRAY"] Nothing),
+    ("NEW", ProcedureType [NominalType $ AST.NonQualIdent "POINTER"] Nothing),
+    ("HALT", ProcedureType [NominalType $ AST.NonQualIdent "INTEGER"] Nothing)]
+
+-- | The set of 'Predefined' types and procedures defined in the Oberon-2 Language Report.
+predefined2 = predefined <>
+   Map.fromList (first AST.NonQualIdent <$>
+                 [("ASSERT", ProcedureType [NominalType $ AST.NonQualIdent "ARRAY",
+                                            NominalType $ AST.NonQualIdent "ARRAY"] Nothing)])
 
 $(mconcat <$> mapM Rank2.TH.unsafeDeriveApply
   [''AST.Declaration, ''AST.Type, ''AST.Expression,

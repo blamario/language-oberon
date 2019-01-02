@@ -30,7 +30,8 @@ import System.FilePath (FilePath, takeDirectory)
 
 import Prelude hiding (getLine, getContents, readFile)
 
-data GrammarMode = ModuleWithImportsMode | ModuleMode | AmbiguousModuleMode | DefinitionMode | StatementsMode | StatementMode | ExpressionMode
+data GrammarMode = TypeCheckedModuleMode | ModuleWithImportsMode | ModuleMode | AmbiguousModuleMode | DefinitionMode
+                 | StatementsMode | StatementMode | ExpressionMode
     deriving Show
 
 data Output = Plain | Pretty Int | Tree
@@ -68,7 +69,8 @@ main = execParser opts >>= main'
               <> help "Oberon file to parse"))
 
     mode :: Parser GrammarMode
-    mode = ModuleWithImportsMode <$ switch (long "module-with-imports")
+    mode = TypeCheckedModuleMode <$ switch (long "type-checked-module")
+       <|> ModuleWithImportsMode <$ switch (long "module-with-imports")
        <|> ModuleMode          <$ switch (long "module")
        <|> AmbiguousModuleMode <$ switch (long "module-ambiguous")
        <|> DefinitionMode      <$ switch (long "definition")
@@ -81,8 +83,12 @@ main' Opts{..} =
     case optsFile of
         Just file -> (if file == "-" then getContents else readFile file)
                      >>= case optsMode
-                         of ModuleWithImportsMode ->
-                               \source-> parseAndResolveModule optsOberon2
+                         of TypeCheckedModuleMode ->
+                               \source-> parseAndResolveModule True optsOberon2
+                                                               (fromMaybe (takeDirectory file) optsInclude) source
+                                         >>= succeed optsOutput source
+                            ModuleWithImportsMode ->
+                               \source-> parseAndResolveModule False optsOberon2
                                                                (fromMaybe (takeDirectory file) optsInclude) source
                                          >>= succeed optsOutput source
                             ModuleMode          -> go (Resolver.resolveModule predefined mempty) Grammar.module_prod

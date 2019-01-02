@@ -5,7 +5,9 @@ module Language.Oberon (parseModule, parseAndResolveModule, parseAndResolveModul
 import Language.Oberon.AST (Module(..))
 import qualified Language.Oberon.Grammar as Grammar
 import qualified Language.Oberon.Resolver as Resolver
+import qualified Language.Oberon.TypeChecker as TypeChecker
 
+import Control.Monad (when)
 import Data.Either.Validation (Validation(..))
 import Data.Functor.Identity (Identity)
 import Data.Functor.Compose (getCompose)
@@ -58,17 +60,26 @@ parseImportsOf oberon2 path modules =
 
 -- | Given a directory path for module imports, parse the given module text and all the module files it imports, then
 -- use all the information to resolve the syntactic ambiguities.
-parseAndResolveModule :: Bool -> FilePath -> Text -> IO (Validation (NonEmpty Resolver.Error) (Module Identity Identity))
-parseAndResolveModule oberon2 path source =
+parseAndResolveModule :: Bool -> Bool -> FilePath -> Text
+                      -> IO (Validation (NonEmpty Resolver.Error) (Module Identity Identity))
+parseAndResolveModule checkTypes oberon2 path source =
    case parseModule oberon2 source
    of Left err -> return (Failure $ Resolver.UnparseableModule err :| [])
       Right [rootModule@(Module moduleName imports _ _ _)] ->
          do importedModules <- parseImportsOf oberon2 path (Map.singleton moduleName rootModule)
             let resolvedImportMap = Resolver.resolveModule predefinedScope resolvedImportMap <$> importedModules
                 predefinedScope = if oberon2 then Resolver.predefined2 else Resolver.predefined
-            return $ Resolver.resolveModule predefinedScope resolvedImportMap rootModule
+                successful (Success a) = Just a
+                successful _ = Nothing
+                typeErrors = TypeChecker.checkModules
+                                (if oberon2 then TypeChecker.predefined2 else TypeChecker.predefined)
+                                (Map.mapMaybe successful resolvedImportMap)
+            when (checkTypes && not (null typeErrors)) (error $ show typeErrors)
+            return $ resolvedImportMap Map.! moduleName
       Right _ -> return (Failure $ Resolver.AmbiguousParses :| [])
 
 -- | Parse the module file at the given path, assuming all its imports are in the same directory.
-parseAndResolveModuleFile :: Bool -> FilePath -> IO (Validation (NonEmpty Resolver.Error) (Module Identity Identity))
-parseAndResolveModuleFile oberon2 path = readFile path >>= parseAndResolveModule oberon2 (takeDirectory path)
+parseAndResolveModuleFile :: Bool -> Bool -> FilePath
+                          -> IO (Validation (NonEmpty Resolver.Error) (Module Identity Identity))
+parseAndResolveModuleFile checkTypes oberon2 path =
+  readFile path >>= parseAndResolveModule checkTypes oberon2 (takeDirectory path)
