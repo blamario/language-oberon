@@ -56,7 +56,7 @@ main = execParser opts >>= main'
 
     p :: Parser Opts
     p = Opts
-        <$> (mode <|> pure ModuleWithImportsMode)
+        <$> mode
         <*> (switch (long "oberon2"))
         <*> (option auto (long "index" <> help "Index of ambiguous parse" <> showDefault <> value 0 <> metavar "INT"))
         <*> (Pretty <$> option auto (long "pretty" <> help "Pretty-print output" <> metavar "WIDTH")

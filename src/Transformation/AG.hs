@@ -19,13 +19,14 @@ deriving instance (Show (Atts (Synthesized a) g)) => Show (Synthesized a g)
 
 type Semantics a = Inherited a Rank2.~> Synthesized a
 
-type Rule a g (f :: * -> *) = (Inherited   a (g f (Semantics a)), g f (Synthesized a))
+type Rule a g (f :: * -> *) = g f (Semantics a)
+                           -> (Inherited   a (g f (Semantics a)), g f (Synthesized a))
                            -> (Synthesized a (g f (Semantics a)), g f (Inherited a))
 
 knit :: Rank2.Apply (g f) => Rule a g f -> g f (Semantics a) -> Semantics a (g f (Semantics a))
 knit r chSem = Rank2.Arrow knit'
    where knit' inh = syn
-            where (syn, chInh) = r (inh, chSyn)
+            where (syn, chInh) = r chSem (inh, chSyn)
                   chSyn = chSem Rank2.<*> chInh
 
 class Shallow.Functor t Identity (Semantics t) (g (Semantics t) (Semantics t)) => Attribution t g where
