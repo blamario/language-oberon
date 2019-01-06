@@ -149,8 +149,15 @@ instance Attribution TypeCheck AST.Module where
       (Synthesized SynTC'{errors'= foldMap (errors' . syn) decls' <> foldMap (errors . syn) body',
                           env'= newEnv},
        AST.Module ident1 imports (Inherited localEnv <$ decls) (Inherited localEnv <$ body) ident2)
-      where newEnv = foldMap (env' . syn) decls'
+      where newEnv = Map.unionsWith mergeTypeBoundProcedures (env' . syn <$> decls')
             localEnv = InhTC (newEnv `Map.union` env (inh inherited))
+            mergeTypeBoundProcedures (RecordType ancestry1 fields1) (RecordType ancestry2 fields2) =
+               RecordType (ancestry1 <> ancestry2) (fields1 <> fields2)
+            mergeTypeBoundProcedures (PointerType (RecordType ancestry1 fields1)) (RecordType ancestry2 fields2) =
+               PointerType (RecordType (ancestry1 <> ancestry2) (fields1 <> fields2))
+            mergeTypeBoundProcedures (RecordType ancestry1 fields1) (PointerType (RecordType ancestry2 fields2)) =
+               PointerType (RecordType (ancestry1 <> ancestry2) (fields1 <> fields2))
+            mergeTypeBoundProcedures t1 t2 = error (show (anonymize t2))
 
 instance Attribution TypeCheck AST.Declaration where
    attribution TypeCheck (AST.ConstantDeclaration namedef@(AST.IdentDef name _) _)
@@ -178,7 +185,10 @@ instance Attribution TypeCheck AST.Declaration where
                 AST.ProcedureDeclaration (AST.ProcedureHeading _receiver _indirect _ signature') 
                  body@(AST.ProcedureBody declarations statements) _name') =
       (Synthesized SynTC'{errors'= foldMap (signatureErrors . syn) signature',
-                          env'= foldMap (Map.singleton (AST.NonQualIdent name) . signatureType . syn) signature'},
+                          env'= case receiver
+                                of Nothing -> Map.singleton (AST.NonQualIdent name) procedureType
+                                   Just (_, _, typeName) -> Map.singleton (AST.NonQualIdent typeName) $
+                                                            RecordType [] $ Map.singleton name procedureType},
        AST.ProcedureDeclaration
           (AST.ProcedureHeading receiver indirect namedef (Inherited (inh inherited) <$ signature))
           (AST.ProcedureBody (Inherited localInherited <$ declarations) (Inherited localInherited <$ statements))
@@ -186,10 +196,12 @@ instance Attribution TypeCheck AST.Declaration where
      where receiverEnv (_, formalName, typeName) =
              foldMap (Map.singleton $ AST.NonQualIdent formalName) (Map.lookup (AST.NonQualIdent typeName) 
                                                                     $ env $ inh inherited)
+           procedureType = maybe (ProcedureType [] Nothing) (signatureType . syn) signature'
            receiverError (_, formalName, typeName) =
              case Map.lookup (AST.NonQualIdent typeName) (env $ inh inherited)
              of Nothing -> [UnknownName $ AST.NonQualIdent typeName]
                 Just RecordType{} -> []
+                Just (PointerType RecordType{}) -> []
                 Just t -> [NonRecordType t]
            localInherited = InhTC (foldMap receiverEnv receiver
                                    `Map.union` foldMap (signatureEnv . syn) signature'
@@ -213,7 +225,7 @@ instance Attribution TypeCheck AST.FormalParameters where
                | otherwise = [UnknownName q]
 
 instance Attribution TypeCheck AST.FPSection where
-   attribution TypeCheck self (inherited, AST.FPSection var names typeDef) =
+   attribution TypeCheck (AST.FPSection var names _typeDef) (inherited, AST.FPSection _var _names typeDef) =
       (Synthesized SynTCSec{sectionErrors= typeErrors (syn typeDef),
                             sectionParameters= definedType (syn typeDef) <$ toList names,
                             sectionEnv= Map.fromList (toList
@@ -245,9 +257,9 @@ instance Attribution TypeCheck AST.Type where
                            Just (Just t) -> ([NonRecordType t], Nothing)
                            Just Nothing -> (foldMap ((:[]) . UnknownName) base, Nothing)
                            Nothing -> ([], Nothing)
-   attribution TypeCheck self (inherited, AST.PointerType targetType) = 
-      (Synthesized SynTCType{typeErrors= typeErrors (syn targetType),
-                             definedType= PointerType (definedType $ syn targetType)},
+   attribution TypeCheck _self (inherited, AST.PointerType targetType') =
+      (Synthesized SynTCType{typeErrors= typeErrors (syn targetType'),
+                             definedType= PointerType (definedType $ syn targetType')},
        AST.PointerType (Inherited $ inh inherited))
    attribution TypeCheck (AST.ProcedureType signature) (inherited, AST.ProcedureType signature') = 
       (Synthesized SynTCType{typeErrors= foldMap (signatureErrors . syn) signature',
@@ -502,6 +514,10 @@ instance Attribution TypeCheck AST.Designator where
                                                     | Map.member fieldName fields -> []
                                                     | otherwise -> [UnknownField fieldName]
                                                  SynTCDes{designatorErrors= [],
+                                                          designatorType= PointerType (RecordType _ fields)}
+                                                    | Map.member fieldName fields -> []
+                                                    | otherwise -> [UnknownField fieldName]
+                                                 SynTCDes{designatorErrors= [],
                                                           designatorType= t} -> [NonRecordType t]
                                                  SynTCDes{designatorErrors= errors} -> errors,
                             designatorType= case designatorType (syn record)
@@ -602,7 +618,7 @@ typeCompatible expected actual
    | expected == NominalType (AST.NonQualIdent "POINTER"), PointerType{} <- actual = []
    | NilType <- actual, PointerType{} <- expected = []
    | NilType <- actual, ProcedureType{} <- expected = []
-   | otherwise = error (show $ (anonymize expected, anonymize actual))
+   | otherwise = error (show (anonymize expected, anonymize actual))
 
 anonymize :: Type -> Type
 anonymize (RecordType ancestry fields) = RecordType ancestry (NominalType (AST.NonQualIdent "?") <$ fields)
