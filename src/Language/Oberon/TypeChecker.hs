@@ -71,8 +71,14 @@ data SynTC = SynTC{errors :: [Error]} deriving Show
 data SynTC' = SynTC'{errors' :: [Error],
                      env' :: Environment} deriving Show
 
+data SynTCMod = SynTCMod{moduleErrors :: [Error],
+                         moduleEnv :: Environment,
+                         pointerTargets :: Map AST.Ident AST.Ident} deriving Show
+
 data SynTCType = SynTCType{typeErrors :: [Error],
-                           definedType :: Type} deriving Show
+                           typeName   :: Maybe AST.Ident,
+                           definedType :: Type,
+                           pointerTarget :: Maybe AST.Ident} deriving Show
 
 data SynTCFields = SynTCFields{fieldErrors :: [Error],
                                fieldEnv :: Map AST.Ident Type} deriving Show
@@ -107,9 +113,9 @@ instance Rank2.Apply (Modules f') where
 type instance Atts (Inherited TypeCheck) (Modules f' f) = InhTC
 type instance Atts (Synthesized TypeCheck) (Modules f' f) = SynTC
 type instance Atts (Inherited TypeCheck) (AST.Module f' f) = InhTC
-type instance Atts (Synthesized TypeCheck) (AST.Module f' f) = SynTC'
-type instance Atts (Inherited TypeCheck) (AST.Declaration f' f) = InhTC
-type instance Atts (Synthesized TypeCheck) (AST.Declaration f' f) = SynTC'
+type instance Atts (Synthesized TypeCheck) (AST.Module f' f) = SynTCMod
+type instance Atts (Inherited TypeCheck) (AST.Declaration f' f) = (InhTC, Map AST.Ident AST.Ident)
+type instance Atts (Synthesized TypeCheck) (AST.Declaration f' f) = SynTCMod
 type instance Atts (Inherited TypeCheck) (AST.FormalParameters f' f) = InhTC
 type instance Atts (Synthesized TypeCheck) (AST.FormalParameters f' f) = SynTCSig
 type instance Atts (Inherited TypeCheck) (AST.FPSection f' f) = InhTC
@@ -141,16 +147,18 @@ type instance Atts (Synthesized TypeCheck) (AST.WithAlternative f' f) = SynTC
 
 instance Attribution TypeCheck Modules where
    attribution TypeCheck (Modules self) (inherited, Modules ms) =
-     (Synthesized SynTC{errors= foldMap (errors' . syn) ms},
-      Modules (Inherited InhTC{env= env (inh inherited) <> foldMap (env' . syn) ms} <$ self))
+     (Synthesized SynTC{errors= foldMap (moduleErrors . syn) ms},
+      Modules (Inherited InhTC{env= env (inh inherited) <> foldMap (moduleEnv . syn) ms} <$ self))
 
 instance Attribution TypeCheck AST.Module where
    attribution TypeCheck (AST.Module ident1 imports decls body ident2) (inherited, AST.Module _ _ decls' body' _) =
-      (Synthesized SynTC'{errors'= foldMap (errors' . syn) decls' <> foldMap (errors . syn) body',
-                          env'= newEnv},
-       AST.Module ident1 imports (Inherited localEnv <$ decls) (Inherited localEnv <$ body) ident2)
-      where newEnv = Map.unionsWith mergeTypeBoundProcedures (env' . syn <$> decls')
+      (Synthesized SynTCMod{moduleErrors= foldMap (moduleErrors . syn) decls' <> foldMap (errors . syn) body',
+                            moduleEnv= newEnv,
+                            pointerTargets= pointers},
+       AST.Module ident1 imports (Inherited (localEnv, pointers) <$ decls) (Inherited localEnv <$ body) ident2)
+      where newEnv = Map.unionsWith mergeTypeBoundProcedures (moduleEnv . syn <$> decls')
             localEnv = InhTC (newEnv `Map.union` env (inh inherited))
+            pointers= foldMap (pointerTargets . syn) decls'
             mergeTypeBoundProcedures (RecordType ancestry1 fields1) (RecordType ancestry2 fields2) =
                RecordType (ancestry1 <> ancestry2) (fields1 <> fields2)
             mergeTypeBoundProcedures (PointerType (RecordType ancestry1 fields1)) (RecordType ancestry2 fields2) =
@@ -162,55 +170,65 @@ instance Attribution TypeCheck AST.Module where
 instance Attribution TypeCheck AST.Declaration where
    attribution TypeCheck (AST.ConstantDeclaration namedef@(AST.IdentDef name _) _)
                (inherited, AST.ConstantDeclaration _ expression) =
-      (Synthesized SynTC'{errors'= expressionErrors (syn expression),
-                          env'= Map.singleton (AST.NonQualIdent name) (inferredType $ syn expression)},
-       AST.ConstantDeclaration namedef (Inherited $ inh inherited))
+      (Synthesized SynTCMod{moduleErrors= expressionErrors (syn expression),
+                            moduleEnv= Map.singleton (AST.NonQualIdent name) (inferredType $ syn expression),
+                            pointerTargets= mempty},
+       AST.ConstantDeclaration namedef (Inherited $ fst $ inh inherited))
    attribution TypeCheck (AST.TypeDeclaration namedef@(AST.IdentDef name _) _) (inherited,
                                                                                 AST.TypeDeclaration _ definition) =
-      (Synthesized SynTC'{errors'= typeErrors (syn definition),
-                          env'= Map.singleton (AST.NonQualIdent name) (definedType $ syn definition)},
-       AST.TypeDeclaration namedef (Inherited $ inh inherited))
+      (Synthesized SynTCMod{moduleErrors= typeErrors (syn definition),
+                            moduleEnv= Map.singleton (AST.NonQualIdent name) (definedType $ syn definition),
+                            pointerTargets= foldMap (Map.singleton name) (pointerTarget $ syn definition)},
+       AST.TypeDeclaration namedef (Inherited $ fst $ inh inherited))
    attribution TypeCheck (AST.VariableDeclaration names _declaredType)
                (inherited, AST.VariableDeclaration _names declaredType) =
-      (Synthesized SynTC'{errors'= typeErrors (syn declaredType),
-                          env'= foldMap (\name-> Map.singleton (AST.NonQualIdent $ defName name)
-                                                 (definedType $ syn declaredType))
-                                      names},
-       AST.VariableDeclaration names (Inherited $ inh inherited))
+      (Synthesized SynTCMod{moduleErrors= typeErrors (syn declaredType),
+                            moduleEnv= foldMap (\name-> Map.singleton (AST.NonQualIdent $ defName name)
+                                                        (definedType $ syn declaredType))
+                                       names,
+                            pointerTargets= mempty},
+       AST.VariableDeclaration names (Inherited $ fst $ inh inherited))
       where defName (AST.IdentDef name _) = name
    attribution TypeCheck (AST.ProcedureDeclaration (AST.ProcedureHeading receiver indirect
                                                        namedef@(AST.IdentDef name _) signature) 
-                           _body name')
+                          _body name')
                (inherited,
                 AST.ProcedureDeclaration (AST.ProcedureHeading _receiver _indirect _ signature') 
                  body@(AST.ProcedureBody declarations statements) _name') =
-      (Synthesized SynTC'{errors'= foldMap (signatureErrors . syn) signature',
-                          env'= case receiver
-                                of Nothing -> Map.singleton (AST.NonQualIdent name) procedureType
-                                   Just (_, _, typeName) -> Map.singleton (AST.NonQualIdent typeName) $
-                                                            RecordType [] $ Map.singleton name procedureType},
+      (Synthesized SynTCMod{moduleErrors= foldMap (signatureErrors . syn) signature',
+                            moduleEnv= case receiver
+                                       of Just (_, _, typeName)
+                                             | Just targetName <- Map.lookup typeName (snd $ inh inherited) ->
+                                                Map.singleton (AST.NonQualIdent targetName) $
+                                                RecordType [] $ Map.singleton name procedureType
+                                             | otherwise ->
+                                                Map.singleton (AST.NonQualIdent typeName) $
+                                                RecordType [] $ Map.singleton name procedureType
+                                          Nothing -> Map.singleton (AST.NonQualIdent name) procedureType,
+                            pointerTargets= mempty},
        AST.ProcedureDeclaration
-          (AST.ProcedureHeading receiver indirect namedef (Inherited (inh inherited) <$ signature))
-          (AST.ProcedureBody (Inherited localInherited <$ declarations) (Inherited localInherited <$ statements))
+          (AST.ProcedureHeading receiver indirect namedef (Inherited (fst $ inh inherited) <$ signature))
+          (AST.ProcedureBody (Inherited (localInherited, mempty) <$ declarations) (Inherited localInherited <$ statements))
           name')
      where receiverEnv (_, formalName, typeName) =
              foldMap (Map.singleton $ AST.NonQualIdent formalName) (Map.lookup (AST.NonQualIdent typeName) 
-                                                                    $ env $ inh inherited)
+                                                                    $ env $ fst $ inh inherited)
            procedureType = maybe (ProcedureType [] Nothing) (signatureType . syn) signature'
            receiverError (_, formalName, typeName) =
-             case Map.lookup (AST.NonQualIdent typeName) (env $ inh inherited)
+             case Map.lookup (AST.NonQualIdent typeName) (env $ fst $ inh inherited)
              of Nothing -> [UnknownName $ AST.NonQualIdent typeName]
                 Just RecordType{} -> []
                 Just (PointerType RecordType{}) -> []
                 Just t -> [NonRecordType t]
            localInherited = InhTC (foldMap receiverEnv receiver
                                    `Map.union` foldMap (signatureEnv . syn) signature'
-                                   `Map.union` env (inh inherited))
+                                   `Map.union` env (fst $ inh inherited))
    attribution TypeCheck (AST.ForwardDeclaration namedef@(AST.IdentDef name _) signature)
                (inherited, AST.ForwardDeclaration _namedef signature') =
-      (Synthesized SynTC'{errors'= foldMap (signatureErrors . syn) signature',
-                          env'= foldMap (Map.singleton (AST.NonQualIdent name) . signatureType . syn) signature'},
-       AST.ForwardDeclaration namedef (Inherited (inh inherited) <$ signature))
+      (Synthesized SynTCMod{moduleErrors= foldMap (signatureErrors . syn) signature',
+                            moduleEnv= foldMap (Map.singleton (AST.NonQualIdent name) . signatureType . syn) signature',
+                            pointerTargets= mempty},
+       AST.ForwardDeclaration namedef (Inherited (fst $ inh inherited) <$ signature))
 
 instance Attribution TypeCheck AST.FormalParameters where
    attribution TypeCheck (AST.FormalParameters sections returnType)
@@ -236,11 +254,17 @@ instance Attribution TypeCheck AST.FPSection where
 instance Attribution TypeCheck AST.Type where
    attribution TypeCheck (AST.TypeReference q) (inherited, _) = 
       (Synthesized SynTCType{typeErrors= if Map.member q (env $ inh inherited) then [] else [UnknownName q],
+                             typeName= case q 
+                                       of AST.NonQualIdent name -> Just name
+                                          _ -> Nothing,
+                             pointerTarget= Nothing,
                              definedType= fromMaybe UnknownType (Map.lookup q $ env $ inh inherited)},
        AST.TypeReference q)
    attribution TypeCheck (AST.ArrayType dimensions _itemType) (inherited, AST.ArrayType dimensions' itemType) = 
       (Synthesized SynTCType{typeErrors= foldMap (expressionErrors . syn) dimensions' <> typeErrors (syn itemType)
                                          <> foldMap (expectInteger . syn) dimensions',
+                             typeName= Nothing,
+                             pointerTarget= Nothing,
                              definedType= ArrayType (integerValue . syn <$> dimensions') (definedType $ syn itemType)},
        AST.ArrayType (Inherited (inh inherited) <$ dimensions) (Inherited $ inh inherited))
      where expectInteger SynTCExp{inferredType= NominalType (AST.NonQualIdent "INTEGER")} = []
@@ -248,6 +272,8 @@ instance Attribution TypeCheck AST.Type where
            integerValue SynTCExp{inferredType= NominalType (AST.NonQualIdent "INTEGER")} = 0
    attribution TypeCheck (AST.RecordType base fields) (inherited, AST.RecordType _base fields') =
       (Synthesized SynTCType{typeErrors= fst baseRecord <> foldMap (fieldErrors . syn) fields',
+                             typeName= Nothing,
+                             pointerTarget= Nothing,
                              definedType= RecordType (maybe [] (maybe id (:) base . ancestry) $ snd baseRecord)
                                              (maybe Map.empty recordFields (snd baseRecord)
                                               <> foldMap (fieldEnv . syn) fields')},
@@ -259,10 +285,14 @@ instance Attribution TypeCheck AST.Type where
                            Nothing -> ([], Nothing)
    attribution TypeCheck _self (inherited, AST.PointerType targetType') =
       (Synthesized SynTCType{typeErrors= typeErrors (syn targetType'),
+                             typeName= Nothing,
+                             pointerTarget= typeName (syn targetType'),
                              definedType= PointerType (definedType $ syn targetType')},
        AST.PointerType (Inherited $ inh inherited))
    attribution TypeCheck (AST.ProcedureType signature) (inherited, AST.ProcedureType signature') = 
       (Synthesized SynTCType{typeErrors= foldMap (signatureErrors . syn) signature',
+                             typeName= Nothing,
+                             pointerTarget= Nothing,
                              definedType= maybe (ProcedureType [] Nothing) (signatureType . syn) signature'},
        AST.ProcedureType (Inherited (inh inherited) <$ signature))
 
@@ -521,9 +551,11 @@ instance Attribution TypeCheck AST.Designator where
                                                           designatorType= t} -> [NonRecordType t]
                                                  SynTCDes{designatorErrors= errors} -> errors,
                             designatorType= case designatorType (syn record)
-                                            of RecordType _ fields 
+                                            of RecordType _ fields
                                                   | Just t <- Map.lookup fieldName fields -> t
-                                               _ -> UnknownType},
+                                               PointerType (RecordType _ fields)
+                                                  | Just t <- Map.lookup fieldName fields -> t
+                                               _ -> traceShow (fieldName, anonymize $ designatorType (syn record)) UnknownType},
        AST.Field (Inherited $ inh inherited) fieldName)
    attribution TypeCheck (AST.Index _array indexes) (inherited, AST.Index array _indexes) =
       (Synthesized SynTCDes{designatorErrors= case syn array
