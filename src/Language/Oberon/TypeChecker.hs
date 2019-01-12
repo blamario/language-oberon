@@ -30,7 +30,7 @@ import qualified Language.Oberon.AST as AST
 
 import Debug.Trace
 
-data Type = NominalType AST.QualIdent
+data Type = NominalType AST.QualIdent (Maybe Type)
           | RecordType{ancestry :: [AST.QualIdent],
                        recordFields :: Map AST.Ident Type}
           | NilType
@@ -39,7 +39,6 @@ data Type = NominalType AST.QualIdent
           | PointerType Type
           | ProcedureType [Type] (Maybe Type)
           | UnknownType
-          deriving (Eq, Show)
 
 data Error = TypeMismatch Type Type
            | ArgumentCountMismatch [Type] Int
@@ -55,8 +54,24 @@ data Error = TypeMismatch Type Type
            | NonRecordType Type
            | UnrealType Type
            | UnknownName AST.QualIdent
-           | UnknownField AST.Ident
+           | UnknownField AST.Ident Type
            deriving Show
+
+instance Eq Type where
+  NominalType q1 _ == NominalType q2 _ = q1 == q2
+  ArrayType [] t1 == ArrayType [] t2 = t1 == t2
+  ProcedureType p1 r1 == ProcedureType p2 r2 = r1 == r2 && p1 == p2
+  _ == _ = False
+
+instance Show Type where
+  show (NominalType q t) = "Nominal " ++ show q -- ++ " " ++ show t
+  show (RecordType ancestry fields) = "RecordType " ++ show ancestry ++ show (fst <$> Map.toList fields)
+  show (ArrayType dimensions itemType) = "ArrayType " ++ show dimensions ++ " " ++ show itemType
+  show (PointerType targetType) = "PointerType " ++ show targetType
+  show (ProcedureType parameters result) = "ProcedureType " ++ show parameters ++ " " ++ show result
+  show StringType{} = "StringType"
+  show NilType = "NilType"
+  show UnknownType = "UnknownType"
 
 type Environment = Map AST.QualIdent Type
 
@@ -92,6 +107,7 @@ data SynTCSec = SynTCSec{sectionErrors :: [Error],
                          sectionParameters :: [Type]} deriving Show
 
 data SynTCDes = SynTCDes{designatorErrors :: [Error],
+                         designatorSelf   :: AST.Designator Identity Identity,
                          designatorType :: Type} deriving Show
 
 data SynTCExp = SynTCExp{expressionErrors :: [Error],
@@ -160,13 +176,18 @@ instance Attribution TypeCheck AST.Module where
             localEnv = InhTC (newEnv `Map.union` env (inh inherited))
             export (AST.NonQualIdent name) = AST.QualIdent ident1 name
             pointers= foldMap (pointerTargets . syn) decls'
+            mergeTypeBoundProcedures' t1 t2 = mergeTypeBoundProcedures t1 t2
+            mergeTypeBoundProcedures (NominalType (AST.NonQualIdent "") (Just t1)) t2 = mergeTypeBoundProcedures t1 t2
+            mergeTypeBoundProcedures (NominalType q (Just t1)) t2 = NominalType q (Just $ mergeTypeBoundProcedures t1 t2)
+            mergeTypeBoundProcedures t1 (NominalType (AST.NonQualIdent "") (Just t2)) = mergeTypeBoundProcedures t1 t2
+            mergeTypeBoundProcedures t1 (NominalType q (Just t2)) = NominalType q (Just $ mergeTypeBoundProcedures t1 t2)
             mergeTypeBoundProcedures (RecordType ancestry1 fields1) (RecordType ancestry2 fields2) =
                RecordType (ancestry1 <> ancestry2) (fields1 <> fields2)
             mergeTypeBoundProcedures (PointerType (RecordType ancestry1 fields1)) (RecordType ancestry2 fields2) =
                PointerType (RecordType (ancestry1 <> ancestry2) (fields1 <> fields2))
             mergeTypeBoundProcedures (RecordType ancestry1 fields1) (PointerType (RecordType ancestry2 fields2)) =
                PointerType (RecordType (ancestry1 <> ancestry2) (fields1 <> fields2))
-            mergeTypeBoundProcedures t1 t2 = error (show (anonymize t2))
+            mergeTypeBoundProcedures t1 t2 = error (take 90 $ show (anonymize t1))
 
 instance Attribution TypeCheck AST.Declaration where
    attribution TypeCheck (AST.ConstantDeclaration namedef@(AST.IdentDef name _) _)
@@ -178,9 +199,12 @@ instance Attribution TypeCheck AST.Declaration where
    attribution TypeCheck (AST.TypeDeclaration namedef@(AST.IdentDef name _) _) (inherited,
                                                                                 AST.TypeDeclaration _ definition) =
       (Synthesized SynTCMod{moduleErrors= typeErrors (syn definition),
-                            moduleEnv= Map.singleton (AST.NonQualIdent name) (definedType $ syn definition),
+                            moduleEnv= Map.singleton qname (nominal $ definedType $ syn definition),
                             pointerTargets= foldMap (Map.singleton name) (pointerTarget $ syn definition)},
        AST.TypeDeclaration namedef (Inherited $ fst $ inh inherited))
+      where nominal t@NominalType{} = t
+            nominal t = NominalType qname (Just t)
+            qname = AST.NonQualIdent name
    attribution TypeCheck (AST.VariableDeclaration names _declaredType)
                (inherited, AST.VariableDeclaration _names declaredType) =
       (Synthesized SynTCMod{moduleErrors= typeErrors (syn declaredType),
@@ -200,11 +224,9 @@ instance Attribution TypeCheck AST.Declaration where
                             moduleEnv= case receiver
                                        of Just (_, _, typeName)
                                              | Just targetName <- Map.lookup typeName (snd $ inh inherited) ->
-                                                Map.singleton (AST.NonQualIdent targetName) $
-                                                RecordType [] $ Map.singleton name procedureType
-                                             | otherwise ->
-                                                Map.singleton (AST.NonQualIdent typeName) $
-                                                RecordType [] $ Map.singleton name procedureType
+                                                Map.singleton (AST.NonQualIdent targetName) methodType
+                                             | otherwise -> Map.singleton (AST.NonQualIdent typeName) methodType
+                                                
                                           Nothing -> Map.singleton (AST.NonQualIdent name) procedureType,
                             pointerTargets= mempty},
        AST.ProcedureDeclaration
@@ -214,12 +236,15 @@ instance Attribution TypeCheck AST.Declaration where
      where receiverEnv (_, formalName, typeName) =
              foldMap (Map.singleton $ AST.NonQualIdent formalName) (Map.lookup (AST.NonQualIdent typeName) 
                                                                     $ env $ fst $ inh inherited)
+           methodType = NominalType (AST.NonQualIdent "") (Just $ RecordType [] $ Map.singleton name procedureType)
            procedureType = maybe (ProcedureType [] Nothing) (signatureType . syn) signature'
            receiverError (_, formalName, typeName) =
              case Map.lookup (AST.NonQualIdent typeName) (env $ fst $ inh inherited)
              of Nothing -> [UnknownName $ AST.NonQualIdent typeName]
                 Just RecordType{} -> []
                 Just (PointerType RecordType{}) -> []
+                Just (NominalType _ (Just RecordType{})) -> []
+                Just (NominalType _ (Just (PointerType RecordType{}))) -> []
                 Just t -> [NonRecordType t]
            localInherited = InhTC (foldMap receiverEnv receiver
                                    `Map.union` foldMap (signatureEnv . syn) signature'
@@ -268,9 +293,9 @@ instance Attribution TypeCheck AST.Type where
                              pointerTarget= Nothing,
                              definedType= ArrayType (integerValue . syn <$> dimensions') (definedType $ syn itemType)},
        AST.ArrayType [Inherited (inh inherited)] (Inherited $ inh inherited))
-     where expectInteger SynTCExp{inferredType= NominalType (AST.NonQualIdent "INTEGER")} = []
+     where expectInteger SynTCExp{inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing} = []
            expectInteger SynTCExp{inferredType= t} = [NonIntegerType t]
-           integerValue SynTCExp{inferredType= NominalType (AST.NonQualIdent "INTEGER")} = 0
+           integerValue SynTCExp{inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing} = 0
    attribution TypeCheck (AST.RecordType base fields) (inherited, AST.RecordType _base fields') =
       (Synthesized SynTCType{typeErrors= fst baseRecord <> foldMap (fieldErrors . syn) fields',
                              typeName= Nothing,
@@ -281,6 +306,7 @@ instance Attribution TypeCheck AST.Type where
        AST.RecordType base (pure $ Inherited $ inh inherited))
      where baseRecord = case flip Map.lookup (env $ inh inherited) <$> base
                         of Just (Just t@RecordType{}) -> ([], Just t)
+                           Just (Just (NominalType _ (Just t@RecordType{}))) -> ([], Just t)
                            Just (Just t) -> ([NonRecordType t], Nothing)
                            Just Nothing -> (foldMap ((:[]) . UnknownName) base, Nothing)
                            Nothing -> ([], Nothing)
@@ -320,22 +346,22 @@ instance Attribution TypeCheck AST.StatementSequence where
 
 instance Attribution TypeCheck AST.Statement where
    attribution TypeCheck self (inherited, AST.EmptyStatement) = (Synthesized SynTC{errors= []}, AST.EmptyStatement)
-   attribution TypeCheck self (inherited, AST.Assignment var value) =
+   attribution TypeCheck self (inherited, AST.Assignment var value) = {-# SCC "Assignment" #-}
       (Synthesized SynTC{errors= typeCompatible (designatorType $ syn var) (inferredType $ syn value)},
        AST.Assignment (Inherited $ inh inherited) (Inherited $ inh inherited))
    attribution TypeCheck (AST.ProcedureCall _proc parameters) (inherited, AST.ProcedureCall procedure' parameters') =
       (Synthesized SynTC{errors= case syn procedure'
                                  of SynTCDes{designatorErrors= [],
-                                             designatorType= ProcedureType formalTypes Nothing}
-                                                   | length formalTypes /= maybe 0 length parameters ->
-                                                       [ArgumentCountMismatch formalTypes $ maybe 0 length parameters]
-                                                   | otherwise -> concat (zipWith typeCompatible formalTypes $
-                                                                          maybe [] (inferredType . syn <$>) parameters')
-                                    SynTCDes{designatorErrors= [],
-                                             designatorType= t} -> [NonProcedureType t]
+                                             designatorType= t} -> {-# SCC "ProcedureCall" #-} procedureErrors t
                                     SynTCDes{designatorErrors= errs} -> errs
                                       <> foldMap (foldMap (expressionErrors . syn)) parameters'},
-       AST.ProcedureCall (Inherited $ inh inherited) ((Inherited (inh inherited) <$) <$> parameters))
+       AST.ProcedureCall (Inherited $ inh inherited) (Just [Inherited $ inh inherited]))
+     where procedureErrors (ProcedureType formalTypes Nothing)
+             | length formalTypes /= maybe 0 length parameters =
+                 [ArgumentCountMismatch formalTypes $ maybe 0 length parameters]
+             | otherwise = concat (zipWith typeCompatible formalTypes $ maybe [] (inferredType . syn <$>) parameters')
+           procedureErrors (NominalType _ (Just t)) = procedureErrors t
+           procedureErrors t = [NonProcedureType t]
    attribution TypeCheck self (inherited, AST.If branches fallback) =
       (Synthesized SynTC{errors= foldMap (errors . syn) branches <> foldMap (errors . syn) fallback},
        AST.If (pure $ Inherited $ inh inherited) (Inherited (inh inherited) <$ fallback))
@@ -355,7 +381,7 @@ instance Attribution TypeCheck AST.Statement where
                                  <> foldMap (integerExpressionErrors . syn) step <> errors (syn body)},
        AST.For counter (Inherited $ inh inherited) (Inherited $ inh inherited) (Inherited (inh inherited) <$ step)
                        (Inherited $ InhTC $
-                        Map.insert (AST.NonQualIdent counter) (NominalType $ AST.NonQualIdent "INTEGER")
+                        Map.insert (AST.NonQualIdent counter) (NominalType (AST.NonQualIdent "INTEGER") Nothing)
                         $ env $ inh inherited))
    attribution TypeCheck self (inherited, AST.Loop body) = (Synthesized SynTC{errors= errors (syn body)},
                                                             AST.Loop (Inherited $ inh inherited))
@@ -368,7 +394,7 @@ instance Attribution TypeCheck AST.Statement where
        AST.Return (Inherited (inh inherited) <$ value))
 
 instance Attribution TypeCheck AST.WithAlternative where
-   attribution TypeCheck self (inherited, AST.WithAlternative var subtype body) =
+   attribution TypeCheck self (inherited, AST.WithAlternative var subtype body) = {-# SCC "WithAlternative" #-}
       (Synthesized SynTC{errors= case (Map.lookup var (env $ inh inherited),
                                        Map.lookup subtype (env $ inh inherited))
                                  of (Just supertype, Just subtypeDef) -> typeCompatible supertype subtypeDef
@@ -401,7 +427,7 @@ instance Attribution TypeCheck AST.Expression where
                                                                      (inferredType $ syn left)
                                                                      (inferredType $ syn right)]
                                                  errs -> errs,
-                            inferredType= NominalType (AST.NonQualIdent "BOOLEAN")},
+                            inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing},
        AST.Relation op (Inherited $ inh inherited) (Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.Positive expr) =
       (Synthesized SynTCExp{expressionErrors= unaryNumericOperatorErrors (syn expr),
@@ -421,51 +447,52 @@ instance Attribution TypeCheck AST.Expression where
        AST.Subtract (Inherited $ inh inherited) (Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.Or left right) =
       (Synthesized SynTCExp{expressionErrors= binaryBooleanOperatorErrors (syn left) (syn right),
-                            inferredType= NominalType (AST.NonQualIdent "BOOLEAN")},
+                            inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing},
        AST.Or (Inherited $ inh inherited) (Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.Multiply left right) =
       (Synthesized SynTCExp{expressionErrors= binaryNumericOperatorErrors (syn left) (syn right),
                             inferredType= inferredType (syn left)},
        AST.Multiply (Inherited $ inh inherited) (Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.Divide left right) =
-      (Synthesized SynTCExp{expressionErrors= case (syn left, syn right)
-                                              of (SynTCExp{expressionErrors= [],
-                                                           inferredType= NominalType (AST.NonQualIdent "REAL")},
-                                                  SynTCExp{expressionErrors= [],
-                                                           inferredType= NominalType (AST.NonQualIdent "REAL")}) -> []
-                                                 (SynTCExp{expressionErrors= [], inferredType= t1},
-                                                  SynTCExp{expressionErrors= [], inferredType= t2})
-                                                   | t1 == t2 -> [UnrealType t1]
-                                                   | otherwise -> [TypeMismatch t1 t2],
-                            inferredType= NominalType (AST.NonQualIdent "REAL")},
+      (Synthesized SynTCExp{expressionErrors=
+                               case (syn left, syn right)
+                               of (SynTCExp{expressionErrors= [],
+                                            inferredType= NominalType (AST.NonQualIdent "REAL") Nothing},
+                                   SynTCExp{expressionErrors= [],
+                                            inferredType= NominalType (AST.NonQualIdent "REAL") Nothing}) -> []
+                                  (SynTCExp{expressionErrors= [], inferredType= t1},
+                                   SynTCExp{expressionErrors= [], inferredType= t2})
+                                    | t1 == t2 -> [UnrealType t1]
+                                    | otherwise -> [TypeMismatch t1 t2],
+                            inferredType= NominalType (AST.NonQualIdent "REAL") Nothing},
        AST.Divide (Inherited $ inh inherited) (Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.IntegerDivide left right) =
       (Synthesized SynTCExp{expressionErrors= binaryIntegerOperatorErrors (syn left) (syn right),
-                            inferredType= NominalType (AST.NonQualIdent "INTEGER")},
+                            inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing},
        AST.IntegerDivide (Inherited $ inh inherited) (Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.Modulo left right) =
       (Synthesized SynTCExp{expressionErrors= binaryIntegerOperatorErrors (syn left) (syn right),
-                            inferredType= NominalType (AST.NonQualIdent "INTEGER")},
+                            inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing},
         AST.Modulo (Inherited $ inh inherited) (Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.And left right) =
       (Synthesized SynTCExp{expressionErrors= binaryBooleanOperatorErrors (syn left) (syn right),
-                            inferredType= NominalType (AST.NonQualIdent "BOOLEAN")},
+                            inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing},
        AST.And (Inherited $ inh inherited) (Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.Integer x) =
       (Synthesized SynTCExp{expressionErrors= mempty,
-                            inferredType= NominalType (AST.NonQualIdent "INTEGER")},
+                            inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing},
        AST.Integer x)
    attribution TypeCheck self (inherited, AST.Real x) =
       (Synthesized SynTCExp{expressionErrors= mempty,
-                            inferredType= NominalType (AST.NonQualIdent "REAL")},
+                            inferredType= NominalType (AST.NonQualIdent "REAL") Nothing},
        AST.Real x)
    attribution TypeCheck self (inherited, AST.CharConstant x) =
       (Synthesized SynTCExp{expressionErrors= mempty,
-                            inferredType= NominalType (AST.NonQualIdent "CHAR")},
+                            inferredType= NominalType (AST.NonQualIdent "CHAR") Nothing},
        AST.CharConstant x)
    attribution TypeCheck self (inherited, AST.CharCode x) =
       (Synthesized SynTCExp{expressionErrors= mempty,
-                            inferredType= NominalType (AST.NonQualIdent "CHAR")},
+                            inferredType= NominalType (AST.NonQualIdent "CHAR") Nothing},
        AST.CharCode x)
    attribution TypeCheck self (inherited, AST.String x) =
       (Synthesized SynTCExp{expressionErrors= mempty,
@@ -477,7 +504,7 @@ instance Attribution TypeCheck AST.Expression where
        AST.Nil)
    attribution TypeCheck self (inherited, AST.Set elements) =
       (Synthesized SynTCExp{expressionErrors= mempty,
-                            inferredType= NominalType (AST.NonQualIdent "SET")},
+                            inferredType= NominalType (AST.NonQualIdent "SET") Nothing},
        AST.Set [Inherited $ inh inherited])
    attribution TypeCheck self (inherited, AST.Read designator) =
       (Synthesized SynTCExp{expressionErrors= designatorErrors (syn designator),
@@ -485,7 +512,7 @@ instance Attribution TypeCheck AST.Expression where
        AST.Read (Inherited $ inh inherited))
    attribution TypeCheck (AST.FunctionCall _designator parameters)
                (inherited, AST.FunctionCall designator parameters') =
-      (Synthesized SynTCExp{expressionErrors= case syn designator
+      (Synthesized SynTCExp{expressionErrors= case {-# SCC "FunctionCall" #-} syn designator
                                               of SynTCDes{designatorErrors= [],
                                                           designatorType= ProcedureType formalTypes Just{}}
                                                    | length formalTypes /= length parameters ->
@@ -502,32 +529,33 @@ instance Attribution TypeCheck AST.Expression where
        AST.FunctionCall (Inherited $ inh inherited) [Inherited $ inh inherited])
    attribution TypeCheck self (inherited, AST.Not expr) =
       (Synthesized SynTCExp{expressionErrors= booleanExpressionErrors (syn expr),
-                            inferredType= NominalType (AST.NonQualIdent "BOOLEAN")},
+                            inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing},
        AST.Not (Inherited $ inh inherited))
 
 instance Attribution TypeCheck AST.Element where
    attribution TypeCheck self (inherited, AST.Element expr) =
       (Synthesized SynTCExp{expressionErrors= case expressionErrors (syn expr)
                                               of [] | inferredType (syn expr) 
-                                                      == NominalType (AST.NonQualIdent "INTEGER") -> []
+                                                      == NominalType (AST.NonQualIdent "INTEGER") Nothing -> []
                                                     | otherwise -> [NonIntegerType (inferredType $ syn expr)]
                                                  errs -> errs,
-                            inferredType= NominalType (AST.NonQualIdent "SET")},
+                            inferredType= NominalType (AST.NonQualIdent "SET") Nothing},
        AST.Element (Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.Range low high) =
-      (Synthesized SynTCExp{expressionErrors= case (syn low, syn high)
-                                              of (SynTCExp{expressionErrors= [],
-                                                           inferredType= NominalType (AST.NonQualIdent "INTEGER")},
-                                                  SynTCExp{expressionErrors= [],
-                                                           inferredType= NominalType (AST.NonQualIdent "INTEGER")}) 
-                                                    -> []
-                                                 (SynTCExp{expressionErrors= [], inferredType= t1},
-                                                  SynTCExp{expressionErrors= [], inferredType= t2})
-                                                    | t1 /= t2 -> [TypeMismatch t1 t2]
-                                                    | otherwise -> [NonIntegerType t1]
-                                                 (SynTCExp{expressionErrors= errors1}, 
-                                                  SynTCExp{expressionErrors= errors2}) -> errors1 <> errors2,
-                            inferredType= NominalType (AST.NonQualIdent "SET")},
+      (Synthesized SynTCExp{expressionErrors=
+                               case (syn low, syn high)
+                               of (SynTCExp{expressionErrors= [],
+                                            inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing},
+                                   SynTCExp{expressionErrors= [],
+                                            inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing}) 
+                                     -> []
+                                  (SynTCExp{expressionErrors= [], inferredType= t1},
+                                   SynTCExp{expressionErrors= [], inferredType= t2})
+                                     | t1 /= t2 -> [TypeMismatch t1 t2]
+                                     | otherwise -> [NonIntegerType t1]
+                                  (SynTCExp{expressionErrors= errors1}, 
+                                   SynTCExp{expressionErrors= errors2}) -> errors1 <> errors2,
+                            inferredType= NominalType (AST.NonQualIdent "SET") Nothing},
        AST.Range (Inherited $ inh inherited) (Inherited $ inh inherited))
 
 instance Attribution TypeCheck AST.Designator where
@@ -535,29 +563,25 @@ instance Attribution TypeCheck AST.Designator where
       (Synthesized SynTCDes{designatorErrors= case designatorType
                                               of Nothing -> [UnknownName q]
                                                  Just{} -> [],
+                            designatorSelf= AST.Variable q,
                             designatorType= fromMaybe UnknownType designatorType},
        AST.Variable q)
       where designatorType = Map.lookup q (env $ inh inherited)
    attribution TypeCheck (AST.Field _record fieldName) (inherited, AST.Field record _fieldName) =
       (Synthesized SynTCDes{designatorErrors= case syn record
                                               of SynTCDes{designatorErrors= [],
-                                                          designatorType= RecordType _ fields}
-                                                    | Map.member fieldName fields -> []
-                                                    | otherwise -> [UnknownField fieldName]
-                                                 SynTCDes{designatorErrors= [],
-                                                          designatorType= PointerType (RecordType _ fields)}
-                                                    | Map.member fieldName fields -> []
-                                                    | otherwise -> [UnknownField fieldName]
-                                                 SynTCDes{designatorErrors= [],
-                                                          designatorType= t} -> [NonRecordType t]
+                                                          designatorType= t} ->
+                                                   maybe [NonRecordType t]
+                                                         (maybe [UnknownField fieldName t] $ const []) (access True t)
                                                  SynTCDes{designatorErrors= errors} -> errors,
-                            designatorType= case designatorType (syn record)
-                                            of RecordType _ fields
-                                                  | Just t <- Map.lookup fieldName fields -> t
-                                               PointerType (RecordType _ fields)
-                                                  | Just t <- Map.lookup fieldName fields -> t
-                                               _ -> UnknownType},
+                            designatorSelf= AST.Field (Identity $ designatorSelf $ syn record) fieldName,
+                            designatorType= fromMaybe UnknownType (fromMaybe Nothing $ access True
+                                                                   $ designatorType $ syn record)},
        AST.Field (Inherited $ inh inherited) fieldName)
+     where access _ (RecordType _ fields) = Just (Map.lookup fieldName fields)
+           access True (PointerType t) = access False t
+           access allowPtr (NominalType _ (Just t)) = access allowPtr t
+           access _ _ = Nothing
    attribution TypeCheck (AST.Index _array indexes) (inherited, AST.Index array _indexes) =
       (Synthesized SynTCDes{designatorErrors= case syn array
                                               of SynTCDes{designatorErrors= [],
@@ -572,7 +596,7 @@ instance Attribution TypeCheck AST.Designator where
                                             of ArrayType _ itemType -> itemType
                                                _ -> UnknownType},
        AST.Index (Inherited $ inh inherited) (pure $ Inherited $ inh inherited))
-   attribution TypeCheck self (inherited, AST.TypeGuard designator q) =
+   attribution TypeCheck self (inherited, AST.TypeGuard designator q) = {-# SCC "TypeGuard" #-}
       (Synthesized SynTCDes{designatorErrors= case (syn designator, targetType)
                                               of (SynTCDes{designatorErrors= [],
                                                            designatorType= t}, 
@@ -588,26 +612,31 @@ instance Attribution TypeCheck AST.Designator where
                                               of SynTCDes{designatorErrors= [],
                                                           designatorType= PointerType{}} -> []
                                                  SynTCDes{designatorErrors= [],
+                                                          designatorType= NominalType _ (Just PointerType{})} -> []
+                                                 SynTCDes{designatorErrors= [],
                                                           designatorType= t} -> [NonPointerType t]
                                                  SynTCDes{designatorErrors= errors} -> errors,
                             designatorType= case designatorType (syn pointer)
-                                            of PointerType t -> t
+                                            of NominalType _ (Just (PointerType t)) -> t
+                                               PointerType t -> t
                                                _ -> UnknownType},
        AST.Dereference (Inherited $ inh inherited))
 
 unaryNumericOperatorErrors :: SynTCExp -> [Error]
-unaryNumericOperatorErrors SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "REAL")} = []
-unaryNumericOperatorErrors SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "INTEGER")} = []
+unaryNumericOperatorErrors SynTCExp{expressionErrors= [],
+                                    inferredType= NominalType (AST.NonQualIdent "REAL") Nothing} = []
+unaryNumericOperatorErrors SynTCExp{expressionErrors= [],
+                                    inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing} = []
 unaryNumericOperatorErrors SynTCExp{expressionErrors= [], inferredType= t} = [NonNumericType t]
 unaryNumericOperatorErrors SynTCExp{expressionErrors= errs} = errs
 
 binaryNumericOperatorErrors :: SynTCExp -> SynTCExp -> [Error]
 binaryNumericOperatorErrors
-  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "REAL")}
-  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "REAL")} = []
+  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "REAL") Nothing}
+  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "REAL") Nothing} = []
 binaryNumericOperatorErrors
-  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "INTEGER")}
-  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "INTEGER")} = []
+  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing}
+  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing} = []
 binaryNumericOperatorErrors SynTCExp{expressionErrors= [], inferredType= t1}
                             SynTCExp{expressionErrors= [], inferredType= t2}
   | t1 == t2 = [NonNumericType t1]
@@ -616,27 +645,27 @@ binaryNumericOperatorErrors SynTCExp{expressionErrors= errs1} SynTCExp{expressio
 
 binaryIntegerOperatorErrors :: SynTCExp -> SynTCExp -> [Error]
 binaryIntegerOperatorErrors
-  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "INTEGER")}
-  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "INTEGER")} = []
+  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing}
+  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing} = []
 binaryIntegerOperatorErrors SynTCExp{expressionErrors= [], inferredType= t1}
                             SynTCExp{expressionErrors= [], inferredType= t2}
   | t1 == t2 = [NonIntegerType t1]
   | otherwise = [TypeMismatch t1 t2]
 
 integerExpressionErrors SynTCExp{expressionErrors= [],
-                                 inferredType= NominalType (AST.NonQualIdent "INTEGER")} = []
+                                 inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing} = []
 integerExpressionErrors SynTCExp{expressionErrors= [], inferredType= t} = [NonIntegerType t]
 integerExpressionErrors SynTCExp{expressionErrors= errs} = errs
 
 booleanExpressionErrors SynTCExp{expressionErrors= [],
-                                 inferredType= NominalType (AST.NonQualIdent "BOOLEAN")} = []
+                                 inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing} = []
 booleanExpressionErrors SynTCExp{expressionErrors= [], inferredType= t} = [NonBooleanType t]
 booleanExpressionErrors SynTCExp{expressionErrors= errs} = errs
 
 binaryBooleanOperatorErrors :: SynTCExp -> SynTCExp -> [Error]
 binaryBooleanOperatorErrors
-  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "BOOLEAN")}
-  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "BOOLEAN")} = []
+  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing}
+  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing} = []
 binaryBooleanOperatorErrors SynTCExp{expressionErrors= [], inferredType= t1}
                             SynTCExp{expressionErrors= [], inferredType= t2}
   | t1 == t2 = [NonBooleanType t1]
@@ -645,19 +674,38 @@ binaryBooleanOperatorErrors SynTCExp{expressionErrors= [], inferredType= t1}
 typeCompatible :: Type -> Type -> [Error]
 typeCompatible expected actual
    | expected == actual = []
-   | expected == NominalType (AST.NonQualIdent "BASIC TYPE"),
-     NominalType (AST.NonQualIdent q) <- actual,
+   | expected == NominalType (AST.NonQualIdent "BASIC TYPE") Nothing,
+     NominalType (AST.NonQualIdent q) Nothing <- actual,
      q `elem` ["BOOLEAN", "CHAR", "SHORTINT", "INTEGER", "LONGINT", "REAL", "LONGREAL", "SET"] = []
-   | expected == NominalType (AST.NonQualIdent "POINTER"), PointerType{} <- actual = []
+   | expected == NominalType (AST.NonQualIdent "POINTER") Nothing, PointerType{} <- actual = []
+   | expected == NominalType (AST.NonQualIdent "POINTER") Nothing, NominalType _ (Just t) <- actual =
+       typeCompatible expected t
    | NilType <- actual, PointerType{} <- expected = []
    | NilType <- actual, ProcedureType{} <- expected = []
-   | otherwise = error (show (anonymize expected, anonymize actual))
+   | NilType <- actual, NominalType _ (Just t) <- expected = typeCompatible t actual
+   | ArrayType [] (NominalType (AST.NonQualIdent "CHAR") Nothing) <- expected, StringType{} <- actual = []
+   | targetExtends actual expected = []
+   | NominalType _ (Just t) <- expected, ProcedureType{} <- actual = typeCompatible t actual
+   | otherwise = error (show (expected, actual))
+
+extends, targetExtends :: Type -> Type -> Bool
+t1 `extends` t2 | t1 == t2 = True
+RecordType ancestry _ `extends` NominalType q _ = q `elem` ancestry
+NominalType _ (Just t1) `extends` t2 = t1 `extends` t2
+t1 `extends` t2 = error (show (t1, t2))
+
+PointerType t1 `targetExtends` PointerType t2 = t1 `extends` t2
+NominalType _ (Just t1) `targetExtends` t2 = t1 `targetExtends` t2
+t1 `targetExtends` NominalType _ (Just t2) = t1 `targetExtends` t2
+t1 `targetExtends` t2 | t1 == t2 = True
+t1 `targetExtends` t2 = False
 
 anonymize :: Type -> Type
-anonymize (RecordType ancestry fields) = RecordType ancestry (NominalType (AST.NonQualIdent "?") <$ fields)
+anonymize (RecordType ancestry fields) = RecordType ancestry (NominalType (AST.NonQualIdent "?") Nothing <$ fields)
 anonymize (ArrayType dimensions itemType) = ArrayType dimensions (anonymize itemType)
 anonymize (PointerType targetType) = PointerType (anonymize targetType)
 anonymize (ProcedureType params result) = ProcedureType (anonymize <$> params) (anonymize <$> result)
+anonymize (NominalType n (Just t)) = NominalType n (Just $ anonymize t)
 anonymize t = t
 
 -- * More boring Shallow.Functor instances, TH candidates
@@ -725,46 +773,58 @@ checkModules predef modules =
 predefined, predefined2 :: Environment
 -- | The set of 'Predefined' types and procedures defined in the Oberon Language Report.
 predefined = Map.fromList $ map (first AST.NonQualIdent) $
-   [("BOOLEAN", NominalType (AST.NonQualIdent "BOOLEAN")),
-    ("CHAR", NominalType (AST.NonQualIdent "CHAR")),
-    ("SHORTINT", NominalType (AST.NonQualIdent "SHORTINT")),
-    ("INTEGER", NominalType (AST.NonQualIdent "INTEGER")),
-    ("LONGINT", NominalType (AST.NonQualIdent "LONGINT")),
-    ("REAL", NominalType (AST.NonQualIdent "REAL")),
-    ("LONGREAL", NominalType (AST.NonQualIdent "LONGREAL")),
-    ("SET", NominalType (AST.NonQualIdent "SET")),
-    ("TRUE", NominalType (AST.NonQualIdent "BOOLEAN")),
-    ("FALSE", NominalType (AST.NonQualIdent "BOOLEAN")),
-    ("ABS", ProcedureType [NominalType $ AST.NonQualIdent "INTEGER"] $ Just $ NominalType $ AST.NonQualIdent "INTEGER"),
-    ("ASH", ProcedureType [NominalType $ AST.NonQualIdent "INTEGER"] $ Just $ NominalType $ AST.NonQualIdent "INTEGER"),
-    ("CAP", ProcedureType [NominalType $ AST.NonQualIdent "INTEGER"] $ Just $ NominalType $ AST.NonQualIdent "CAP"),
-    ("LEN", ProcedureType [NominalType $ AST.NonQualIdent "ARRAY"] $ Just $ NominalType $ AST.NonQualIdent "LONGINT"),
-    ("MAX", ProcedureType [NominalType $ AST.NonQualIdent "BASIC TYPE"] $ Just $ NominalType $ AST.NonQualIdent "INTEGER"),
-    ("MIN", ProcedureType [NominalType $ AST.NonQualIdent "BASIC TYPE"] $ Just $ NominalType $ AST.NonQualIdent "INTEGER"),
-    ("ODD", ProcedureType [NominalType $ AST.NonQualIdent "CHAR"] $ Just $ NominalType $ AST.NonQualIdent "BOOLEAN"),
-    ("SIZE", ProcedureType [NominalType $ AST.NonQualIdent "CHAR"] $ Just $ NominalType $ AST.NonQualIdent "INTEGER"),
-    ("ORD", ProcedureType [NominalType $ AST.NonQualIdent "CHAR"] $ Just $ NominalType $ AST.NonQualIdent "INTEGER"),
-    ("CHR", ProcedureType [NominalType $ AST.NonQualIdent "INTEGER"] $ Just $ NominalType $ AST.NonQualIdent "CHAR"),
-    ("SHORT", ProcedureType [NominalType $ AST.NonQualIdent "INTEGER"]
-              $ Just $ NominalType $ AST.NonQualIdent "INTEGER"),
-    ("LONG", ProcedureType [NominalType $ AST.NonQualIdent "INTEGER"] $ Just $ NominalType $ AST.NonQualIdent "INTEGER"),
-    ("ENTIER", ProcedureType [NominalType $ AST.NonQualIdent "REAL"] $ Just $ NominalType $ AST.NonQualIdent "INTEGER"),
-    ("INC", ProcedureType [NominalType $ AST.NonQualIdent "INTEGER"] Nothing),
-    ("DEC", ProcedureType [NominalType $ AST.NonQualIdent "INTEGER"] Nothing),
-    ("INCL", ProcedureType [NominalType $ AST.NonQualIdent "SET",
-                            NominalType $ AST.NonQualIdent "INTEGER"] Nothing),
-    ("EXCL", ProcedureType [NominalType $ AST.NonQualIdent "SET",
-                            NominalType $ AST.NonQualIdent "INTEGER"] Nothing),
-    ("COPY", ProcedureType [NominalType $ AST.NonQualIdent "ARRAY",
-                            NominalType $ AST.NonQualIdent "ARRAY"] Nothing),
-    ("NEW", ProcedureType [NominalType $ AST.NonQualIdent "POINTER"] Nothing),
-    ("HALT", ProcedureType [NominalType $ AST.NonQualIdent "INTEGER"] Nothing)]
+   [("BOOLEAN", NominalType (AST.NonQualIdent "BOOLEAN") Nothing),
+    ("CHAR", NominalType (AST.NonQualIdent "CHAR") Nothing),
+    ("SHORTINT", NominalType (AST.NonQualIdent "SHORTINT") Nothing),
+    ("INTEGER", NominalType (AST.NonQualIdent "INTEGER") Nothing),
+    ("LONGINT", NominalType (AST.NonQualIdent "LONGINT") Nothing),
+    ("REAL", NominalType (AST.NonQualIdent "REAL") Nothing),
+    ("LONGREAL", NominalType (AST.NonQualIdent "LONGREAL") Nothing),
+    ("SET", NominalType (AST.NonQualIdent "SET") Nothing),
+    ("TRUE", NominalType (AST.NonQualIdent "BOOLEAN") Nothing),
+    ("FALSE", NominalType (AST.NonQualIdent "BOOLEAN") Nothing),
+    ("ABS", ProcedureType [NominalType (AST.NonQualIdent "INTEGER") Nothing] $
+            Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
+    ("ASH", ProcedureType [NominalType (AST.NonQualIdent "INTEGER") Nothing] $
+            Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
+    ("CAP", ProcedureType [NominalType (AST.NonQualIdent "INTEGER") Nothing] $
+            Just $ NominalType (AST.NonQualIdent "CAP") Nothing),
+    ("LEN", ProcedureType [NominalType (AST.NonQualIdent "ARRAY") Nothing] $
+            Just $ NominalType (AST.NonQualIdent "LONGINT") Nothing),
+    ("MAX", ProcedureType [NominalType (AST.NonQualIdent "BASIC TYPE") Nothing] $
+            Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
+    ("MIN", ProcedureType [NominalType (AST.NonQualIdent "BASIC TYPE") Nothing] $
+            Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
+    ("ODD", ProcedureType [NominalType (AST.NonQualIdent "CHAR") Nothing] $
+            Just $ NominalType (AST.NonQualIdent "BOOLEAN") Nothing),
+    ("SIZE", ProcedureType [NominalType (AST.NonQualIdent "CHAR") Nothing] $
+             Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
+    ("ORD", ProcedureType [NominalType (AST.NonQualIdent "CHAR") Nothing] $
+            Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
+    ("CHR", ProcedureType [NominalType (AST.NonQualIdent "INTEGER") Nothing] $
+            Just $ NominalType (AST.NonQualIdent "CHAR") Nothing),
+    ("SHORT", ProcedureType [NominalType (AST.NonQualIdent "INTEGER") Nothing]
+              $ Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
+    ("LONG", ProcedureType [NominalType (AST.NonQualIdent "INTEGER") Nothing] $
+             Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
+    ("ENTIER", ProcedureType [NominalType (AST.NonQualIdent "REAL") Nothing] $
+               Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
+    ("INC", ProcedureType [NominalType (AST.NonQualIdent "INTEGER") Nothing] Nothing),
+    ("DEC", ProcedureType [NominalType (AST.NonQualIdent "INTEGER") Nothing] Nothing),
+    ("INCL", ProcedureType [NominalType (AST.NonQualIdent "SET") Nothing,
+                            NominalType (AST.NonQualIdent "INTEGER") Nothing] Nothing),
+    ("EXCL", ProcedureType [NominalType (AST.NonQualIdent "SET") Nothing,
+                            NominalType (AST.NonQualIdent "INTEGER") Nothing] Nothing),
+    ("COPY", ProcedureType [NominalType (AST.NonQualIdent "ARRAY") Nothing,
+                            NominalType (AST.NonQualIdent "ARRAY") Nothing] Nothing),
+    ("NEW", ProcedureType [NominalType (AST.NonQualIdent "POINTER") Nothing] Nothing),
+    ("HALT", ProcedureType [NominalType (AST.NonQualIdent "INTEGER") Nothing] Nothing)]
 
 -- | The set of 'Predefined' types and procedures defined in the Oberon-2 Language Report.
 predefined2 = predefined <>
    Map.fromList (first AST.NonQualIdent <$>
-                 [("ASSERT", ProcedureType [NominalType $ AST.NonQualIdent "ARRAY",
-                                            NominalType $ AST.NonQualIdent "ARRAY"] Nothing)])
+                 [("ASSERT", ProcedureType [NominalType (AST.NonQualIdent "ARRAY") Nothing,
+                                            NominalType (AST.NonQualIdent "ARRAY") Nothing] Nothing)])
 
 $(mconcat <$> mapM Rank2.TH.unsafeDeriveApply
   [''AST.Declaration, ''AST.Type, ''AST.Expression,
