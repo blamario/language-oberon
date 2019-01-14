@@ -61,15 +61,17 @@ instance Eq Type where
   NominalType q1 _ == NominalType q2 _ = q1 == q2
   ArrayType [] t1 == ArrayType [] t2 = t1 == t2
   ProcedureType p1 r1 == ProcedureType p2 r2 = r1 == r2 && p1 == p2
+  StringType len1 == StringType len2 = len1 == len2
+  NilType == NilType = True
   _ == _ = False
 
 instance Show Type where
-  show (NominalType q t) = "Nominal " ++ show q -- ++ " " ++ show t
+  show (NominalType q t) = "Nominal " ++ show q ++ " " ++ show t
   show (RecordType ancestry fields) = "RecordType " ++ show ancestry ++ show (fst <$> Map.toList fields)
   show (ArrayType dimensions itemType) = "ArrayType " ++ show dimensions ++ " " ++ show itemType
   show (PointerType targetType) = "PointerType " ++ show targetType
   show (ProcedureType parameters result) = "ProcedureType " ++ show parameters ++ " " ++ show result
-  show StringType{} = "StringType"
+  show (StringType len) = "StringType " ++ show len
   show NilType = "NilType"
   show UnknownType = "UnknownType"
 
@@ -169,12 +171,25 @@ instance Attribution TypeCheck Modules where
 instance Attribution TypeCheck AST.Module where
    attribution TypeCheck (AST.Module ident1 imports decls body ident2) (inherited, AST.Module _ _ decls' body' _) =
       (Synthesized SynTCMod{moduleErrors= foldMap (moduleErrors . syn) decls' <> foldMap (errors . syn) body',
-                            moduleEnv= Map.mapKeysMonotonic export newEnv,
+                            moduleEnv= exportedEnv,
                             pointerTargets= pointers},
        AST.Module ident1 imports [Inherited (localEnv, pointers)] (Inherited localEnv <$ body) ident2)
-      where newEnv = Map.unionsWith mergeTypeBoundProcedures (moduleEnv . syn <$> decls')
+      where exportedEnv = exportNominal <$> Map.mapKeysMonotonic export newEnv
+            newEnv = Map.unionsWith mergeTypeBoundProcedures (moduleEnv . syn <$> decls')
             localEnv = InhTC (newEnv `Map.union` env (inh inherited))
             export (AST.NonQualIdent name) = AST.QualIdent ident1 name
+            export q = q
+            exportNominal (NominalType (AST.NonQualIdent name) t) =
+              NominalType (AST.QualIdent ident1 name) (exportNominal' <$> t)
+            exportNominal t = exportNominal' t
+            exportNominal' (RecordType ancestry fields) = RecordType (export <$> ancestry) (exportNominal' <$> fields)
+            exportNominal' (ProcedureType parameters result) =
+              ProcedureType (exportNominal' <$> parameters) (exportNominal' <$> result)
+            exportNominal' (PointerType target) = PointerType (exportNominal' target)
+            exportNominal' (ArrayType dimensions itemType) = ArrayType dimensions (exportNominal' itemType)
+            exportNominal' (NominalType q@(AST.NonQualIdent name) (Just t)) =
+              fromMaybe (NominalType (AST.QualIdent ident1 name) $ Just $ exportNominal' t) (Map.lookup q exportedEnv)
+            exportNominal' t = t
             pointers= foldMap (pointerTargets . syn) decls'
             mergeTypeBoundProcedures' t1 t2 = mergeTypeBoundProcedures t1 t2
             mergeTypeBoundProcedures (NominalType (AST.NonQualIdent "") (Just t1)) t2 = mergeTypeBoundProcedures t1 t2
@@ -494,7 +509,7 @@ instance Attribution TypeCheck AST.Expression where
       (Synthesized SynTCExp{expressionErrors= mempty,
                             inferredType= NominalType (AST.NonQualIdent "CHAR") Nothing},
        AST.CharCode x)
-   attribution TypeCheck self (inherited, AST.String x) =
+   attribution TypeCheck (AST.String x) (inherited, _) =
       (Synthesized SynTCExp{expressionErrors= mempty,
                             inferredType= StringType (Text.length x)},
        AST.String x)
@@ -680,6 +695,7 @@ typeCompatible expected actual
    | expected == NominalType (AST.NonQualIdent "POINTER") Nothing, PointerType{} <- actual = []
    | expected == NominalType (AST.NonQualIdent "POINTER") Nothing, NominalType _ (Just t) <- actual =
        typeCompatible expected t
+   | expected == NominalType (AST.NonQualIdent "CHAR") Nothing, actual == StringType 1 = []
    | NilType <- actual, PointerType{} <- expected = []
    | NilType <- actual, ProcedureType{} <- expected = []
    | NilType <- actual, NominalType _ (Just t) <- expected = typeCompatible t actual
@@ -692,7 +708,7 @@ extends, targetExtends :: Type -> Type -> Bool
 t1 `extends` t2 | t1 == t2 = True
 RecordType ancestry _ `extends` NominalType q _ = q `elem` ancestry
 NominalType _ (Just t1) `extends` t2 = t1 `extends` t2
-t1 `extends` t2 = error (show (t1, t2))
+t1 `extends` t2 = False -- error (show (t1, t2))
 
 PointerType t1 `targetExtends` PointerType t2 = t1 `extends` t2
 NominalType _ (Just t1) `targetExtends` t2 = t1 `targetExtends` t2

@@ -1,3 +1,7 @@
 DEFINITION OFS;
 
+ TYPE
+  File *= RECORD END;
+  Rider *= RECORD END;
+
 END OFS.
