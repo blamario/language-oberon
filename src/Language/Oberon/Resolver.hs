@@ -282,8 +282,8 @@ predefined = Success <$> Map.fromList
             FormalParameters [Identity $ FPSection False (pure "n") $ Identity $ TypeReference $ NonQualIdent "INTEGER"] $
             Just $ NonQualIdent "INTEGER"),
     ("CAP", DeclaredProcedure False $ Just $ Identity $
-            FormalParameters [Identity $ FPSection False (pure "c") $ Identity $ TypeReference $ NonQualIdent "INTEGER"] $
-            Just $ NonQualIdent "CAP"),
+            FormalParameters [Identity $ FPSection False (pure "c") $ Identity $ TypeReference $ NonQualIdent "CHAR"] $
+            Just $ NonQualIdent "CHAR"),
     ("LEN", DeclaredProcedure False $ Just $ Identity $
             FormalParameters [Identity $ FPSection False (pure "c") $ Identity $ TypeReference $ NonQualIdent "ARRAY"] $
             Just $ NonQualIdent "LONGINT"),

@@ -803,8 +803,8 @@ predefined = Map.fromList $ map (first AST.NonQualIdent) $
             Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
     ("ASH", ProcedureType [NominalType (AST.NonQualIdent "INTEGER") Nothing] $
             Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
-    ("CAP", ProcedureType [NominalType (AST.NonQualIdent "INTEGER") Nothing] $
-            Just $ NominalType (AST.NonQualIdent "CAP") Nothing),
+    ("CAP", ProcedureType [NominalType (AST.NonQualIdent "CHAR") Nothing] $
+            Just $ NominalType (AST.NonQualIdent "CHAR") Nothing),
     ("LEN", ProcedureType [NominalType (AST.NonQualIdent "ARRAY") Nothing] $
             Just $ NominalType (AST.NonQualIdent "LONGINT") Nothing),
     ("MAX", ProcedureType [NominalType (AST.NonQualIdent "BASIC TYPE") Nothing] $
