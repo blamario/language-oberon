@@ -44,6 +44,8 @@ data Error = TypeMismatch Type Type
            | ArgumentCountMismatch [Type] Int
            | DuplicateBinding AST.Ident
            | ExtraDimensionalIndex Type
+           | TooSmallArrayType Type
+           | OpenArrayVariable
            | NonArrayType Type
            | NonBooleanType Type
            | NonFunctionType Type
@@ -222,7 +224,10 @@ instance Attribution TypeCheck AST.Declaration where
             qname = AST.NonQualIdent name
    attribution TypeCheck (AST.VariableDeclaration names _declaredType)
                (inherited, AST.VariableDeclaration _names declaredType) =
-      (Synthesized SynTCMod{moduleErrors= typeErrors (syn declaredType),
+      (Synthesized SynTCMod{moduleErrors= typeErrors (syn declaredType) 
+                                          <> case definedType (syn declaredType)
+                                             of ArrayType [] _ -> [OpenArrayVariable]
+                                                _ -> [],
                             moduleEnv= foldMap (\name-> Map.singleton (AST.NonQualIdent $ defName name)
                                                         (definedType $ syn declaredType))
                                        names,
@@ -362,7 +367,7 @@ instance Attribution TypeCheck AST.StatementSequence where
 instance Attribution TypeCheck AST.Statement where
    attribution TypeCheck self (inherited, AST.EmptyStatement) = (Synthesized SynTC{errors= []}, AST.EmptyStatement)
    attribution TypeCheck self (inherited, AST.Assignment var value) = {-# SCC "Assignment" #-}
-      (Synthesized SynTC{errors= typeCompatible (designatorType $ syn var) (inferredType $ syn value)},
+      (Synthesized SynTC{errors= assignmentCompatible (designatorType $ syn var) (inferredType $ syn value)},
        AST.Assignment (Inherited $ inh inherited) (Inherited $ inh inherited))
    attribution TypeCheck (AST.ProcedureCall _proc parameters) (inherited, AST.ProcedureCall procedure' parameters') =
       (Synthesized SynTC{errors= case syn procedure'
@@ -374,7 +379,7 @@ instance Attribution TypeCheck AST.Statement where
      where procedureErrors (ProcedureType formalTypes Nothing)
              | length formalTypes /= maybe 0 length parameters =
                  [ArgumentCountMismatch formalTypes $ maybe 0 length parameters]
-             | otherwise = concat (zipWith typeCompatible formalTypes $ maybe [] (inferredType . syn <$>) parameters')
+             | otherwise = concat (zipWith assignmentCompatible formalTypes $ maybe [] (inferredType . syn <$>) parameters')
            procedureErrors (NominalType _ (Just t)) = procedureErrors t
            procedureErrors t = [NonProcedureType t]
    attribution TypeCheck self (inherited, AST.If branches fallback) =
@@ -412,7 +417,7 @@ instance Attribution TypeCheck AST.WithAlternative where
    attribution TypeCheck self (inherited, AST.WithAlternative var subtype body) = {-# SCC "WithAlternative" #-}
       (Synthesized SynTC{errors= case (Map.lookup var (env $ inh inherited),
                                        Map.lookup subtype (env $ inh inherited))
-                                 of (Just supertype, Just subtypeDef) -> typeCompatible supertype subtypeDef
+                                 of (Just supertype, Just subtypeDef) -> assignmentCompatible supertype subtypeDef
                                     (Nothing, _) -> [UnknownName var]
                                     (_, Nothing) -> [UnknownName subtype]
                                  <> errors (syn body)},
@@ -532,7 +537,7 @@ instance Attribution TypeCheck AST.Expression where
                                                           designatorType= ProcedureType formalTypes Just{}}
                                                    | length formalTypes /= length parameters ->
                                                        [ArgumentCountMismatch formalTypes (length parameters)]
-                                                   | otherwise -> concat (zipWith typeCompatible formalTypes $
+                                                   | otherwise -> concat (zipWith assignmentCompatible formalTypes $
                                                                           inferredType . syn <$> parameters')
                                                  SynTCDes{designatorErrors= [],
                                                           designatorType= t} -> [NonFunctionType t]
@@ -615,7 +620,7 @@ instance Attribution TypeCheck AST.Designator where
       (Synthesized SynTCDes{designatorErrors= case (syn designator, targetType)
                                               of (SynTCDes{designatorErrors= [],
                                                            designatorType= t}, 
-                                                  Just t') -> typeCompatible t' t
+                                                  Just t') -> assignmentCompatible t' t
                                                  (SynTCDes{designatorErrors= errors}, 
                                                   Nothing) -> UnknownName q : errors
                                                  (SynTCDes{designatorErrors= errors}, _) -> errors,
@@ -686,22 +691,29 @@ binaryBooleanOperatorErrors SynTCExp{expressionErrors= [], inferredType= t1}
   | t1 == t2 = [NonBooleanType t1]
   | otherwise = [TypeMismatch t1 t2]
 
-typeCompatible :: Type -> Type -> [Error]
-typeCompatible expected actual
+assignmentCompatible :: Type -> Type -> [Error]
+assignmentCompatible expected actual
    | expected == actual = []
+   | NominalType (AST.NonQualIdent name1) Nothing <- expected,
+     NominalType (AST.NonQualIdent name2) Nothing <- actual,
+     Just index1 <- List.elemIndex name1 numericTypeNames,
+     Just index2 <- List.elemIndex name2 numericTypeNames, 
+     index1 >= index2 = []
    | expected == NominalType (AST.NonQualIdent "BASIC TYPE") Nothing,
      NominalType (AST.NonQualIdent q) Nothing <- actual,
      q `elem` ["BOOLEAN", "CHAR", "SHORTINT", "INTEGER", "LONGINT", "REAL", "LONGREAL", "SET"] = []
    | expected == NominalType (AST.NonQualIdent "POINTER") Nothing, PointerType{} <- actual = []
    | expected == NominalType (AST.NonQualIdent "POINTER") Nothing, NominalType _ (Just t) <- actual =
-       typeCompatible expected t
+       assignmentCompatible expected t
    | expected == NominalType (AST.NonQualIdent "CHAR") Nothing, actual == StringType 1 = []
    | NilType <- actual, PointerType{} <- expected = []
    | NilType <- actual, ProcedureType{} <- expected = []
-   | NilType <- actual, NominalType _ (Just t) <- expected = typeCompatible t actual
+   | NilType <- actual, NominalType _ (Just t) <- expected = assignmentCompatible t actual
    | ArrayType [] (NominalType (AST.NonQualIdent "CHAR") Nothing) <- expected, StringType{} <- actual = []
+   | ArrayType [m] (NominalType (AST.NonQualIdent "CHAR") Nothing) <- expected, StringType n <- actual = 
+      if m < n then [TooSmallArrayType expected] else []
    | targetExtends actual expected = []
-   | NominalType _ (Just t) <- expected, ProcedureType{} <- actual = typeCompatible t actual
+   | NominalType _ (Just t) <- expected, ProcedureType{} <- actual = assignmentCompatible t actual
    | otherwise = error (show (expected, actual))
 
 extends, targetExtends :: Type -> Type -> Bool
@@ -709,6 +721,8 @@ t1 `extends` t2 | t1 == t2 = True
 RecordType ancestry _ `extends` NominalType q _ = q `elem` ancestry
 NominalType _ (Just t1) `extends` t2 = t1 `extends` t2
 t1 `extends` t2 = False -- error (show (t1, t2))
+
+numericTypeNames = ["SHORTINT", "INTEGER", "LONGINT", "REAL", "LONGREAL"]
 
 PointerType t1 `targetExtends` PointerType t2 = t1 `extends` t2
 NominalType _ (Just t1) `targetExtends` t2 = t1 `targetExtends` t2
