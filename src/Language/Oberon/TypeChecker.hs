@@ -37,11 +37,11 @@ data Type = NominalType AST.QualIdent (Maybe Type)
           | StringType Int
           | ArrayType [Int] Type
           | PointerType Type
-          | ProcedureType [Type] (Maybe Type)
+          | ProcedureType [(Bool, Type)] (Maybe Type)
           | UnknownType
 
 data Error = TypeMismatch Type Type
-           | ArgumentCountMismatch [Type] Int
+           | ArgumentCountMismatch Int Int
            | DuplicateBinding AST.Ident
            | ExtraDimensionalIndex Type
            | TooSmallArrayType Type
@@ -54,6 +54,7 @@ data Error = TypeMismatch Type Type
            | NonPointerType Type
            | NonProcedureType Type
            | NonRecordType Type
+           | UnequalTypes Type Type
            | UnrealType Type
            | UnknownName AST.QualIdent
            | UnknownField AST.Ident Type
@@ -108,7 +109,7 @@ data SynTCSig = SynTCSig{signatureErrors :: [Error],
 
 data SynTCSec = SynTCSec{sectionErrors :: [Error],
                          sectionEnv :: Environment,
-                         sectionParameters :: [Type]} deriving Show
+                         sectionParameters :: [(Bool, Type)]} deriving Show
 
 data SynTCDes = SynTCDes{designatorErrors :: [Error],
                          designatorSelf   :: AST.Designator Identity Identity,
@@ -186,7 +187,7 @@ instance Attribution TypeCheck AST.Module where
             exportNominal t = exportNominal' t
             exportNominal' (RecordType ancestry fields) = RecordType (export <$> ancestry) (exportNominal' <$> fields)
             exportNominal' (ProcedureType parameters result) =
-              ProcedureType (exportNominal' <$> parameters) (exportNominal' <$> result)
+              ProcedureType ((exportNominal' <$>) <$> parameters) (exportNominal' <$> result)
             exportNominal' (PointerType target) = PointerType (exportNominal' target)
             exportNominal' (ArrayType dimensions itemType) = ArrayType dimensions (exportNominal' itemType)
             exportNominal' (NominalType q@(AST.NonQualIdent name) (Just t)) =
@@ -204,7 +205,7 @@ instance Attribution TypeCheck AST.Module where
                PointerType (RecordType (ancestry1 <> ancestry2) (fields1 <> fields2))
             mergeTypeBoundProcedures (RecordType ancestry1 fields1) (PointerType (RecordType ancestry2 fields2)) =
                PointerType (RecordType (ancestry1 <> ancestry2) (fields1 <> fields2))
-            mergeTypeBoundProcedures t1 t2 = error (take 90 $ show (anonymize t1))
+            mergeTypeBoundProcedures t1 t2 = error (take 90 $ show t1)
 
 instance Attribution TypeCheck AST.Declaration where
    attribution TypeCheck (AST.ConstantDeclaration namedef@(AST.IdentDef name _) _)
@@ -291,7 +292,7 @@ instance Attribution TypeCheck AST.FormalParameters where
 instance Attribution TypeCheck AST.FPSection where
    attribution TypeCheck (AST.FPSection var names _typeDef) (inherited, AST.FPSection _var _names typeDef) =
       (Synthesized SynTCSec{sectionErrors= typeErrors (syn typeDef),
-                            sectionParameters= definedType (syn typeDef) <$ toList names,
+                            sectionParameters= (var, definedType (syn typeDef)) <$ toList names,
                             sectionEnv= Map.fromList (toList
                                                       $ flip (,) (definedType $ syn typeDef) . AST.NonQualIdent 
                                                       <$> names)},
@@ -378,8 +379,8 @@ instance Attribution TypeCheck AST.Statement where
        AST.ProcedureCall (Inherited $ inh inherited) (Just [Inherited $ inh inherited]))
      where procedureErrors (ProcedureType formalTypes Nothing)
              | length formalTypes /= maybe 0 length parameters =
-                 [ArgumentCountMismatch formalTypes $ maybe 0 length parameters]
-             | otherwise = concat (zipWith assignmentCompatible formalTypes $ maybe [] (inferredType . syn <$>) parameters')
+                 [ArgumentCountMismatch (length formalTypes) $ maybe 0 length parameters]
+             | otherwise = concat (zipWith parameterCompatible formalTypes $ maybe [] (inferredType . syn <$>) parameters')
            procedureErrors (NominalType _ (Just t)) = procedureErrors t
            procedureErrors t = [NonProcedureType t]
    attribution TypeCheck self (inherited, AST.If branches fallback) =
@@ -536,8 +537,8 @@ instance Attribution TypeCheck AST.Expression where
                                               of SynTCDes{designatorErrors= [],
                                                           designatorType= ProcedureType formalTypes Just{}}
                                                    | length formalTypes /= length parameters ->
-                                                       [ArgumentCountMismatch formalTypes (length parameters)]
-                                                   | otherwise -> concat (zipWith assignmentCompatible formalTypes $
+                                                       [ArgumentCountMismatch (length formalTypes) (length parameters)]
+                                                   | otherwise -> concat (zipWith parameterCompatible formalTypes $
                                                                           inferredType . syn <$> parameters')
                                                  SynTCDes{designatorErrors= [],
                                                           designatorType= t} -> [NonFunctionType t]
@@ -691,6 +692,12 @@ binaryBooleanOperatorErrors SynTCExp{expressionErrors= [], inferredType= t1}
   | t1 == t2 = [NonBooleanType t1]
   | otherwise = [TypeMismatch t1 t2]
 
+parameterCompatible :: (Bool, Type) -> Type -> [Error]
+parameterCompatible (True, expected) actual
+   | expected == actual = []
+   | otherwise = [UnequalTypes expected actual]
+parameterCompatible (False, expected) actual = assignmentCompatible expected actual
+
 assignmentCompatible :: Type -> Type -> [Error]
 assignmentCompatible expected actual
    | expected == actual = []
@@ -729,14 +736,6 @@ NominalType _ (Just t1) `targetExtends` t2 = t1 `targetExtends` t2
 t1 `targetExtends` NominalType _ (Just t2) = t1 `targetExtends` t2
 t1 `targetExtends` t2 | t1 == t2 = True
 t1 `targetExtends` t2 = False
-
-anonymize :: Type -> Type
-anonymize (RecordType ancestry fields) = RecordType ancestry (NominalType (AST.NonQualIdent "?") Nothing <$ fields)
-anonymize (ArrayType dimensions itemType) = ArrayType dimensions (anonymize itemType)
-anonymize (PointerType targetType) = PointerType (anonymize targetType)
-anonymize (ProcedureType params result) = ProcedureType (anonymize <$> params) (anonymize <$> result)
-anonymize (NominalType n (Just t)) = NominalType n (Just $ anonymize t)
-anonymize t = t
 
 -- * More boring Shallow.Functor instances, TH candidates
 instance Shallow.Functor TypeCheck Identity (Semantics TypeCheck)
@@ -813,48 +812,48 @@ predefined = Map.fromList $ map (first AST.NonQualIdent) $
     ("SET", NominalType (AST.NonQualIdent "SET") Nothing),
     ("TRUE", NominalType (AST.NonQualIdent "BOOLEAN") Nothing),
     ("FALSE", NominalType (AST.NonQualIdent "BOOLEAN") Nothing),
-    ("ABS", ProcedureType [NominalType (AST.NonQualIdent "INTEGER") Nothing] $
+    ("ABS", ProcedureType [(False, NominalType (AST.NonQualIdent "INTEGER") Nothing)] $
             Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
-    ("ASH", ProcedureType [NominalType (AST.NonQualIdent "INTEGER") Nothing] $
+    ("ASH", ProcedureType [(False, NominalType (AST.NonQualIdent "INTEGER") Nothing)] $
             Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
-    ("CAP", ProcedureType [NominalType (AST.NonQualIdent "CHAR") Nothing] $
+    ("CAP", ProcedureType [(False, NominalType (AST.NonQualIdent "CHAR") Nothing)] $
             Just $ NominalType (AST.NonQualIdent "CHAR") Nothing),
-    ("LEN", ProcedureType [NominalType (AST.NonQualIdent "ARRAY") Nothing] $
+    ("LEN", ProcedureType [(False, NominalType (AST.NonQualIdent "ARRAY") Nothing)] $
             Just $ NominalType (AST.NonQualIdent "LONGINT") Nothing),
-    ("MAX", ProcedureType [NominalType (AST.NonQualIdent "BASIC TYPE") Nothing] $
+    ("MAX", ProcedureType [(False, NominalType (AST.NonQualIdent "BASIC TYPE") Nothing)] $
             Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
-    ("MIN", ProcedureType [NominalType (AST.NonQualIdent "BASIC TYPE") Nothing] $
+    ("MIN", ProcedureType [(False, NominalType (AST.NonQualIdent "BASIC TYPE") Nothing)] $
             Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
-    ("ODD", ProcedureType [NominalType (AST.NonQualIdent "CHAR") Nothing] $
+    ("ODD", ProcedureType [(False, NominalType (AST.NonQualIdent "CHAR") Nothing)] $
             Just $ NominalType (AST.NonQualIdent "BOOLEAN") Nothing),
-    ("SIZE", ProcedureType [NominalType (AST.NonQualIdent "CHAR") Nothing] $
+    ("SIZE", ProcedureType [(False, NominalType (AST.NonQualIdent "CHAR") Nothing)] $
              Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
-    ("ORD", ProcedureType [NominalType (AST.NonQualIdent "CHAR") Nothing] $
+    ("ORD", ProcedureType [(False, NominalType (AST.NonQualIdent "CHAR") Nothing)] $
             Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
-    ("CHR", ProcedureType [NominalType (AST.NonQualIdent "INTEGER") Nothing] $
+    ("CHR", ProcedureType [(False, NominalType (AST.NonQualIdent "INTEGER") Nothing)] $
             Just $ NominalType (AST.NonQualIdent "CHAR") Nothing),
-    ("SHORT", ProcedureType [NominalType (AST.NonQualIdent "INTEGER") Nothing]
+    ("SHORT", ProcedureType [(False, NominalType (AST.NonQualIdent "INTEGER") Nothing)]
               $ Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
-    ("LONG", ProcedureType [NominalType (AST.NonQualIdent "INTEGER") Nothing] $
+    ("LONG", ProcedureType [(False, NominalType (AST.NonQualIdent "INTEGER") Nothing)] $
              Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
-    ("ENTIER", ProcedureType [NominalType (AST.NonQualIdent "REAL") Nothing] $
+    ("ENTIER", ProcedureType [(False, NominalType (AST.NonQualIdent "REAL") Nothing)] $
                Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
-    ("INC", ProcedureType [NominalType (AST.NonQualIdent "INTEGER") Nothing] Nothing),
-    ("DEC", ProcedureType [NominalType (AST.NonQualIdent "INTEGER") Nothing] Nothing),
-    ("INCL", ProcedureType [NominalType (AST.NonQualIdent "SET") Nothing,
-                            NominalType (AST.NonQualIdent "INTEGER") Nothing] Nothing),
-    ("EXCL", ProcedureType [NominalType (AST.NonQualIdent "SET") Nothing,
-                            NominalType (AST.NonQualIdent "INTEGER") Nothing] Nothing),
-    ("COPY", ProcedureType [NominalType (AST.NonQualIdent "ARRAY") Nothing,
-                            NominalType (AST.NonQualIdent "ARRAY") Nothing] Nothing),
-    ("NEW", ProcedureType [NominalType (AST.NonQualIdent "POINTER") Nothing] Nothing),
-    ("HALT", ProcedureType [NominalType (AST.NonQualIdent "INTEGER") Nothing] Nothing)]
+    ("INC", ProcedureType [(False, NominalType (AST.NonQualIdent "INTEGER") Nothing)] Nothing),
+    ("DEC", ProcedureType [(False, NominalType (AST.NonQualIdent "INTEGER") Nothing)] Nothing),
+    ("INCL", ProcedureType [(False, NominalType (AST.NonQualIdent "SET") Nothing),
+                            (False, NominalType (AST.NonQualIdent "INTEGER") Nothing)] Nothing),
+    ("EXCL", ProcedureType [(False, NominalType (AST.NonQualIdent "SET") Nothing),
+                            (False, NominalType (AST.NonQualIdent "INTEGER") Nothing)] Nothing),
+    ("COPY", ProcedureType [(False, NominalType (AST.NonQualIdent "ARRAY") Nothing),
+                            (False, NominalType (AST.NonQualIdent "ARRAY") Nothing)] Nothing),
+    ("NEW", ProcedureType [(False, NominalType (AST.NonQualIdent "POINTER") Nothing)] Nothing),
+    ("HALT", ProcedureType [(False, NominalType (AST.NonQualIdent "INTEGER") Nothing)] Nothing)]
 
 -- | The set of 'Predefined' types and procedures defined in the Oberon-2 Language Report.
 predefined2 = predefined <>
    Map.fromList (first AST.NonQualIdent <$>
-                 [("ASSERT", ProcedureType [NominalType (AST.NonQualIdent "ARRAY") Nothing,
-                                            NominalType (AST.NonQualIdent "ARRAY") Nothing] Nothing)])
+                 [("ASSERT", ProcedureType [(False, NominalType (AST.NonQualIdent "BOOL") Nothing),
+                                            (False, NominalType (AST.NonQualIdent "INTEGER") Nothing)] Nothing)])
 
 $(mconcat <$> mapM Rank2.TH.unsafeDeriveApply
   [''AST.Declaration, ''AST.Type, ''AST.Expression,
