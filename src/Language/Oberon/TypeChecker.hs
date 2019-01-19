@@ -34,6 +34,7 @@ data Type = NominalType AST.QualIdent (Maybe Type)
           | RecordType{ancestry :: [AST.QualIdent],
                        recordFields :: Map AST.Ident Type}
           | NilType
+          | IntegerType Int
           | StringType Int
           | ArrayType [Int] Type
           | PointerType Type
@@ -74,6 +75,7 @@ instance Show Type where
   show (ArrayType dimensions itemType) = "ArrayType " ++ show dimensions ++ " " ++ show itemType
   show (PointerType targetType) = "PointerType " ++ show targetType
   show (ProcedureType parameters result) = "ProcedureType " ++ show parameters ++ " " ++ show result
+  show (IntegerType n) = "IntegerType " ++ show n
   show (StringType len) = "StringType " ++ show len
   show NilType = "NilType"
   show UnknownType = "UnknownType"
@@ -314,9 +316,10 @@ instance Attribution TypeCheck AST.Type where
                              pointerTarget= Nothing,
                              definedType= ArrayType (integerValue . syn <$> dimensions') (definedType $ syn itemType)},
        AST.ArrayType [Inherited (inh inherited)] (Inherited $ inh inherited))
-     where expectInteger SynTCExp{inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing} = []
+     where expectInteger SynTCExp{inferredType= IntegerType{}} = []
            expectInteger SynTCExp{inferredType= t} = [NonIntegerType t]
-           integerValue SynTCExp{inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing} = 0
+           integerValue SynTCExp{inferredType= IntegerType n} = n
+           integerValue _ = 0
    attribution TypeCheck (AST.RecordType base fields) (inherited, AST.RecordType _base fields') =
       (Synthesized SynTCType{typeErrors= fst baseRecord <> foldMap (fieldErrors . syn) fields',
                              typeName= Nothing,
@@ -456,15 +459,15 @@ instance Attribution TypeCheck AST.Expression where
        AST.Positive (Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.Negative expr) = 
       (Synthesized SynTCExp{expressionErrors= unaryNumericOperatorErrors (syn expr),
-                            inferredType= inferredType (syn expr)},
+                            inferredType= unaryNumericOperatorType negate (syn expr)},
        AST.Negative (Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.Add left right) =
       (Synthesized SynTCExp{expressionErrors= binaryNumericOperatorErrors (syn left) (syn right),
-                            inferredType= inferredType (syn left)},
+                            inferredType= binaryNumericOperatorType div (syn left) (syn right)},
        AST.Add (Inherited $ inh inherited) (Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.Subtract left right) =
       (Synthesized SynTCExp{expressionErrors= binaryNumericOperatorErrors (syn left) (syn right),
-                            inferredType= inferredType (syn left)},
+                            inferredType= binaryNumericOperatorType div (syn left) (syn right)},
        AST.Subtract (Inherited $ inh inherited) (Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.Or left right) =
       (Synthesized SynTCExp{expressionErrors= binaryBooleanOperatorErrors (syn left) (syn right),
@@ -472,7 +475,7 @@ instance Attribution TypeCheck AST.Expression where
        AST.Or (Inherited $ inh inherited) (Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.Multiply left right) =
       (Synthesized SynTCExp{expressionErrors= binaryNumericOperatorErrors (syn left) (syn right),
-                            inferredType= inferredType (syn left)},
+                            inferredType= binaryNumericOperatorType div (syn left) (syn right)},
        AST.Multiply (Inherited $ inh inherited) (Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.Divide left right) =
       (Synthesized SynTCExp{expressionErrors=
@@ -489,19 +492,19 @@ instance Attribution TypeCheck AST.Expression where
        AST.Divide (Inherited $ inh inherited) (Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.IntegerDivide left right) =
       (Synthesized SynTCExp{expressionErrors= binaryIntegerOperatorErrors (syn left) (syn right),
-                            inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing},
+                            inferredType= binaryNumericOperatorType div (syn left) (syn right)},
        AST.IntegerDivide (Inherited $ inh inherited) (Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.Modulo left right) =
       (Synthesized SynTCExp{expressionErrors= binaryIntegerOperatorErrors (syn left) (syn right),
-                            inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing},
+                            inferredType= binaryNumericOperatorType mod (syn left) (syn right)},
         AST.Modulo (Inherited $ inh inherited) (Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.And left right) =
       (Synthesized SynTCExp{expressionErrors= binaryBooleanOperatorErrors (syn left) (syn right),
                             inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing},
        AST.And (Inherited $ inh inherited) (Inherited $ inh inherited))
-   attribution TypeCheck self (inherited, AST.Integer x) =
+   attribution TypeCheck (AST.Integer x) (inherited, _) =
       (Synthesized SynTCExp{expressionErrors= mempty,
-                            inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing},
+                            inferredType= IntegerType (read $ Text.unpack x)},
        AST.Integer x)
    attribution TypeCheck self (inherited, AST.Real x) =
       (Synthesized SynTCExp{expressionErrors= mempty,
@@ -545,9 +548,17 @@ instance Attribution TypeCheck AST.Expression where
                                                  SynTCDes{designatorErrors= errs} -> errs
                                               <> foldMap (expressionErrors . syn) parameters',
                             inferredType= case syn designator
-                                          of SynTCDes{designatorType= ProcedureType _ (Just returnType)} -> returnType
+                                          of SynTCDes{designatorSelf= d,
+                                                      designatorType= ProcedureType _ (Just returnType)}
+                                               | IntegerType{} <- returnType ->
+                                                 IntegerType (callValue d $ inferredType . syn <$> parameters')
+                                               | otherwise -> returnType
                                              _ -> UnknownType},
        AST.FunctionCall (Inherited $ inh inherited) [Inherited $ inh inherited])
+     where callValue (AST.Variable (AST.NonQualIdent "MAX"))
+                     [NominalType (AST.NonQualIdent "SET") Nothing] = 63
+           callValue (AST.Variable (AST.NonQualIdent "MIN"))
+                     [NominalType (AST.NonQualIdent "SET") Nothing] = 0
    attribution TypeCheck self (inherited, AST.Not expr) =
       (Synthesized SynTCExp{expressionErrors= booleanExpressionErrors (syn expr),
                             inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing},
@@ -555,27 +566,11 @@ instance Attribution TypeCheck AST.Expression where
 
 instance Attribution TypeCheck AST.Element where
    attribution TypeCheck self (inherited, AST.Element expr) =
-      (Synthesized SynTCExp{expressionErrors= case expressionErrors (syn expr)
-                                              of [] | inferredType (syn expr) 
-                                                      == NominalType (AST.NonQualIdent "INTEGER") Nothing -> []
-                                                    | otherwise -> [NonIntegerType (inferredType $ syn expr)]
-                                                 errs -> errs,
+      (Synthesized SynTCExp{expressionErrors= integerExpressionErrors (syn expr),
                             inferredType= NominalType (AST.NonQualIdent "SET") Nothing},
        AST.Element (Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.Range low high) =
-      (Synthesized SynTCExp{expressionErrors=
-                               case (syn low, syn high)
-                               of (SynTCExp{expressionErrors= [],
-                                            inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing},
-                                   SynTCExp{expressionErrors= [],
-                                            inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing}) 
-                                     -> []
-                                  (SynTCExp{expressionErrors= [], inferredType= t1},
-                                   SynTCExp{expressionErrors= [], inferredType= t2})
-                                     | t1 /= t2 -> [TypeMismatch t1 t2]
-                                     | otherwise -> [NonIntegerType t1]
-                                  (SynTCExp{expressionErrors= errors1}, 
-                                   SynTCExp{expressionErrors= errors2}) -> errors1 <> errors2,
+      (Synthesized SynTCExp{expressionErrors= integerExpressionErrors (syn low) <> integerExpressionErrors (syn high),
                             inferredType= NominalType (AST.NonQualIdent "SET") Nothing},
        AST.Range (Inherited $ inh inherited) (Inherited $ inh inherited))
 
@@ -644,38 +639,61 @@ instance Attribution TypeCheck AST.Designator where
        AST.Dereference (Inherited $ inh inherited))
 
 unaryNumericOperatorErrors :: SynTCExp -> [Error]
+unaryNumericOperatorErrors SynTCExp{expressionErrors= [], inferredType= IntegerType{}} = []
 unaryNumericOperatorErrors SynTCExp{expressionErrors= [],
-                                    inferredType= NominalType (AST.NonQualIdent "REAL") Nothing} = []
-unaryNumericOperatorErrors SynTCExp{expressionErrors= [],
-                                    inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing} = []
+                                    inferredType= NominalType (AST.NonQualIdent name) Nothing}
+  | name `elem` numericTypeNames = []
 unaryNumericOperatorErrors SynTCExp{expressionErrors= [], inferredType= t} = [NonNumericType t]
 unaryNumericOperatorErrors SynTCExp{expressionErrors= errs} = errs
 
+unaryNumericOperatorType :: (Int -> Int) -> SynTCExp -> Type
+unaryNumericOperatorType f SynTCExp{inferredType= IntegerType x} = IntegerType (f x)
+unaryNumericOperatorType _ SynTCExp{inferredType= t} = t
+
 binaryNumericOperatorErrors :: SynTCExp -> SynTCExp -> [Error]
 binaryNumericOperatorErrors
-  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "REAL") Nothing}
-  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "REAL") Nothing} = []
+  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent name1) Nothing}
+  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent name2) Nothing}
+  | name1 `elem` numericTypeNames, name2 `elem` numericTypeNames = []
 binaryNumericOperatorErrors
-  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing}
-  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing} = []
+  SynTCExp{expressionErrors= [], inferredType= IntegerType{}}
+  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent name) Nothing}
+  | name `elem` numericTypeNames = []
+binaryNumericOperatorErrors
+  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent name) Nothing}
+  SynTCExp{expressionErrors= [], inferredType= IntegerType{}}
+  | name `elem` numericTypeNames = []
+binaryNumericOperatorErrors SynTCExp{expressionErrors= [], inferredType= IntegerType{}}
+                            SynTCExp{expressionErrors= [], inferredType= IntegerType{}} = []
 binaryNumericOperatorErrors SynTCExp{expressionErrors= [], inferredType= t1}
                             SynTCExp{expressionErrors= [], inferredType= t2}
   | t1 == t2 = [NonNumericType t1]
   | otherwise = [TypeMismatch t1 t2]
 binaryNumericOperatorErrors SynTCExp{expressionErrors= errs1} SynTCExp{expressionErrors= errs2} = errs1 <> errs2
 
-binaryIntegerOperatorErrors :: SynTCExp -> SynTCExp -> [Error]
-binaryIntegerOperatorErrors
-  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing}
-  SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing} = []
-binaryIntegerOperatorErrors SynTCExp{expressionErrors= [], inferredType= t1}
-                            SynTCExp{expressionErrors= [], inferredType= t2}
-  | t1 == t2 = [NonIntegerType t1]
-  | otherwise = [TypeMismatch t1 t2]
+binaryNumericOperatorType :: (Int -> Int -> Int) -> SynTCExp -> SynTCExp -> Type
+binaryNumericOperatorType f SynTCExp{inferredType= IntegerType x} SynTCExp{inferredType= IntegerType y} =
+  IntegerType (f x y)
+binaryNumericOperatorType _ SynTCExp{inferredType= t1} SynTCExp{inferredType= t2}
+  | t1 == t2 = t1
+  | IntegerType{} <- t1 = t2
+  | IntegerType{} <- t2 = t1
+  | NominalType (AST.NonQualIdent name1) Nothing <- t1,
+    NominalType (AST.NonQualIdent name2) Nothing <- t2,
+    Just index1 <- List.elemIndex name1 numericTypeNames,
+    Just index2 <- List.elemIndex name2 numericTypeNames =
+      NominalType (AST.NonQualIdent $ numericTypeNames !! max index1 index2) Nothing
+  | otherwise = t1
 
-integerExpressionErrors SynTCExp{expressionErrors= [],
-                                 inferredType= NominalType (AST.NonQualIdent "INTEGER") Nothing} = []
-integerExpressionErrors SynTCExp{expressionErrors= [], inferredType= t} = [NonIntegerType t]
+binaryIntegerOperatorErrors :: SynTCExp -> SynTCExp -> [Error]
+binaryIntegerOperatorErrors syn1 syn2 = integerExpressionErrors syn1 <> integerExpressionErrors syn2
+
+integerExpressionErrors SynTCExp{expressionErrors= [], inferredType= t} = expectInteger t
+  where expectInteger IntegerType{} = []
+        expectInteger (NominalType (AST.NonQualIdent "SHORTINT") Nothing) = []
+        expectInteger (NominalType (AST.NonQualIdent "INTEGER") Nothing) = []
+        expectInteger (NominalType (AST.NonQualIdent "LONGINT") Nothing) = []
+        expectInteger t = [NonIntegerType t]
 integerExpressionErrors SynTCExp{expressionErrors= errs} = errs
 
 booleanExpressionErrors SynTCExp{expressionErrors= [],
@@ -706,6 +724,8 @@ assignmentCompatible expected actual
      Just index1 <- List.elemIndex name1 numericTypeNames,
      Just index2 <- List.elemIndex name2 numericTypeNames, 
      index1 >= index2 = []
+   | NominalType (AST.NonQualIdent name) Nothing <- expected,
+     IntegerType{} <- actual, name `elem` numericTypeNames = []
    | expected == NominalType (AST.NonQualIdent "BASIC TYPE") Nothing,
      NominalType (AST.NonQualIdent q) Nothing <- actual,
      q `elem` ["BOOLEAN", "CHAR", "SHORTINT", "INTEGER", "LONGINT", "REAL", "LONGREAL", "SET"] = []
@@ -820,10 +840,8 @@ predefined = Map.fromList $ map (first AST.NonQualIdent) $
             Just $ NominalType (AST.NonQualIdent "CHAR") Nothing),
     ("LEN", ProcedureType [(False, NominalType (AST.NonQualIdent "ARRAY") Nothing)] $
             Just $ NominalType (AST.NonQualIdent "LONGINT") Nothing),
-    ("MAX", ProcedureType [(False, NominalType (AST.NonQualIdent "BASIC TYPE") Nothing)] $
-            Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
-    ("MIN", ProcedureType [(False, NominalType (AST.NonQualIdent "BASIC TYPE") Nothing)] $
-            Just $ NominalType (AST.NonQualIdent "INTEGER") Nothing),
+    ("MAX", ProcedureType [(False, NominalType (AST.NonQualIdent "BASIC TYPE") Nothing)] $ Just $ IntegerType 0),
+    ("MIN", ProcedureType [(False, NominalType (AST.NonQualIdent "BASIC TYPE") Nothing)] $ Just $ IntegerType 0),
     ("ODD", ProcedureType [(False, NominalType (AST.NonQualIdent "CHAR") Nothing)] $
             Just $ NominalType (AST.NonQualIdent "BOOLEAN") Nothing),
     ("SIZE", ProcedureType [(False, NominalType (AST.NonQualIdent "CHAR") Nothing)] $
