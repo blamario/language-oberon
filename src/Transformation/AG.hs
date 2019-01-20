@@ -32,6 +32,6 @@ knit r chSem = Rank2.Arrow knit'
 class Shallow.Functor t Identity (Semantics t) (g (Semantics t) (Semantics t)) => Attribution t g where
    attribution :: t -> Rule t g (Semantics t)
 
-mapDefault :: (p ~ Identity, q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Attribution t g)
-           => t -> Identity x -> Semantics t x
-mapDefault t (Identity sem) = knit (attribution t) sem
+mapDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Attribution t g) => (p x -> x) -> t -> p x -> q x
+mapDefault extract t sem = knit (attribution t) (extract sem)
+{-# INLINE mapDefault #-}

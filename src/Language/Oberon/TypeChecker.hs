@@ -760,52 +760,52 @@ t1 `targetExtends` t2 = False
 -- * More boring Shallow.Functor instances, TH candidates
 instance Shallow.Functor TypeCheck Identity (Semantics TypeCheck)
          (Modules (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault
+   (<$>) = AG.mapDefault runIdentity
 instance Shallow.Functor TypeCheck Identity (Semantics TypeCheck)
          (AST.Module (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault
+   (<$>) = AG.mapDefault runIdentity
 instance Shallow.Functor TypeCheck Identity (Semantics TypeCheck)
          (AST.Declaration (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault
+   (<$>) = AG.mapDefault runIdentity
 instance Shallow.Functor TypeCheck Identity (Semantics TypeCheck)
          (AST.FormalParameters (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault
+   (<$>) = AG.mapDefault runIdentity
 instance Shallow.Functor TypeCheck Identity (Semantics TypeCheck)
          (AST.FPSection (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault
+   (<$>) = AG.mapDefault runIdentity
 instance Shallow.Functor TypeCheck Identity (Semantics TypeCheck)
          (Deep.Product AST.Expression AST.StatementSequence (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault
+   (<$>) = AG.mapDefault runIdentity
 instance Shallow.Functor TypeCheck Identity (Semantics TypeCheck)
          (AST.StatementSequence (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault
+   (<$>) = AG.mapDefault runIdentity
 instance Shallow.Functor TypeCheck Identity (Semantics TypeCheck)
          (AST.Statement (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault
+   (<$>) = AG.mapDefault runIdentity
 instance Shallow.Functor TypeCheck Identity (Semantics TypeCheck)
          (AST.Case (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault
+   (<$>) = AG.mapDefault runIdentity
 instance Shallow.Functor TypeCheck Identity (Semantics TypeCheck)
          (AST.CaseLabels (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault
+   (<$>) = AG.mapDefault runIdentity
 instance Shallow.Functor TypeCheck Identity (Semantics TypeCheck)
          (AST.WithAlternative (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault
+   (<$>) = AG.mapDefault runIdentity
 instance Shallow.Functor TypeCheck Identity (Semantics TypeCheck)
          (AST.Expression (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault
+   (<$>) = AG.mapDefault runIdentity
 instance Shallow.Functor TypeCheck Identity (Semantics TypeCheck)
          (AST.Element (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault
+   (<$>) = AG.mapDefault runIdentity
 instance Shallow.Functor TypeCheck Identity (Semantics TypeCheck)
          (AST.Designator (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault
+   (<$>) = AG.mapDefault runIdentity
 instance Shallow.Functor TypeCheck Identity (Semantics TypeCheck)
          (AST.Type (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault
+   (<$>) = AG.mapDefault runIdentity
 instance Shallow.Functor TypeCheck Identity (Semantics TypeCheck)
          (AST.FieldList (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault
+   (<$>) = AG.mapDefault runIdentity
 
 -- * Unsafe Rank2 AST instances
 
