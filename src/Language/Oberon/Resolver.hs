@@ -24,6 +24,7 @@ import Data.Map.Lazy (Map, traverseWithKey)
 import qualified Data.Map.Lazy as Map
 import Data.Semigroup (Semigroup(..), sconcat)
 
+import qualified Rank2.TH
 import qualified Transformation as Shallow
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Deep.TH
@@ -357,4 +358,7 @@ unique inv amb (Ambiguous xs) =
       (errors, []) -> Failure (inv (sconcat $ NonEmpty.fromList errors) :| [])
       (_, multi) -> Failure (amb multi :| [])
 
+$(Rank2.TH.deriveFunctor ''DeclarationRHS)
+$(Rank2.TH.deriveFoldable ''DeclarationRHS)
+$(Rank2.TH.deriveTraversable ''DeclarationRHS)
 $(Transformation.Deep.TH.deriveDownTraversable ''DeclarationRHS)

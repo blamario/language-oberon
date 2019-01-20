@@ -14,16 +14,16 @@ import qualified Transformation as Shallow
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
 
-class Functor t g (p :: * -> *) (q :: * -> *) where
+class Rank2.Functor (g p) => Functor t g (p :: * -> *) (q :: * -> *) where
    (<$>) :: t -> g p p -> g q q
 
-class Foldable t g (p :: * -> *) m where
+class Rank2.Foldable (g p) => Foldable t g p m where
    foldMap :: t -> g p p -> m
 
-class UpTraversable t g (p :: * -> *) (q :: * -> *) m where
+class Rank2.Traversable (g p) => UpTraversable t g (p :: * -> *) (q :: * -> *) m where
    traverseUp :: t -> g p p -> m (g q q)
 
-class DownTraversable t g (p :: * -> *) (q :: * -> *) m where
+class Rank2.Traversable (g p) => DownTraversable t g (p :: * -> *) (q :: * -> *) m where
    traverseDown :: t -> g p p -> m (g q q)
 
 data Product g1 g2 (p :: * -> *) (q :: * -> *) = Pair{fst :: q (g1 p p),
