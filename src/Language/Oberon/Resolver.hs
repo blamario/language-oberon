@@ -23,6 +23,7 @@ import Data.Monoid (Alt(..))
 import Data.Map.Lazy (Map, traverseWithKey)
 import qualified Data.Map.Lazy as Map
 import Data.Semigroup (Semigroup(..), sconcat)
+import Data.Text (Text)
 
 import qualified Rank2.TH
 import qualified Transformation as Shallow
@@ -58,7 +59,7 @@ data Error = UnknownModule QualIdent
            | NotAType QualIdent
            | NotAValue QualIdent
            | ClashingImports
-           | UnparseableModule ParseFailure
+           | UnparseableModule Text
            deriving (Show)
 
 type Scope = Map Ident (Validation (NonEmpty Error) (DeclarationRHS Identity Identity))

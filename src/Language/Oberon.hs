@@ -17,7 +17,7 @@ import Data.Map.Lazy (Map)
 import Data.Monoid ((<>))
 import Data.Text (Text, unpack)
 import Data.Text.IO (readFile)
-import Text.Grampa (Ambiguous, Grammar, ParseResults, parseComplete)
+import Text.Grampa (Ambiguous, Grammar, ParseResults, parseComplete, failureDescription)
 import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
 import System.Directory (doesFileExist)
 import System.FilePath (FilePath, addExtension, combine, takeDirectory)
@@ -54,7 +54,7 @@ parseImportsOf oberon2 path modules =
                     >>= parseImportsOf oberon2 path
    where moduleImports = foldMap importsOf modules
          importsOf (Module _ imports _ _ _) = snd <$> imports
-         assertSuccess (m, Left err) = error ("Parse error in module " <> unpack m <> ":" <> show err)
+         assertSuccess (m, Left err) = error ("Parse error in module " <> unpack m)
          assertSuccess (m, Right [p]) = (m, p)
          assertSuccess (m, Right _) = error ("Ambiguous parses of module " <> unpack m)
 
@@ -64,7 +64,7 @@ parseAndResolveModule :: Bool -> Bool -> FilePath -> Text
                       -> IO (Validation (NonEmpty Resolver.Error) (Module Identity Identity))
 parseAndResolveModule checkTypes oberon2 path source =
    case parseModule oberon2 source
-   of Left err -> return (Failure $ Resolver.UnparseableModule err :| [])
+   of Left err -> return (Failure $ Resolver.UnparseableModule (failureDescription source err 4) :| [])
       Right [rootModule@(Module moduleName imports _ _ _)] ->
          do importedModules <- parseImportsOf oberon2 path (Map.singleton moduleName rootModule)
             let resolvedImportMap = Resolver.resolveModule predefinedScope resolvedImportMap <$> importedModules
