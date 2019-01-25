@@ -41,10 +41,10 @@ data Type = NominalType AST.QualIdent (Maybe Type)
           | ProcedureType [(Bool, Type)] (Maybe Type)
           | UnknownType
 
-data Error = TypeMismatch Type Type
-           | ArgumentCountMismatch Int Int
+data Error = ArgumentCountMismatch Int Int
            | DuplicateBinding AST.Ident
            | ExtraDimensionalIndex Type
+           | IncompatibleTypes Type Type
            | TooSmallArrayType Type
            | OpenArrayVariable
            | NonArrayType Type
@@ -55,6 +55,7 @@ data Error = TypeMismatch Type Type
            | NonPointerType Type
            | NonProcedureType Type
            | NonRecordType Type
+           | TypeMismatch Type Type
            | UnequalTypes Type Type
            | UnrealType Type
            | UnknownName AST.QualIdent
@@ -741,7 +742,7 @@ assignmentCompatible expected actual
       if m < n then [TooSmallArrayType expected] else []
    | targetExtends actual expected = []
    | NominalType _ (Just t) <- expected, ProcedureType{} <- actual = assignmentCompatible t actual
-   | otherwise = error (show (expected, actual))
+   | otherwise = [IncompatibleTypes expected actual]
 
 extends, targetExtends :: Type -> Type -> Bool
 t1 `extends` t2 | t1 == t2 = True
