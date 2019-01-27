@@ -1,51 +1,65 @@
+{-# Language FlexibleContexts, TypeFamilies #-}
 -- | Every function in this module takes a flag that determines whether the input is an Oberon or Oberon-2 module.
 
-module Language.Oberon (parseModule, parseAndResolveModule, parseAndResolveModuleFile) where
+module Language.Oberon (parseModule, parseAndResolveModule, parseAndResolveModuleFile,
+                        resolvePosition, resolvePositions) where
 
 import Language.Oberon.AST (Module(..))
 import qualified Language.Oberon.Grammar as Grammar
 import qualified Language.Oberon.Resolver as Resolver
 import qualified Language.Oberon.TypeChecker as TypeChecker
 
+import qualified Transformation.Rank2 as Rank2
+import qualified Transformation.Deep as Deep
+
 import Control.Monad (when)
 import Data.Either.Validation (Validation(..))
 import Data.Functor.Identity (Identity)
-import Data.Functor.Compose (getCompose)
+import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.Map.Lazy as Map
 import Data.Map.Lazy (Map)
 import Data.Monoid ((<>))
 import Data.Text (Text, unpack)
 import Data.Text.IO (readFile)
-import Text.Grampa (Ambiguous, Grammar, ParseResults, parseComplete, failureDescription)
+import Text.Grampa (Ambiguous, Grammar, ParseResults, parseComplete, failureDescription, positionOffset)
 import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
 import System.Directory (doesFileExist)
 import System.FilePath (FilePath, addExtension, combine, takeDirectory)
 
 import Prelude hiding (readFile)
 
+type NodeWrap = Compose ((,) Int) Ambiguous
+
+resolvePositions :: (p ~ Grammar.NodeWrap, q ~ NodeWrap, Deep.Functor (Rank2.Map p q) g p q)
+                 => Text -> g p p -> g q q
+resolvePositions src t = resolvePosition src Rank2.<$> t
+
+resolvePosition :: Text -> Grammar.NodeWrap a -> NodeWrap a
+resolvePosition src (Compose (pos, a)) = Compose (positionOffset pos src, a)
+
+moduleGrammar o2 = if o2 then Grammar.oberon2Grammar else Grammar.oberonGrammar
+definitionGrammar o2 = if o2 then Grammar.oberon2DefinitionGrammar else Grammar.oberonDefinitionGrammar
+
 -- | Parse the given text of a single module, without resolving the syntactic ambiguities.
-parseModule :: Bool -> Text -> ParseResults [Module Ambiguous Ambiguous]
-parseModule oberon2 = getCompose . Grammar.module_prod
-                      . parseComplete (if oberon2 then Grammar.oberon2Grammar else Grammar.oberonGrammar)
+parseModule :: Bool -> Text -> ParseResults [Module NodeWrap NodeWrap]
+parseModule oberon2 src =
+  getCompose (resolvePositions src <$> Grammar.module_prod (parseComplete (moduleGrammar oberon2) src))
 
 -- | Parse the given text of a single /definition/ module, without resolving the syntactic ambiguities.
-parseDefinitionModule :: Bool -> Text -> ParseResults [Module Ambiguous Ambiguous]
-parseDefinitionModule oberon2 = getCompose . Grammar.module_prod
-                                . parseComplete (if oberon2 then Grammar.oberon2DefinitionGrammar
-                                                 else Grammar.oberonDefinitionGrammar)
+parseDefinitionModule :: Bool -> Text -> ParseResults [Module NodeWrap NodeWrap]
+parseDefinitionModule oberon2 src =
+  getCompose (resolvePositions src <$> Grammar.module_prod (parseComplete (definitionGrammar oberon2) src))
 
-parseNamedModule :: Bool -> FilePath -> Text -> IO (ParseResults [Module Ambiguous Ambiguous])
+parseNamedModule :: Bool -> FilePath -> Text -> IO (ParseResults [Module NodeWrap NodeWrap])
 parseNamedModule oberon2 path name =
    do let basePath = combine path (unpack name)
       isDefn <- doesFileExist (addExtension basePath "Def")
-      let grammar = if oberon2
-                    then if isDefn then Grammar.oberon2DefinitionGrammar else Grammar.oberon2Grammar
-                    else if isDefn then Grammar.oberonDefinitionGrammar else Grammar.oberonGrammar
-      getCompose . Grammar.module_prod . parseComplete grammar
-         <$> readFile (addExtension basePath $ if isDefn then "Def" else "Mod")
+      let grammar = (if isDefn then definitionGrammar else moduleGrammar) oberon2
+      src <- readFile (addExtension basePath $ if isDefn then "Def" else "Mod")
+      return (getCompose $ resolvePositions src <$> Grammar.module_prod (parseComplete grammar src))
 
-parseImportsOf :: Bool -> FilePath -> Map Text (Module Ambiguous Ambiguous) -> IO (Map Text (Module Ambiguous Ambiguous))
+parseImportsOf :: Bool -> FilePath -> Map Text (Module NodeWrap NodeWrap) -> IO (Map Text (Module NodeWrap NodeWrap))
 parseImportsOf oberon2 path modules =
    case filter (`Map.notMember` modules) moduleImports
    of [] -> return modules

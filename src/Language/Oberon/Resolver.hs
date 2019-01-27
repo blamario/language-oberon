@@ -15,6 +15,7 @@ import Control.Monad.Trans.State (StateT(..), evalStateT)
 import Data.Either (partitionEithers)
 import Data.Either.Validation (Validation(..), validationToEither)
 import Data.Foldable (toList)
+import Data.Functor.Compose (Compose(..))
 import Data.Functor.Identity (Identity(..))
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
@@ -30,7 +31,7 @@ import qualified Transformation as Shallow
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Deep.TH
 import qualified Transformation.Rank2 as Rank2
-import Text.Grampa (Ambiguous(..), ParseFailure)
+import Text.Grampa (Ambiguous(..), Position(..), ParseFailure)
 
 import Language.Oberon.AST
 
@@ -219,7 +220,9 @@ resolveName res scope (NonQualIdent name) =
    of Just (Success rhs) -> Success rhs
       _ -> Failure (UnknownLocal name :| [])
 
-resolveModules :: Predefined -> Map Ident (Module Ambiguous Ambiguous)
+type NodeWrap = Compose ((,) Int) Ambiguous
+
+resolveModules :: Predefined -> Map Ident (Module NodeWrap NodeWrap)
                 -> Validation (NonEmpty (Ident, NonEmpty Error)) (Map Ident (Module Identity Identity))
 resolveModules predefinedScope modules = traverseWithKey extractErrors modules'
    where modules' = resolveModule predefinedScope modules' <$> modules
@@ -227,9 +230,9 @@ resolveModules predefinedScope modules = traverseWithKey extractErrors modules'
          extractErrors _         (Success mod) = Success mod
 
 resolveModule :: Scope -> Map Ident (Validation (NonEmpty Error) (Module Identity Identity))
-               -> Module Ambiguous Ambiguous -> Validation (NonEmpty Error) (Module Identity Identity)
-resolveModule predefined modules m@(Module moduleName imports declarations body _) =
-   evalStateT (Deep.traverseDown res m) (moduleGlobalScope, ModuleState)
+               -> Module NodeWrap NodeWrap -> Validation (NonEmpty Error) (Module Identity Identity)
+resolveModule predefined modules m =
+   evalStateT (Deep.traverseDown res m') (moduleGlobalScope, ModuleState)
    where res = Resolution moduleExports
          importedModules = Map.delete mempty (Map.mapKeysWith clashingRenames importedAs modules)
             where importedAs moduleName = case List.find ((== moduleName) . snd) imports
@@ -241,6 +244,8 @@ resolveModule predefined modules m@(Module moduleName imports declarations body 
          resolveDeclaration d = runIdentity <$> (traverse (Deep.traverseDown res) d >>= Shallow.traverse res)
          moduleExports = foldMap exportsOfModule <$> importedModules
          moduleGlobalScope = localScope res moduleName declarations predefined
+         m' :: Module Ambiguous Ambiguous
+         m'@(Module moduleName imports declarations body _) = (snd . getCompose) Rank2.<$> m
 
 localScope :: Resolution -> Ident -> [Ambiguous (Declaration Ambiguous Ambiguous)] -> Scope -> Scope
 localScope res qual declarations outerScope = innerScope

@@ -1,12 +1,16 @@
-{-# LANGUAGE FlexibleInstances, RankNTypes, RecordWildCards, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, RankNTypes, RecordWildCards, ScopedTypeVariables, TypeFamilies #-}
 
 module Main where
 
-import Language.Oberon (parseAndResolveModule)
+import Language.Oberon (parseAndResolveModule, resolvePosition, resolvePositions)
 import Language.Oberon.AST (Module(..), StatementSequence, Statement, Expression)
 import qualified Language.Oberon.Grammar as Grammar
 import qualified Language.Oberon.Resolver as Resolver
 import qualified Language.Oberon.Pretty ()
+
+import qualified Transformation.Rank2 as Rank2
+import qualified Transformation.Deep as Deep
+
 import Data.Text.Prettyprint.Doc (Pretty(pretty))
 import Data.Text.Prettyprint.Doc.Util (putDocW)
 
@@ -14,7 +18,7 @@ import Control.Monad
 import Data.Data (Data)
 import Data.Either.Validation (Validation(..), validationToEither)
 import Data.Functor.Identity (Identity)
-import Data.Functor.Compose (getCompose)
+import Data.Functor.Compose (Compose, getCompose)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.Map.Lazy as Map
 import Data.Maybe (fromMaybe)
@@ -85,19 +89,21 @@ main' Opts{..} =
         Just file -> (if file == "-" then getContents else readFile file)
                      >>= case optsMode
                          of TypeCheckedModuleMode ->
-                               \source-> parseAndResolveModule True optsOberon2
-                                                               (fromMaybe (takeDirectory file) optsInclude) source
-                                         >>= succeed optsOutput
+                              \source-> parseAndResolveModule True optsOberon2
+                                (fromMaybe (takeDirectory file) optsInclude) source
+                              >>= succeed optsOutput
                             ModuleWithImportsMode ->
-                               \source-> parseAndResolveModule False optsOberon2
-                                                               (fromMaybe (takeDirectory file) optsInclude) source
-                                         >>= succeed optsOutput
-                            ModuleMode          -> go (Resolver.resolveModule predefined mempty) Grammar.module_prod
-                                                   chosenGrammar file
-                            DefinitionMode      -> go (Resolver.resolveModule predefined mempty) Grammar.module_prod
-                                                   Grammar.oberonDefinitionGrammar file
-                            AmbiguousModuleMode -> go pure Grammar.module_prod chosenGrammar file
-                            _                   -> error "A file usually contains a whole module."
+                              \source-> parseAndResolveModule False optsOberon2
+                                (fromMaybe (takeDirectory file) optsInclude) source
+                              >>= succeed optsOutput
+                            ModuleMode ->
+                              go (Resolver.resolveModule predefined mempty) Grammar.module_prod chosenGrammar file
+                            DefinitionMode ->
+                              go (Resolver.resolveModule predefined mempty) Grammar.module_prod
+                                 Grammar.oberonDefinitionGrammar file
+                            AmbiguousModuleMode ->
+                              go pure Grammar.module_prod chosenGrammar file
+                            _ -> error "A file usually contains a whole module."
 
         Nothing ->
             forever $
@@ -110,21 +116,31 @@ main' Opts{..} =
                                           Grammar.oberonDefinitionGrammar "<stdin>"
                 StatementMode       -> go pure Grammar.statement chosenGrammar "<stdin>"
                 StatementsMode      -> go pure Grammar.statementSequence chosenGrammar "<stdin>"
-                ExpressionMode      -> go pure Grammar.expression chosenGrammar "<stdin>"
+                ExpressionMode      -> \src-> case getCompose ((resolvePosition src . (resolvePositions src <$>))
+                                                               <$> Grammar.expression (parseComplete chosenGrammar src))
+                                              of Right [x] -> succeed optsOutput (pure x)
+                                                 Right l -> putStrLn ("Ambiguous: " ++ show optsIndex ++ "/"
+                                                                      ++ show (length l) ++ " parses")
+                                                            >> succeed optsOutput (pure $ l !! optsIndex)
+                                                 Left err -> Text.putStrLn (failureDescription src err 4)
   where
     chosenGrammar = if optsOberon2 then Grammar.oberon2Grammar else Grammar.oberonGrammar
     predefined = if optsOberon2 then Resolver.predefined2 else Resolver.predefined
-    go :: (Show f, Data f, Pretty f) => 
-          (f' -> Validation (NonEmpty Resolver.Error) f)
-       -> (forall p. Grammar.OberonGrammar Ambiguous p -> p f')
-       -> (Grammar (Grammar.OberonGrammar Ambiguous) LeftRecursive.Parser Text)
+    
+    go :: (Show a, Data a, Pretty a, a ~ t f f,
+           Deep.Functor (Rank2.Map Grammar.NodeWrap NodeWrap) t Grammar.NodeWrap NodeWrap) =>
+          (t NodeWrap NodeWrap -> Validation (NonEmpty Resolver.Error) a)
+       -> (forall p. Grammar.OberonGrammar Grammar.NodeWrap p -> p (t Grammar.NodeWrap Grammar.NodeWrap))
+       -> (Grammar (Grammar.OberonGrammar Grammar.NodeWrap) LeftRecursive.Parser Text)
        -> String -> Text -> IO ()
     go resolve production grammar filename contents =
-       case getCompose (production $ parseComplete grammar contents)
+       case getCompose (resolvePositions contents <$> production (parseComplete grammar contents))
        of Right [x] -> succeed optsOutput (resolve x)
           Right l -> putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
                      >> succeed optsOutput (resolve $ l !! optsIndex)
           Left err -> Text.putStrLn (failureDescription contents err 4)
+
+type NodeWrap = Compose ((,) Int) Ambiguous
 
 succeed out x = either reportFailure showSuccess (validationToEither x)
    where reportFailure (Resolver.UnparseableModule err :| []) = Text.putStrLn err
@@ -134,15 +150,15 @@ succeed out x = either reportFailure showSuccess (validationToEither x)
                           Tree -> putStrLn . reprTreeString
                           Plain -> print
 
-instance Pretty (Module Ambiguous Ambiguous) where
+instance Pretty (Module NodeWrap NodeWrap) where
    pretty _ = error "Disambiguate before pretty-printing"
-instance Pretty (StatementSequence Ambiguous Ambiguous) where
+instance Pretty (StatementSequence NodeWrap NodeWrap) where
    pretty _ = error "Disambiguate before pretty-printing"
-instance Pretty (Ambiguous (Statement Ambiguous Ambiguous)) where
+instance Pretty (NodeWrap (Statement NodeWrap NodeWrap)) where
    pretty _ = error "Disambiguate before pretty-printing"
-instance Pretty (Statement Ambiguous Ambiguous) where
+instance Pretty (Statement NodeWrap NodeWrap) where
    pretty _ = error "Disambiguate before pretty-printing"
-instance Pretty (Expression Ambiguous Ambiguous) where
+instance Pretty (Expression NodeWrap NodeWrap) where
    pretty _ = error "Disambiguate before pretty-printing"
-instance Pretty (Ambiguous (Expression Ambiguous Ambiguous)) where
+instance Pretty (NodeWrap (Expression NodeWrap NodeWrap)) where
    pretty _ = error "Disambiguate before pretty-printing"

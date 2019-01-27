@@ -3,12 +3,13 @@
 -- | Oberon grammar adapted from http://www.ethoberon.ethz.ch/EBNF.html
 -- Extracted from the book Programmieren in Oberon - Das neue Pascal by N. Wirth and M. Reiser and translated by J. Templ.
 
-module Language.Oberon.Grammar (OberonGrammar(..),
+module Language.Oberon.Grammar (OberonGrammar(..), NodeWrap,
                                 oberonGrammar, oberon2Grammar, oberonDefinitionGrammar, oberon2DefinitionGrammar) where
 
 import Control.Applicative
 import Control.Monad (guard)
 import Data.Char
+import Data.Functor.Compose (Compose(..))
 import Data.List.NonEmpty (NonEmpty((:|)), fromList, toList)
 import Data.Monoid ((<>), Endo(Endo, appEndo))
 import Numeric (readHex)
@@ -92,7 +93,7 @@ data OberonGrammar f p = OberonGrammar {
    loopStatement :: p (Statement f f),
    withStatement :: p (Statement f f)}
 
-newtype BinOp f = BinOp {applyBinOp :: (f (Expression f f) -> f (Expression f f) -> Expression f f)}
+newtype BinOp f = BinOp {applyBinOp :: (f (Expression f f) -> f (Expression f f) -> f (Expression f f))}
 
 instance Show (BinOp f) where
    show = const "BinOp{}"
@@ -113,8 +114,10 @@ instance Lexical (OberonGrammar f) where
                                            guard (w `notElem` reservedWords)
                                            return w)
 
+type NodeWrap = Compose ((,) (Position Text)) Ambiguous
+
 oberonGrammar, oberon2Grammar, oberonDefinitionGrammar, oberon2DefinitionGrammar
-   :: Grammar (OberonGrammar Ambiguous) Parser Text
+   :: Grammar (OberonGrammar NodeWrap) Parser Text
 -- | Grammar of an Oberon module
 oberonGrammar = fixGrammar grammar
 -- | Grammar of an Oberon-2 module
@@ -124,7 +127,7 @@ oberonDefinitionGrammar = fixGrammar definitionGrammar
 -- | Grammar of an Oberon-2 definition module
 oberon2DefinitionGrammar = fixGrammar definitionGrammar2
 
-grammar, definitionGrammar :: GrammarBuilder (OberonGrammar Ambiguous) (OberonGrammar Ambiguous) Parser Text
+grammar, definitionGrammar :: GrammarBuilder (OberonGrammar NodeWrap) (OberonGrammar NodeWrap) Parser Text
 
 definitionGrammar g@OberonGrammar{..} = definitionMixin (grammar g)
 
@@ -179,21 +182,21 @@ grammar OberonGrammar{..} = OberonGrammar{
    constantDeclaration = ConstantDeclaration <$> identdef <* delimiter "=" <*> constExpression,
    identdef = IdentDef <$> ident <*> (Exported <$ delimiter "*" <|> pure PrivateOnly),
    constExpression = expression,
-   expression = simpleExpression <**> (pure id <|> (pure .) <$> ((flip . Relation) <$> relation <*> simpleExpression))
+   expression = simpleExpression
+                <|> wrap (flip Relation <$> simpleExpression <*> relation <*> simpleExpression)
                 <?> "expression",
    simpleExpression = 
-      (((pure .) <$> (Positive <$ operator "+" <|> Negative <$ operator "-") <|> pure id)
-       <*> term)
-      <**> (appEndo <$> concatMany (Endo . (pure .) <$> (flip . applyBinOp <$> addOperator <*> term))),
-   term = factor <**> (appEndo <$> concatMany (Endo . (pure .) <$> (flip . applyBinOp <$> mulOperator <*> factor))),
-   factor = ambiguous (number
-                       <|> charConstant
-                       <|> String <$> string_prod
-                       <|> Nil <$ keyword "NIL"
-                       <|> set
-                       <|> Read <$> designator
-                       <|> FunctionCall <$> designator <*> actualParameters
-                       <|> Not <$ operator "~" <*> factor)
+      (wrap (Positive <$ operator "+" <*> term) <|> wrap (Negative <$ operator "-" <*> term) <|> term)
+      <**> (appEndo <$> concatMany (Endo <$> (flip . applyBinOp <$> addOperator <*> term))),
+   term = factor <**> (appEndo <$> concatMany (Endo <$> (flip . applyBinOp <$> mulOperator <*> factor))),
+   factor = wrapAmbiguous (number
+                           <|> charConstant
+                           <|> String <$> string_prod
+                           <|> Nil <$ keyword "NIL"
+                           <|> set
+                           <|> Read <$> designator
+                           <|> FunctionCall <$> designator <*> actualParameters
+                           <|> Not <$ operator "~" <*> factor)
             <|> parens expression,
    number  =  integer <|> real,
    integer = Integer <$> lexicalToken (digit <> (takeCharsWhile isDigit <|> takeCharsWhile isHexDigit <> string "H")),
@@ -208,7 +211,7 @@ grammar OberonGrammar{..} = OberonGrammar{
    set = Set <$> braces (sepBy (wrap element) (delimiter ",")),
    element = Element <$> expression
              <|> Range <$> expression <* delimiter ".." <*> expression,
-   designator = ambiguous $
+   designator = wrapAmbiguous $
                     Variable <$> qualident
                 <|> Field <$> designator <* delimiter "." <*> ident
                 <|> Index <$> designator <*> brackets expList
@@ -216,9 +219,10 @@ grammar OberonGrammar{..} = OberonGrammar{
                 <|> Dereference <$> designator <* operator "^",
    expList = sepByNonEmpty expression (delimiter ","),
    actualParameters = parens (sepBy expression (delimiter ",")),
-   mulOperator = BinOp <$> (Multiply <$ operator "*" <|> Divide <$ operator "/"
-                            <|> IntegerDivide <$ keyword "DIV" <|> Modulo <$ keyword "MOD" <|> And <$ operator "&"),
-   addOperator = BinOp <$> (Add <$ operator "+" <|> Subtract <$ operator "-" <|> Or <$ keyword "OR"),
+   mulOperator = BinOp . wrapBinary
+                 <$> (Multiply <$ operator "*" <|> Divide <$ operator "/"
+                      <|> IntegerDivide <$ keyword "DIV" <|> Modulo <$ keyword "MOD" <|> And <$ operator "&"),
+   addOperator = BinOp . wrapBinary <$> (Add <$ operator "+" <|> Subtract <$ operator "-" <|> Or <$ keyword "OR"),
    relation = Equal <$ operator "=" <|> Unequal <$ operator "#" 
               <|> Less <$ operator "<" <|> LessOrEqual <$ operator "<=" 
               <|> Greater <$ operator ">" <|> GreaterOrEqual <$ operator ">=" 
@@ -257,7 +261,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                    <*> optional (keyword "BEGIN" *> wrap statementSequence) <* keyword "END",
    forwardDeclaration = ForwardDeclaration <$ keyword "PROCEDURE" <* delimiter "^"
                         <*> identdef <*> optional (wrap formalParameters),
-   statementSequence = StatementSequence <$> sepByNonEmpty (ambiguous statement) (delimiter ";"),
+   statementSequence = StatementSequence <$> sepByNonEmpty (wrapAmbiguous statement) (delimiter ";"),
    statement = assignment <|> procedureCall <|> ifStatement <|> caseStatement 
                <|> whileStatement <|> repeatStatement <|> loopStatement <|> withStatement 
                <|> Exit <$ keyword "EXIT" 
@@ -289,7 +293,12 @@ grammar OberonGrammar{..} = OberonGrammar{
                                        <* keyword "DO" <*> wrap statementSequence))
                         <*> pure Nothing <* keyword "END"}
 
-wrap = ambiguous
+wrapAmbiguous, wrap :: Parser (OberonGrammar f) Text a -> Parser (OberonGrammar f) Text (NodeWrap a)
+wrapAmbiguous = (Compose <$>) . ((,) <$> getSourcePos <*>) . ambiguous
+wrap = wrapAmbiguous
+
+wrapBinary :: (NodeWrap a -> NodeWrap a -> a) -> (NodeWrap a -> NodeWrap a -> NodeWrap a)
+wrapBinary op a@(Compose (pos, a')) b = Compose (pos, pure (op a b))
 
 moptional p = p <|> mempty
 
