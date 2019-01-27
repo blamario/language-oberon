@@ -3,6 +3,7 @@ module Main where
 import Data.Either.Validation (Validation(..))
 import Data.List (isSuffixOf)
 import Data.List.NonEmpty (NonEmpty((:|)))
+import Data.Text (Text)
 import Data.Text.IO (readFile)
 import Data.Text.Prettyprint.Doc (Pretty(pretty), layoutPretty, defaultLayoutOptions)
 import Data.Text.Prettyprint.Doc.Render.Text (renderStrict)
@@ -23,6 +24,7 @@ main = exampleTree "" "examples" >>= defaultMain . testGroup "Oberon"
 width = 80
 contextLines = 3
 
+exampleTree :: FilePath -> FilePath -> IO [TestTree]
 exampleTree ancestry path =
    do let fullPath = combine ancestry path
       isDir <- doesDirectoryExist fullPath
@@ -36,8 +38,9 @@ exampleTree ancestry path =
                       assertEqual "pretty" prettyModule prettyModule'
               else return []
 
+prettyFile :: FilePath -> Text -> IO Text
 prettyFile dirPath source = do
-   resolvedModule <- parseAndResolveModule True dirPath source
+   resolvedModule <- parseAndResolveModule True True dirPath source
    case resolvedModule
       of Failure (Resolver.UnparseableModule err :| []) -> assertFailure (showFailure source err contextLines)
          Failure errs -> assertFailure (show errs)
