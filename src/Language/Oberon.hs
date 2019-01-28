@@ -2,7 +2,7 @@
 -- | Every function in this module takes a flag that determines whether the input is an Oberon or Oberon-2 module.
 
 module Language.Oberon (parseModule, parseAndResolveModule, parseAndResolveModuleFile,
-                        resolvePosition, resolvePositions) where
+                        resolvePosition, resolvePositions, Placed) where
 
 import Language.Oberon.AST (Module(..))
 import qualified Language.Oberon.Grammar as Grammar
@@ -14,7 +14,6 @@ import qualified Transformation.Deep as Deep
 
 import Control.Monad (when)
 import Data.Either.Validation (Validation(..))
-import Data.Functor.Identity (Identity)
 import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.Map.Lazy as Map
@@ -30,6 +29,7 @@ import System.FilePath (FilePath, addExtension, combine, takeDirectory)
 import Prelude hiding (readFile)
 
 type NodeWrap = Compose ((,) Int) Ambiguous
+type Placed = ((,) Int)
 
 resolvePositions :: (p ~ Grammar.NodeWrap, q ~ NodeWrap, Deep.Functor (Rank2.Map p q) g p q)
                  => Text -> g p p -> g q q
@@ -75,7 +75,7 @@ parseImportsOf oberon2 path modules =
 -- | Given a directory path for module imports, parse the given module text and all the module files it imports, then
 -- use all the information to resolve the syntactic ambiguities.
 parseAndResolveModule :: Bool -> Bool -> FilePath -> Text
-                      -> IO (Validation (NonEmpty Resolver.Error) (Module Identity Identity))
+                      -> IO (Validation (NonEmpty Resolver.Error) (Module Placed Placed))
 parseAndResolveModule checkTypes oberon2 path source =
    case parseModule oberon2 source
    of Left err -> return (Failure $ Resolver.UnparseableModule (failureDescription source err 4) :| [])
@@ -94,6 +94,6 @@ parseAndResolveModule checkTypes oberon2 path source =
 
 -- | Parse the module file at the given path, assuming all its imports are in the same directory.
 parseAndResolveModuleFile :: Bool -> Bool -> FilePath
-                          -> IO (Validation (NonEmpty Resolver.Error) (Module Identity Identity))
+                          -> IO (Validation (NonEmpty Resolver.Error) (Module Placed Placed))
 parseAndResolveModuleFile checkTypes oberon2 path =
   readFile path >>= parseAndResolveModule checkTypes oberon2 (takeDirectory path)

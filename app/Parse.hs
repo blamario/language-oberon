@@ -2,7 +2,7 @@
 
 module Main where
 
-import Language.Oberon (parseAndResolveModule, resolvePosition, resolvePositions)
+import Language.Oberon (Placed, parseAndResolveModule, resolvePosition, resolvePositions)
 import Language.Oberon.AST (Module(..), StatementSequence, Statement, Expression)
 import qualified Language.Oberon.Grammar as Grammar
 import qualified Language.Oberon.Resolver as Resolver
@@ -17,7 +17,7 @@ import Data.Text.Prettyprint.Doc.Util (putDocW)
 import Control.Monad
 import Data.Data (Data)
 import Data.Either.Validation (Validation(..), validationToEither)
-import Data.Functor.Identity (Identity)
+import Data.Functor.Identity (Identity(Identity))
 import Data.Functor.Compose (Compose, getCompose)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.Map.Lazy as Map
@@ -150,6 +150,8 @@ succeed out x = either reportFailure showSuccess (validationToEither x)
                           Tree -> putStrLn . reprTreeString
                           Plain -> print
 
+instance Pretty (Module Placed Placed) where
+   pretty m = pretty ((Identity . snd) Rank2.<$> m)
 instance Pretty (Module NodeWrap NodeWrap) where
    pretty _ = error "Disambiguate before pretty-printing"
 instance Pretty (StatementSequence NodeWrap NodeWrap) where

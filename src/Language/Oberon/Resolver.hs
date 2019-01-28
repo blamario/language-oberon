@@ -16,7 +16,6 @@ import Data.Either (partitionEithers)
 import Data.Either.Validation (Validation(..), validationToEither)
 import Data.Foldable (toList)
 import Data.Functor.Compose (Compose(..))
-import Data.Functor.Identity (Identity(..))
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.List as List
@@ -39,21 +38,21 @@ data DeclarationRHS f' f = DeclaredConstant (f (ConstExpression f' f'))
                          | DeclaredType (f (Type f' f'))
                          | DeclaredVariable (f (Type f' f'))
                          | DeclaredProcedure Bool (Maybe (f (FormalParameters f' f')))
-deriving instance Show (DeclarationRHS Identity Identity)
-deriving instance Show (DeclarationRHS Ambiguous Ambiguous)
+deriving instance Show (DeclarationRHS Placed Placed)
+deriving instance Show (DeclarationRHS NodeWrap NodeWrap)
 
 -- | All possible resolution errors
 data Error = UnknownModule QualIdent
            | UnknownLocal Ident
            | UnknownImport QualIdent
            | AmbiguousParses
-           | AmbiguousDeclaration [Declaration Ambiguous Ambiguous]
-           | AmbiguousDesignator [Designator Ambiguous Ambiguous]
-           | AmbiguousExpression [Expression Ambiguous Ambiguous]
-           | AmbiguousRecord [Designator Ambiguous Ambiguous]
-           | AmbiguousStatement [Statement Ambiguous Ambiguous]
+           | AmbiguousDeclaration [Declaration NodeWrap NodeWrap]
+           | AmbiguousDesignator [Designator NodeWrap NodeWrap]
+           | AmbiguousExpression [Expression NodeWrap NodeWrap]
+           | AmbiguousRecord [Designator NodeWrap NodeWrap]
+           | AmbiguousStatement [Statement NodeWrap NodeWrap]
            | InvalidExpression (NonEmpty Error)
-           | InvalidFunctionParameters [Ambiguous (Expression Ambiguous Ambiguous)]
+           | InvalidFunctionParameters [NodeWrap (Expression NodeWrap NodeWrap)]
            | InvalidRecord (NonEmpty Error)
            | InvalidStatement (NonEmpty Error)
            | NotARecord QualIdent
@@ -63,7 +62,10 @@ data Error = UnknownModule QualIdent
            | UnparseableModule Text
            deriving (Show)
 
-type Scope = Map Ident (Validation (NonEmpty Error) (DeclarationRHS Identity Identity))
+type Placed = ((,) Int)
+type NodeWrap = Compose Placed Ambiguous
+
+type Scope = Map Ident (Validation (NonEmpty Error) (DeclarationRHS Placed Placed))
 
 -- | A set of predefined declarations.
 type Predefined = Scope
@@ -83,30 +85,30 @@ instance Monad (Validation (NonEmpty Error)) where
    Success s >>= f = f s
    Failure errors >>= _ = Failure errors
 
-instance Shallow.Functor Resolution Ambiguous Resolved (Module Resolved Resolved) where
+instance Shallow.Functor Resolution NodeWrap Resolved (Module Resolved Resolved) where
    (<$>) = mapResolveDefault
 
-instance {-# overlappable #-} Show (g Identity Identity) =>
-                              Shallow.Traversable Resolution Ambiguous Identity Resolved (g Identity Identity) where
+instance {-# overlappable #-} Show (g Placed Placed) =>
+                              Shallow.Traversable Resolution NodeWrap Placed Resolved (g Placed Placed) where
    traverse = traverseResolveDefault
 
-instance {-# overlappable #-} Show (g Ambiguous Ambiguous) =>
-                              Shallow.Traversable Resolution Ambiguous Identity Resolved (g Ambiguous Ambiguous) where
+instance {-# overlappable #-} Show (g NodeWrap NodeWrap) =>
+                              Shallow.Traversable Resolution NodeWrap Placed Resolved (g NodeWrap NodeWrap) where
    traverse = traverseResolveDefault
 
 instance {-# overlaps #-} Shallow.Traversable
-                          Resolution Ambiguous Identity Resolved (Designator Ambiguous Ambiguous) where
-   traverse res (Ambiguous designators) = StateT $ \s@(scope, state)->
+                          Resolution NodeWrap Placed Resolved (Designator NodeWrap NodeWrap) where
+   traverse res (Compose (pos, Ambiguous designators)) = StateT $ \s@(scope, state)->
       case partitionEithers (NonEmpty.toList (validationToEither . resolveDesignator res scope state <$> designators))
-      of (_, [x]) -> Success (Identity x, s)
+      of (_, [x]) -> Success ((pos, x), s)
          (errors, []) -> Failure (sconcat $ NonEmpty.fromList errors)
          (_, multi) -> Failure (AmbiguousDesignator multi :| [])
 
 instance {-# overlaps #-} Shallow.Traversable
-                          Resolution Ambiguous Identity Resolved (Expression Ambiguous Ambiguous) where
+                          Resolution NodeWrap Placed Resolved (Expression NodeWrap NodeWrap) where
    traverse res expressions = StateT $ \s@(scope, state)->
-      let resolveExpression :: Expression Ambiguous Ambiguous
-                            -> Validation (NonEmpty Error) (Expression Ambiguous Ambiguous, ResolutionState)
+      let resolveExpression :: Expression NodeWrap NodeWrap
+                            -> Validation (NonEmpty Error) (Expression NodeWrap NodeWrap, ResolutionState)
           resolveExpression e@(Read designators) =
              case evalStateT (Shallow.traverse res designators) s
              of Failure errors -> Failure errors
@@ -114,7 +116,7 @@ instance {-# overlaps #-} Shallow.Traversable
           resolveExpression e@(FunctionCall functions parameters) =
              case evalStateT (Shallow.traverse res functions) s
              of Failure errors -> Failure errors
-                Success (Identity d)
+                Success (pos, d)
                    | Variable q <- d, Success (DeclaredProcedure True _) <- resolveName res scope q
                      -> pure (e, ExpressionOrTypeState)
                    | Success{} <- evalStateT (traverse (Shallow.traverse res) parameters) (scope, ExpressionState)
@@ -122,60 +124,63 @@ instance {-# overlaps #-} Shallow.Traversable
                    | otherwise -> Failure (pure $ InvalidFunctionParameters parameters)
           resolveExpression e@(Relation Is lefts rights) = pure (e, ExpressionOrTypeState)
           resolveExpression e = pure (e, state)
-      in (\(r, s)-> (Identity r, (scope, s)))
+      in (\(pos, (r, s))-> ((pos, r), (scope, s)))
          <$> unique InvalidExpression (AmbiguousExpression . (fst <$>)) (resolveExpression <$> expressions)
 
 instance {-# overlaps #-} Shallow.Traversable
-                          Resolution Ambiguous Identity Resolved (Declaration Ambiguous Ambiguous) where
-   traverse res (Ambiguous (proc@(ProcedureDeclaration heading body _) :| [])) =
+                          Resolution NodeWrap Placed Resolved (Declaration NodeWrap NodeWrap) where
+   traverse res (Compose (pos, Ambiguous (proc@(ProcedureDeclaration heading body _) :| []))) =
       StateT $ \s@(scope, state)->
          let ProcedureHeading receiver _indirect _name parameters = heading
              ProcedureBody declarations statements = body
              innerScope = localScope res "" declarations (parameterScope `Map.union` receiverScope `Map.union` scope)
              receiverScope = maybe mempty receiverBinding receiver
-             receiverBinding (_, name, ty) = Map.singleton name (Success $ DeclaredVariable $ pure $ TypeReference
+             receiverBinding :: (Bool, Ident, Ident) -> Map Ident (Validation e (DeclarationRHS f' Placed))
+             receiverBinding (_, name, ty) = Map.singleton name (Success $ DeclaredVariable $ (,) pos $ TypeReference
                                                                  $ NonQualIdent ty)
              parameterScope = case parameters
                               of Nothing -> mempty
-                                 Just (Ambiguous (FormalParameters sections _ :| []))
+                                 Just (Compose (_, Ambiguous (FormalParameters sections _ :| [])))
                                     -> Map.fromList (concatMap binding sections)
-             binding (Ambiguous (FPSection _ names types :| [])) =
+             binding (Compose (_, Ambiguous (FPSection _ names types :| []))) =
                 [(v, evalStateT (Deep.traverseDown res $ DeclaredVariable types) s) | v <- NonEmpty.toList names]
-         in Success (Identity proc, (innerScope, state))
-   traverse res (Ambiguous (dec :| [])) = pure (Identity dec)
+         in Success ((pos, proc), (innerScope, state))
+   traverse res (Compose (pos, Ambiguous (dec :| []))) = pure (pos, dec)
    traverse _ declarations = StateT (const $ Failure $ pure $ AmbiguousDeclaration $ toList declarations)
 
 instance {-# overlaps #-} Shallow.Traversable
-                          Resolution Ambiguous Identity Resolved (ProcedureBody Ambiguous Ambiguous) where
-   traverse res (Ambiguous (body@(ProcedureBody declarations statements) :| [])) = StateT $ \(scope, state)->
-      Success (Identity body, (localScope res "" declarations scope, state))
+                          Resolution NodeWrap Placed Resolved (ProcedureBody NodeWrap NodeWrap) where
+   traverse res (Compose (pos, Ambiguous (body@(ProcedureBody declarations statements) :| []))) =
+     StateT $ \(scope, state)-> Success ((pos, body), (localScope res "" declarations scope, state))
    traverse _ b = StateT (const $ Failure $ pure AmbiguousParses)
 
 instance {-# overlaps #-} Shallow.Traversable
-                          Resolution Ambiguous Identity Resolved (Statement Ambiguous Ambiguous) where
+                          Resolution NodeWrap Placed Resolved (Statement NodeWrap NodeWrap) where
    traverse res statements = StateT $ \s@(scope, state)->
-      let resolveStatement :: Statement Ambiguous Ambiguous
-                            -> Validation (NonEmpty Error) (Statement Ambiguous Ambiguous, ResolutionState)
+      let resolveStatement :: Statement NodeWrap NodeWrap
+                            -> Validation (NonEmpty Error) (Statement NodeWrap NodeWrap, ResolutionState)
           resolveStatement p@(ProcedureCall procedures parameters) =
              case evalStateT (Shallow.traverse res procedures) s
              of Failure errors -> Failure errors
                 Success{} -> pure (p, StatementState)
           resolveStatement stat = pure (stat, StatementState)
-      in (\(r, s)-> (Identity r, (scope, s)))
+      in (\(pos, (r, s))-> ((pos, r), (scope, s)))
          <$> unique InvalidStatement (AmbiguousStatement . (fst <$>)) (resolveStatement <$> statements)
 
-mapResolveDefault :: Resolution -> Ambiguous (g Resolved Resolved) -> Resolved (g Resolved Resolved)
-mapResolveDefault Resolution{} (Ambiguous (x :| [])) = pure x
+mapResolveDefault :: Resolution -> NodeWrap (g Resolved Resolved) -> Resolved (g Resolved Resolved)
+mapResolveDefault Resolution{} (Compose (_, Ambiguous (x :| []))) = pure x
 mapResolveDefault Resolution{} _ = StateT (const $ Failure $ pure AmbiguousParses)
 
-traverseResolveDefault :: Show (g f f) => Resolution -> Ambiguous (g (f :: * -> *) f) -> Resolved (Identity (g f f))
-traverseResolveDefault Resolution{} (Ambiguous (x :| [])) = StateT (\s-> Success (Identity x, s))
-traverseResolveDefault Resolution{} x@(Ambiguous _) = StateT (const $ Failure $ pure AmbiguousParses)
+traverseResolveDefault :: Show (g f f) => Resolution -> NodeWrap (g (f :: * -> *) f) -> Resolved (Placed (g f f))
+traverseResolveDefault Resolution{} (Compose (pos, Ambiguous (x :| []))) = StateT (\s-> Success ((pos, x), s))
+traverseResolveDefault Resolution{} _ = StateT (const $ Failure $ pure AmbiguousParses)
 
-resolveDesignator :: Resolution -> Scope -> ResolutionState -> Designator Ambiguous Ambiguous
-                  -> Validation (NonEmpty Error) (Designator Ambiguous Ambiguous)
+resolveDesignator :: Resolution -> Scope -> ResolutionState -> Designator NodeWrap NodeWrap
+                  -> Validation (NonEmpty Error) (Designator NodeWrap NodeWrap)
 resolveDesignator res scope state = resolveDesignator'
    where resolveTypeName   :: QualIdent -> Validation (NonEmpty Error) QualIdent
+         resolveDesignator',
+           resolveRecord :: Designator NodeWrap NodeWrap -> Validation (NonEmpty Error) (Designator NodeWrap NodeWrap)
          resolveDesignator' (Variable q) =
             case resolveName res scope q
             of Failure err ->  Failure err
@@ -208,7 +213,7 @@ resolveDesignator res scope state = resolveDesignator'
                Success DeclaredType{} -> Success q
                Success _ -> Failure (NotAType q :| [])
 
-resolveName :: Resolution -> Scope -> QualIdent -> Validation (NonEmpty Error) (DeclarationRHS Identity Identity)
+resolveName :: Resolution -> Scope -> QualIdent -> Validation (NonEmpty Error) (DeclarationRHS Placed Placed)
 resolveName res scope q@(QualIdent moduleName name) =
    case Map.lookup moduleName (_modules res)
    of Nothing -> Failure (UnknownModule q :| [])
@@ -220,19 +225,17 @@ resolveName res scope (NonQualIdent name) =
    of Just (Success rhs) -> Success rhs
       _ -> Failure (UnknownLocal name :| [])
 
-type NodeWrap = Compose ((,) Int) Ambiguous
-
 resolveModules :: Predefined -> Map Ident (Module NodeWrap NodeWrap)
-                -> Validation (NonEmpty (Ident, NonEmpty Error)) (Map Ident (Module Identity Identity))
+                -> Validation (NonEmpty (Ident, NonEmpty Error)) (Map Ident (Module Placed Placed))
 resolveModules predefinedScope modules = traverseWithKey extractErrors modules'
    where modules' = resolveModule predefinedScope modules' <$> modules
          extractErrors moduleKey (Failure e)   = Failure ((moduleKey, e) :| [])
          extractErrors _         (Success mod) = Success mod
 
-resolveModule :: Scope -> Map Ident (Validation (NonEmpty Error) (Module Identity Identity))
-               -> Module NodeWrap NodeWrap -> Validation (NonEmpty Error) (Module Identity Identity)
-resolveModule predefined modules m =
-   evalStateT (Deep.traverseDown res m') (moduleGlobalScope, ModuleState)
+resolveModule :: Scope -> Map Ident (Validation (NonEmpty Error) (Module Placed Placed))
+               -> Module NodeWrap NodeWrap -> Validation (NonEmpty Error) (Module Placed Placed)
+resolveModule predefined modules m@(Module moduleName imports declarations body _) =
+   evalStateT (Deep.traverseDown res m) (moduleGlobalScope, ModuleState)
    where res = Resolution moduleExports
          importedModules = Map.delete mempty (Map.mapKeysWith clashingRenames importedAs modules)
             where importedAs moduleName = case List.find ((== moduleName) . snd) imports
@@ -240,21 +243,19 @@ resolveModule predefined modules m =
                                              Just (Just innerKey, _) -> innerKey
                                              Nothing -> mempty
                   clashingRenames _ _ = Failure (ClashingImports :| [])
-         resolveDeclaration :: Ambiguous (Declaration Ambiguous Ambiguous) -> Resolved (Declaration Identity Identity)
-         resolveDeclaration d = runIdentity <$> (traverse (Deep.traverseDown res) d >>= Shallow.traverse res)
+         resolveDeclaration :: NodeWrap (Declaration NodeWrap NodeWrap) -> Resolved (Declaration Placed Placed)
+         resolveDeclaration d = snd <$> (traverse (Deep.traverseDown res) d >>= Shallow.traverse res)
          moduleExports = foldMap exportsOfModule <$> importedModules
          moduleGlobalScope = localScope res moduleName declarations predefined
-         m' :: Module Ambiguous Ambiguous
-         m'@(Module moduleName imports declarations body _) = (snd . getCompose) Rank2.<$> m
 
-localScope :: Resolution -> Ident -> [Ambiguous (Declaration Ambiguous Ambiguous)] -> Scope -> Scope
+localScope :: Resolution -> Ident -> [NodeWrap (Declaration NodeWrap NodeWrap)] -> Scope -> Scope
 localScope res qual declarations outerScope = innerScope
    where innerScope = Map.union (snd <$> scopeAdditions) outerScope
          scopeAdditions = (resolveBinding res innerScope <$>)
                           <$> Map.fromList (concatMap (declarationBinding qual . unamb) declarations)
-         unamb (Ambiguous (x :| [])) = x
-         resolveBinding     :: Resolution -> Scope -> DeclarationRHS Ambiguous Ambiguous
-                            -> Validation (NonEmpty Error) (DeclarationRHS Identity Identity)
+         unamb (Compose (offset, Ambiguous (x :| []))) = x
+         resolveBinding     :: Resolution -> Scope -> DeclarationRHS NodeWrap NodeWrap
+                            -> Validation (NonEmpty Error) (DeclarationRHS Placed Placed)
          resolveBinding res scope dr = evalStateT (Deep.traverseDown res dr) (scope, DeclarationState)
 
 declarationBinding :: Ident -> Declaration f f -> [(Ident, (AccessMode, DeclarationRHS f f))]
@@ -272,95 +273,95 @@ declarationBinding _ (ForwardDeclaration (IdentDef name export) parameters) =
 predefined, predefined2 :: Predefined
 -- | The set of 'Predefined' types and procedures defined in the Oberon Language Report.
 predefined = Success <$> Map.fromList
-   [("BOOLEAN", DeclaredType (Identity $ TypeReference $ NonQualIdent "BOOLEAN")),
-    ("CHAR", DeclaredType (Identity $ TypeReference $ NonQualIdent "CHAR")),
-    ("SHORTINT", DeclaredType (Identity $ TypeReference $ NonQualIdent "SHORTINT")),
-    ("INTEGER", DeclaredType (Identity $ TypeReference $ NonQualIdent "INTEGER")),
-    ("LONGINT", DeclaredType (Identity $ TypeReference $ NonQualIdent "LONGINT")),
-    ("REAL", DeclaredType (Identity $ TypeReference $ NonQualIdent "REAL")),
-    ("LONGREAL", DeclaredType (Identity $ TypeReference $ NonQualIdent "LONGREAL")),
-    ("SET", DeclaredType (Identity $ TypeReference $ NonQualIdent "SET")),
-    ("TRUE", DeclaredConstant (Identity $ Read $ Identity $ Variable $ NonQualIdent "TRUE")),
-    ("FALSE", DeclaredConstant (Identity $ Read $ Identity $ Variable $ NonQualIdent "FALSE")),
-    ("ABS", DeclaredProcedure False $ Just $ Identity $
-            FormalParameters [Identity $ FPSection False (pure "n") $ Identity $ TypeReference $ NonQualIdent "INTEGER"] $
+   [("BOOLEAN", DeclaredType ((,) 0 $ TypeReference $ NonQualIdent "BOOLEAN")),
+    ("CHAR", DeclaredType ((,) 0 $ TypeReference $ NonQualIdent "CHAR")),
+    ("SHORTINT", DeclaredType ((,) 0 $ TypeReference $ NonQualIdent "SHORTINT")),
+    ("INTEGER", DeclaredType ((,) 0 $ TypeReference $ NonQualIdent "INTEGER")),
+    ("LONGINT", DeclaredType ((,) 0 $ TypeReference $ NonQualIdent "LONGINT")),
+    ("REAL", DeclaredType ((,) 0 $ TypeReference $ NonQualIdent "REAL")),
+    ("LONGREAL", DeclaredType ((,) 0 $ TypeReference $ NonQualIdent "LONGREAL")),
+    ("SET", DeclaredType ((,) 0 $ TypeReference $ NonQualIdent "SET")),
+    ("TRUE", DeclaredConstant ((,) 0 $ Read $ (,) 0 $ Variable $ NonQualIdent "TRUE")),
+    ("FALSE", DeclaredConstant ((,) 0 $ Read $ (,) 0 $ Variable $ NonQualIdent "FALSE")),
+    ("ABS", DeclaredProcedure False $ Just $ (,) 0 $
+            FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "INTEGER"] $
             Just $ NonQualIdent "INTEGER"),
-    ("ASH", DeclaredProcedure False $ Just $ Identity $
-            FormalParameters [Identity $ FPSection False (pure "n") $ Identity $ TypeReference $ NonQualIdent "INTEGER"] $
+    ("ASH", DeclaredProcedure False $ Just $ (,) 0 $
+            FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "INTEGER"] $
             Just $ NonQualIdent "INTEGER"),
-    ("CAP", DeclaredProcedure False $ Just $ Identity $
-            FormalParameters [Identity $ FPSection False (pure "c") $ Identity $ TypeReference $ NonQualIdent "CHAR"] $
+    ("CAP", DeclaredProcedure False $ Just $ (,) 0 $
+            FormalParameters [(,) 0 $ FPSection False (pure "c") $ (,) 0 $ TypeReference $ NonQualIdent "CHAR"] $
             Just $ NonQualIdent "CHAR"),
-    ("LEN", DeclaredProcedure False $ Just $ Identity $
-            FormalParameters [Identity $ FPSection False (pure "c") $ Identity $ TypeReference $ NonQualIdent "ARRAY"] $
+    ("LEN", DeclaredProcedure False $ Just $ (,) 0 $
+            FormalParameters [(,) 0 $ FPSection False (pure "c") $ (,) 0 $ TypeReference $ NonQualIdent "ARRAY"] $
             Just $ NonQualIdent "LONGINT"),
-    ("MAX", DeclaredProcedure True $ Just $ Identity $
-            FormalParameters [Identity $ FPSection False (pure "c") $ Identity $ TypeReference $ NonQualIdent "SET"] $
+    ("MAX", DeclaredProcedure True $ Just $ (,) 0 $
+            FormalParameters [(,) 0 $ FPSection False (pure "c") $ (,) 0 $ TypeReference $ NonQualIdent "SET"] $
             Just $ NonQualIdent "INTEGER"),
-    ("MIN", DeclaredProcedure True $ Just $ Identity $
-            FormalParameters [Identity $ FPSection False (pure "c") $ Identity $ TypeReference $ NonQualIdent "SET"] $
+    ("MIN", DeclaredProcedure True $ Just $ (,) 0 $
+            FormalParameters [(,) 0 $ FPSection False (pure "c") $ (,) 0 $ TypeReference $ NonQualIdent "SET"] $
             Just $ NonQualIdent "INTEGER"),
-    ("ODD", DeclaredProcedure False $ Just $ Identity $
-            FormalParameters [Identity $ FPSection False (pure "n") $ Identity $ TypeReference $ NonQualIdent "CHAR"] $
+    ("ODD", DeclaredProcedure False $ Just $ (,) 0 $
+            FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "CHAR"] $
             Just $ NonQualIdent "BOOLEAN"),
-    ("SIZE", DeclaredProcedure True $ Just $ Identity $
-             FormalParameters [Identity $ FPSection False (pure "n") $ Identity $ TypeReference $ NonQualIdent "CHAR"] $
+    ("SIZE", DeclaredProcedure True $ Just $ (,) 0 $
+             FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "CHAR"] $
              Just $ NonQualIdent "INTEGER"),
-    ("ORD", DeclaredProcedure False $ Just $ Identity $
-            FormalParameters [Identity $ FPSection False (pure "n") $ Identity $ TypeReference $ NonQualIdent "CHAR"] $
+    ("ORD", DeclaredProcedure False $ Just $ (,) 0 $
+            FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "CHAR"] $
             Just $ NonQualIdent "INTEGER"),
-    ("CHR", DeclaredProcedure False $ Just $ Identity $
-            FormalParameters [Identity $ FPSection False (pure "n") $ Identity $ TypeReference $ NonQualIdent "INTEGER"] $
+    ("CHR", DeclaredProcedure False $ Just $ (,) 0 $
+            FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "INTEGER"] $
             Just $ NonQualIdent "CHAR"),
-    ("SHORT", DeclaredProcedure False $ Just $ Identity $
-              FormalParameters [Identity $ FPSection False (pure "n") $ Identity $ TypeReference $ NonQualIdent "INTEGER"] $
+    ("SHORT", DeclaredProcedure False $ Just $ (,) 0 $
+              FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "INTEGER"] $
               Just $ NonQualIdent "INTEGER"),
-    ("LONG", DeclaredProcedure False $ Just $ Identity $
-             FormalParameters [Identity $ FPSection False (pure "n") $ Identity $ TypeReference $ NonQualIdent "INTEGER"] $
+    ("LONG", DeclaredProcedure False $ Just $ (,) 0 $
+             FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "INTEGER"] $
              Just $ NonQualIdent "INTEGER"),
-    ("ENTIER", DeclaredProcedure False $ Just $ Identity $
-               FormalParameters [Identity $ FPSection False (pure "n") $ Identity $ TypeReference $ NonQualIdent "REAL"] $
+    ("ENTIER", DeclaredProcedure False $ Just $ (,) 0 $
+               FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "REAL"] $
                Just $ NonQualIdent "INTEGER"),
-    ("INC", DeclaredProcedure False $ Just $ Identity $
-            FormalParameters [Identity $ FPSection False (pure "n") $ Identity $ TypeReference $ NonQualIdent "INTEGER"] Nothing),
-    ("DEC", DeclaredProcedure False $ Just $ Identity $
-            FormalParameters [Identity $ FPSection False (pure "n") $ Identity $ TypeReference $ NonQualIdent "INTEGER"] Nothing),
-    ("INCL", DeclaredProcedure False $ Just $ Identity $
-             FormalParameters [Identity $ FPSection False (pure "s") $ Identity $ TypeReference $ NonQualIdent "SET",
-                               Identity $ FPSection False (pure "n") $ Identity $ TypeReference $ NonQualIdent "INTEGER"] Nothing),
-    ("EXCL", DeclaredProcedure False $ Just $ Identity $
-             FormalParameters [Identity $ FPSection False (pure "s") $ Identity $ TypeReference $ NonQualIdent "SET",
-                               Identity $ FPSection False (pure "n") $ Identity $ TypeReference $ NonQualIdent "INTEGER"] Nothing),
-    ("COPY", DeclaredProcedure False $ Just $ Identity $
-             FormalParameters [Identity $ FPSection False (pure "s") $ Identity $ TypeReference $ NonQualIdent "ARRAY",
-                               Identity $ FPSection False (pure "n") $ Identity $ TypeReference $ NonQualIdent "ARRAY"] Nothing),
-    ("NEW", DeclaredProcedure False $ Just $ Identity $
-            FormalParameters [Identity $ FPSection False (pure "n") $ Identity $ TypeReference $ NonQualIdent "POINTER"] Nothing),
-    ("HALT", DeclaredProcedure False $ Just $ Identity $
-             FormalParameters [Identity $ FPSection False (pure "n") $ Identity $ TypeReference $ NonQualIdent "INTEGER"] Nothing)]
+    ("INC", DeclaredProcedure False $ Just $ (,) 0 $
+            FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "INTEGER"] Nothing),
+    ("DEC", DeclaredProcedure False $ Just $ (,) 0 $
+            FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "INTEGER"] Nothing),
+    ("INCL", DeclaredProcedure False $ Just $ (,) 0 $
+             FormalParameters [(,) 0 $ FPSection False (pure "s") $ (,) 0 $ TypeReference $ NonQualIdent "SET",
+                               (,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "INTEGER"] Nothing),
+    ("EXCL", DeclaredProcedure False $ Just $ (,) 0 $
+             FormalParameters [(,) 0 $ FPSection False (pure "s") $ (,) 0 $ TypeReference $ NonQualIdent "SET",
+                               (,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "INTEGER"] Nothing),
+    ("COPY", DeclaredProcedure False $ Just $ (,) 0 $
+             FormalParameters [(,) 0 $ FPSection False (pure "s") $ (,) 0 $ TypeReference $ NonQualIdent "ARRAY",
+                               (,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "ARRAY"] Nothing),
+    ("NEW", DeclaredProcedure False $ Just $ (,) 0 $
+            FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "POINTER"] Nothing),
+    ("HALT", DeclaredProcedure False $ Just $ (,) 0 $
+             FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "INTEGER"] Nothing)]
 
 -- | The set of 'Predefined' types and procedures defined in the Oberon-2 Language Report.
 predefined2 = predefined <>
    (Success <$> Map.fromList
-    [("ASSERT", DeclaredProcedure False $ Just $ Identity $
-             FormalParameters [Identity $ FPSection False (pure "s") $ Identity $ TypeReference $ NonQualIdent "ARRAY",
-                               Identity $ FPSection False (pure "n") $ Identity $ TypeReference $ NonQualIdent "ARRAY"] Nothing)])
+    [("ASSERT", DeclaredProcedure False $ Just $ (,) 0 $
+             FormalParameters [(,) 0 $ FPSection False (pure "s") $ (,) 0 $ TypeReference $ NonQualIdent "ARRAY",
+                               (,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "ARRAY"] Nothing)])
 
-exportsOfModule :: Module Identity Identity -> Scope
+exportsOfModule :: Module Placed Placed -> Scope
 exportsOfModule = fmap Success . Map.mapMaybe isExported . globalsOfModule
    where isExported (PrivateOnly, _) = Nothing
          isExported (_, binding) = Just binding
 
-globalsOfModule :: Module Identity Identity -> Map Ident (AccessMode, DeclarationRHS Identity Identity)
+globalsOfModule :: Module Placed Placed -> Map Ident (AccessMode, DeclarationRHS Placed Placed)
 globalsOfModule (Module name imports declarations _ _) =
-   Map.fromList (concatMap (declarationBinding name . runIdentity) declarations)
+   Map.fromList (concatMap (declarationBinding name . snd) declarations)
 
-unique :: (NonEmpty Error -> Error) -> ([a] -> Error) -> Ambiguous (Validation (NonEmpty Error) a)
-       -> Validation (NonEmpty Error) a
-unique _ _ (Ambiguous (x :| [])) = x
-unique inv amb (Ambiguous xs) =
+unique :: (NonEmpty Error -> Error) -> ([a] -> Error) -> NodeWrap (Validation (NonEmpty Error) a)
+       -> Validation (NonEmpty Error) (Placed a)
+unique _ _ (Compose (pos, Ambiguous (x :| []))) = (,) pos <$> x
+unique inv amb (Compose (pos, Ambiguous xs)) =
    case partitionEithers (validationToEither <$> NonEmpty.toList xs)
-   of (_, [x]) -> Success x
+   of (_, [x]) -> Success (pos, x)
       (errors, []) -> Failure (inv (sconcat $ NonEmpty.fromList errors) :| [])
       (_, multi) -> Failure (amb multi :| [])
 

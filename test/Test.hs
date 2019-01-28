@@ -1,6 +1,8 @@
+{-# Language FlexibleInstances #-}
 module Main where
 
 import Data.Either.Validation (Validation(..))
+import Data.Functor.Identity (Identity(Identity))
 import Data.List (isSuffixOf)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Text (Text, unpack)
@@ -12,7 +14,10 @@ import System.FilePath.Posix (combine)
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.HUnit (assertFailure, assertEqual, testCase)
 
-import Language.Oberon (parseAndResolveModule)
+import qualified Transformation.Rank2 as Rank2
+
+import Language.Oberon (parseAndResolveModule, Placed)
+import Language.Oberon.AST (Module)
 import Language.Oberon.Pretty ()
 import qualified Language.Oberon.Resolver as Resolver
 
@@ -44,3 +49,6 @@ prettyFile dirPath source = do
       of Failure (Resolver.UnparseableModule err :| []) -> assertFailure (unpack err)
          Failure errs -> assertFailure (show errs)
          Success mod -> return (renderStrict $ layoutPretty defaultLayoutOptions $ pretty mod)
+
+instance Pretty (Module Placed Placed) where
+   pretty m = pretty ((Identity . snd) Rank2.<$> m)

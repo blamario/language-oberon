@@ -24,6 +24,7 @@ import qualified Rank2.TH
 import qualified Transformation as Shallow
 import qualified Transformation.Deep as Deep
 import qualified Transformation.AG as AG
+import qualified Transformation.Rank2
 import Transformation.AG (Attribution(..), Atts, Inherited(..), Synthesized(..), Semantics)
 
 import qualified Language.Oberon.AST as AST
@@ -814,11 +815,14 @@ instance Rank2.Apply (AST.Module f') where
    AST.Module ident1a imports1 decls1 body1 ident1b <*> ~(AST.Module ident2a imports2 decls2 body2 ident2b) =
       AST.Module ident1a imports1 (liftA2 Rank2.apply decls1 decls2) (liftA2 Rank2.apply body1 body2) ident1b
 
-checkModules :: Environment -> Map AST.Ident (AST.Module Identity Identity) -> [Error]
+type Placed = ((,) Int)
+
+checkModules :: Environment -> Map AST.Ident (AST.Module Placed Placed) -> [Error]
 checkModules predef modules = 
-   errors (syn (TypeCheck Shallow.<$> Identity (TypeCheck Deep.<$> Modules (Identity <$> modules))
+   errors (syn (TypeCheck Shallow.<$> Identity (TypeCheck Deep.<$> Modules modules')
                 `Rank2.apply`
                 Inherited (InhTC predef)))
+   where modules' = (Identity . ((Identity . snd) Transformation.Rank2.<$>)) <$> modules
 
 predefined, predefined2 :: Environment
 -- | The set of 'Predefined' types and procedures defined in the Oberon Language Report.
