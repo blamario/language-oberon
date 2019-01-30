@@ -71,15 +71,17 @@ deriving instance (Typeable f, Typeable f', Data (f (Designator f' f')),
                    Data (f (Element f' f')), Data (f (Expression f' f'))) => Data (Expression f' f)
 deriving instance (Show (f (Designator f' f')),
                    Show (f (Element f' f')), Show (f (Expression f' f'))) => Show (Expression f' f)
+deriving instance (Eq (f (Designator f' f')), Eq (f (Element f' f')), Eq (f (Expression f' f'))) => Eq (Expression f' f)
 
 data RelOp = Equal | Unequal | Less | LessOrEqual | Greater | GreaterOrEqual | In | Is
-   deriving (Data, Show)
+   deriving (Data, Eq, Show)
 
 data Element f' f = Element (f (Expression f' f'))
                   | Range (f (Expression f' f')) (f (Expression f' f'))
 
 deriving instance (Typeable f, Typeable f', Data (f (Expression f' f'))) => Data (Element f' f)
 deriving instance Show (f (Expression f' f')) => Show (Element f' f)
+deriving instance Eq (f (Expression f' f')) => Eq (Element f' f)
 
 data Designator f' f = Variable QualIdent
                      | Field (f (Designator f' f')) Ident 
@@ -90,6 +92,7 @@ data Designator f' f = Variable QualIdent
 deriving instance (Typeable f, Typeable f', Data (f (Designator f' f')), Data (f (Expression f' f'))) =>
                   Data (Designator f' f)
 deriving instance (Show (f (Designator f' f')), Show (f (Expression f' f'))) => Show (Designator f' f)
+deriving instance (Eq (f (Designator f' f')), Eq (f (Expression f' f'))) => Eq (Designator f' f)
 
 data Type f' f = TypeReference QualIdent 
                | ArrayType [f (ConstExpression f' f')] (f (Type f' f'))
@@ -160,7 +163,7 @@ data Statement f' f = EmptyStatement
                           (Maybe (f (Expression f' f'))) (f (StatementSequence f' f'))  -- Oberon2
                     | Loop (f (StatementSequence f' f'))
                     | With (NonEmpty (f (WithAlternative f' f'))) (Maybe (f (StatementSequence f' f')))
-                    | Exit 
+                    | Exit
                     | Return (Maybe (f (Expression f' f')))
 
 deriving instance (Typeable f, Typeable f', Data (f (Designator f' f')), Data (f (Expression f' f')),

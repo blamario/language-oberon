@@ -74,11 +74,11 @@ instance Eq Type where
   _ == _ = False
 
 instance Show Type where
-  show (NominalType q t) = "Nominal " ++ show q ++ " " ++ show t
+  show (NominalType q t) = "Nominal " ++ show q ++ " (" ++ shows t ")"
   show (RecordType ancestry fields) = "RecordType " ++ show ancestry ++ show (fst <$> Map.toList fields)
-  show (ArrayType dimensions itemType) = "ArrayType " ++ show dimensions ++ " " ++ show itemType
+  show (ArrayType dimensions itemType) = "ArrayType " ++ show dimensions ++ " (" ++ shows itemType ")"
   show (PointerType targetType) = "PointerType " ++ show targetType
-  show (ProcedureType parameters result) = "ProcedureType " ++ show parameters ++ " " ++ show result
+  show (ProcedureType parameters result) = "ProcedureType (" ++ show parameters ++ "): " ++ show result
   show (IntegerType n) = "IntegerType " ++ show n
   show (StringType len) = "StringType " ++ show len
   show NilType = "NilType"
@@ -380,12 +380,14 @@ instance Attribution TypeCheck AST.Statement (Int, AST.Statement (Semantics Type
    attribution TypeCheck (pos, AST.ProcedureCall _proc parameters) (inherited, AST.ProcedureCall procedure' parameters') =
       (Synthesized SynTC{errors= case syn procedure'
                                  of SynTCDes{designatorErrors= [],
-                                             designatorType= t} -> {-# SCC "ProcedureCall" #-} procedureErrors t
+                                             designatorType= t} -> procedureErrors t
                                     SynTCDes{designatorErrors= errs} -> errs
                                       <> foldMap (foldMap (expressionErrors . syn)) parameters'},
        AST.ProcedureCall (Inherited $ inh inherited) (Just [Inherited $ inh inherited]))
      where procedureErrors (ProcedureType formalTypes Nothing)
-             | length formalTypes /= maybe 0 length parameters =
+             | length formalTypes /= maybe 0 length parameters,
+               not (length formalTypes == 2 && (length <$> parameters) == Just 1
+                     && designatorSelf (syn procedure') == AST.Variable (AST.NonQualIdent "ASSERT")) =
                  [(pos, ArgumentCountMismatch (length formalTypes) $ maybe 0 length parameters)]
              | otherwise = concat (zipWith (parameterCompatible pos) formalTypes
                                    $ maybe [] (inferredType . syn <$>) parameters')
@@ -449,9 +451,12 @@ instance Attribution TypeCheck AST.CaseLabels (Int, AST.CaseLabels (Semantics Ty
        AST.LabelRange (Inherited $ inh inherited) (Inherited $ inh inherited))
 
 instance Attribution TypeCheck AST.Expression (Int, AST.Expression (Semantics TypeCheck) (Semantics TypeCheck)) where
-   attribution TypeCheck (pos, _) (inherited, AST.Relation op left right) =
+   attribution TypeCheck (pos, AST.Relation op _ _) (inherited, AST.Relation _op left right) =
       (Synthesized SynTCExp{expressionErrors= case expressionErrors (syn left) <> expressionErrors (syn right)
-                                              of [] | inferredType (syn left) == inferredType (syn right) -> []
+                                              of [] | t1 == t2 -> []
+                                                    | AST.Is <- op, [] <- assignmentCompatible pos t1 t2 -> []
+                                                    | equality op, [] <- assignmentCompatible pos t1 t2 -> []
+                                                    | equality op, [] <- assignmentCompatible pos t2 t1 -> []
                                                     | otherwise -> [(pos,
                                                                      TypeMismatch
                                                                       (inferredType $ syn left)
@@ -459,6 +464,11 @@ instance Attribution TypeCheck AST.Expression (Int, AST.Expression (Semantics Ty
                                                  errs -> errs,
                             inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing},
        AST.Relation op (Inherited $ inh inherited) (Inherited $ inh inherited))
+      where t1 = inferredType (syn left)
+            t2 = inferredType (syn right)
+            equality AST.Equal = True
+            equality AST.Unequal = True
+            equality _ = False
    attribution TypeCheck (pos, _) (inherited, AST.Positive expr) =
       (Synthesized SynTCExp{expressionErrors= unaryNumericOperatorErrors pos (syn expr),
                             inferredType= inferredType (syn expr)},
@@ -885,7 +895,7 @@ predefined = Map.fromList $ map (first AST.NonQualIdent) $
 -- | The set of 'Predefined' types and procedures defined in the Oberon-2 Language Report.
 predefined2 = predefined <>
    Map.fromList (first AST.NonQualIdent <$>
-                 [("ASSERT", ProcedureType [(False, NominalType (AST.NonQualIdent "BOOL") Nothing),
+                 [("ASSERT", ProcedureType [(False, NominalType (AST.NonQualIdent "BOOLEAN") Nothing),
                                             (False, NominalType (AST.NonQualIdent "INTEGER") Nothing)] Nothing)])
 
 $(mconcat <$> mapM Rank2.TH.unsafeDeriveApply
