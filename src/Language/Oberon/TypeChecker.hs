@@ -247,7 +247,9 @@ instance Attribution TypeCheck AST.Declaration (Int, AST.Declaration (Semantics 
                (inherited,
                 AST.ProcedureDeclaration (AST.ProcedureHeading _receiver _indirect _ signature') 
                  body@(AST.ProcedureBody declarations statements) _name') =
-      (Synthesized SynTCMod{moduleErrors= foldMap (signatureErrors . syn) signature',
+      (Synthesized SynTCMod{moduleErrors= foldMap (signatureErrors . syn) signature'
+                                          <> foldMap (moduleErrors . syn) declarations
+                                          <> foldMap (errors . syn) statements,
                             moduleEnv= case receiver
                                        of Just (_, _, typeName)
                                              | Just targetName <- Map.lookup typeName (snd $ inh inherited) ->
@@ -258,7 +260,7 @@ instance Attribution TypeCheck AST.Declaration (Int, AST.Declaration (Semantics 
                             pointerTargets= mempty},
        AST.ProcedureDeclaration
           (AST.ProcedureHeading receiver indirect namedef (Inherited (fst $ inh inherited) <$ signature))
-          (AST.ProcedureBody [Inherited (localInherited, mempty)] (Inherited localInherited <$ statements))
+          (AST.ProcedureBody [Inherited (bodyInherited, mempty)] (Just $ Inherited localInherited))
           name')
      where receiverEnv (_, formalName, typeName) =
              foldMap (Map.singleton $ AST.NonQualIdent formalName) (Map.lookup (AST.NonQualIdent typeName) 
@@ -273,9 +275,10 @@ instance Attribution TypeCheck AST.Declaration (Int, AST.Declaration (Semantics 
                 Just (NominalType _ (Just RecordType{})) -> []
                 Just (NominalType _ (Just (PointerType RecordType{}))) -> []
                 Just t -> [NonRecordType t]
-           localInherited = InhTC (foldMap receiverEnv receiver
-                                   `Map.union` foldMap (signatureEnv . syn) signature'
-                                   `Map.union` env (fst $ inh inherited))
+           localInherited = InhTC (foldMap (moduleEnv . syn) declarations <> env bodyInherited)
+           bodyInherited = InhTC (foldMap receiverEnv receiver
+                                  `Map.union` foldMap (signatureEnv . syn) signature'
+                                  `Map.union` env (fst $ inh inherited))
    attribution TypeCheck (pos, AST.ForwardDeclaration namedef@(AST.IdentDef name _) signature)
                (inherited, AST.ForwardDeclaration _namedef signature') =
       (Synthesized SynTCMod{moduleErrors= foldMap (signatureErrors . syn) signature',
