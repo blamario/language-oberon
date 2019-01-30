@@ -395,12 +395,12 @@ instance Attribution TypeCheck AST.Statement (Int, AST.Statement (Semantics Type
            procedureErrors t = [(pos, NonProcedureType t)]
    attribution TypeCheck self (inherited, AST.If branches fallback) =
       (Synthesized SynTC{errors= foldMap (errors . syn) branches <> foldMap (errors . syn) fallback},
-       AST.If (pure $ Inherited $ inh inherited) (Inherited (inh inherited) <$ fallback))
+       AST.If (pure $ Inherited $ inh inherited) (Just $ Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.CaseStatement value branches fallback) =
       (Synthesized SynTC{errors= expressionErrors (syn value) <> foldMap (errors . syn) branches
                                  <> foldMap (errors . syn) fallback},
        AST.CaseStatement (Inherited $ inh inherited) (pure $ Inherited $ inh inherited)
-                         (Inherited (inh inherited) <$ fallback))
+                         (Just $ Inherited $ inh inherited))
    attribution TypeCheck (pos, _) (inherited, AST.While condition body) =
       (Synthesized SynTC{errors= booleanExpressionErrors pos (syn condition) <> errors (syn body)},
        AST.While (Inherited $ inh inherited) (Inherited $ inh inherited))
@@ -410,7 +410,7 @@ instance Attribution TypeCheck AST.Statement (Int, AST.Statement (Semantics Type
    attribution TypeCheck (pos, AST.For counter _start _end _step _body) (inherited, AST.For _counter start end step body) =
       (Synthesized SynTC{errors= integerExpressionErrors pos (syn start) <> integerExpressionErrors pos (syn end)
                                  <> foldMap (integerExpressionErrors pos . syn) step <> errors (syn body)},
-       AST.For counter (Inherited $ inh inherited) (Inherited $ inh inherited) (Inherited (inh inherited) <$ step)
+       AST.For counter (Inherited $ inh inherited) (Inherited $ inh inherited) (Just $ Inherited $ inh inherited)
                        (Inherited $ InhTC $
                         Map.insert (AST.NonQualIdent counter) (NominalType (AST.NonQualIdent "INTEGER") Nothing)
                         $ env $ inh inherited))
@@ -418,14 +418,15 @@ instance Attribution TypeCheck AST.Statement (Int, AST.Statement (Semantics Type
                                                             AST.Loop (Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.With branches fallback) =
       (Synthesized SynTC{errors= foldMap (errors . syn) branches <> foldMap (errors . syn) fallback},
-       AST.With (pure $ Inherited $ inh inherited) (Inherited (inh inherited) <$ fallback))
+       AST.With (pure $ Inherited $ inh inherited) (Just $ Inherited $ inh inherited))
    attribution TypeCheck self (inherited, AST.Exit) = (Synthesized SynTC{errors= []}, AST.Exit)
    attribution TypeCheck self (inherited, AST.Return value) =
       (Synthesized SynTC{errors= foldMap (expressionErrors . syn) value}, 
-       AST.Return (Inherited (inh inherited) <$ value))
+       AST.Return (Just $ Inherited $ inh inherited))
 
 instance Attribution TypeCheck AST.WithAlternative (Int, AST.WithAlternative (Semantics TypeCheck) (Semantics TypeCheck)) where
-   attribution TypeCheck (pos, _) (inherited, AST.WithAlternative var subtype body) = {-# SCC "WithAlternative" #-}
+   attribution TypeCheck (pos, AST.WithAlternative var subtype _body)
+                         (inherited, AST.WithAlternative _var _subtype body) =
       (Synthesized SynTC{errors= case (Map.lookup var (env $ inh inherited),
                                        Map.lookup subtype (env $ inh inherited))
                                  of (Just supertype, Just subtypeDef) -> assignmentCompatible pos supertype subtypeDef
