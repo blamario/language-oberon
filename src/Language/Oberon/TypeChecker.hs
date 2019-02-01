@@ -46,6 +46,7 @@ data Type = NominalType AST.QualIdent (Maybe Type)
 data ErrorType = ArgumentCountMismatch Int Int
                | DuplicateBinding AST.Ident
                | ExtraDimensionalIndex Type
+               | IncomparableTypes Type Type
                | IncompatibleTypes Type Type
                | TooSmallArrayType Type
                | OpenArrayVariable
@@ -67,7 +68,9 @@ data ErrorType = ArgumentCountMismatch Int Int
 type Error = (Int, ErrorType)
 
 instance Eq Type where
-  NominalType q1 _ == NominalType q2 _ = q1 == q2
+  NominalType q1 (Just t1) == t2@(NominalType q2 _) = q1 == q2 || t1 == t2
+  t1@(NominalType q1 _) == NominalType q2 (Just t2) = q1 == q2 || t1 == t2
+  NominalType q1 Nothing == NominalType q2 Nothing = q1 == q2
   ArrayType [] t1 == ArrayType [] t2 = t1 == t2
   ProcedureType _ p1 r1 == ProcedureType _ p2 r2 = r1 == r2 && p1 == p2
   StringType len1 == StringType len2 = len1 == len2
@@ -462,13 +465,12 @@ instance Attribution TypeCheck AST.Expression (Int, AST.Expression (Semantics Ty
    attribution TypeCheck (pos, AST.Relation op _ _) (inherited, AST.Relation _op left right) =
       (Synthesized SynTCExp{expressionErrors= case expressionErrors (syn left) <> expressionErrors (syn right)
                                               of [] | t1 == t2 -> []
-                                                    | AST.Is <- op, [] <- assignmentCompatible pos t1 t2 -> []
+                                                    | AST.Is <- op -> assignmentCompatible pos t1 t2
+                                                    | AST.In <- op -> membershipCompatible (ultimate t1) (ultimate t2)
                                                     | equality op, [] <- assignmentCompatible pos t1 t2 -> []
                                                     | equality op, [] <- assignmentCompatible pos t2 t1 -> []
-                                                    | otherwise -> [(pos,
-                                                                     TypeMismatch
-                                                                      (inferredType $ syn left)
-                                                                      (inferredType $ syn right))]
+                                                    | op /= AST.Is -> comparable (ultimate t1) (ultimate t2)
+                                                    | otherwise -> [(pos, TypeMismatch t1 t2)]
                                                  errs -> errs,
                             inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing},
        AST.Relation op (Inherited $ inh inherited) (Inherited $ inh inherited))
@@ -477,6 +479,23 @@ instance Attribution TypeCheck AST.Expression (Int, AST.Expression (Semantics Ty
             equality AST.Equal = True
             equality AST.Unequal = True
             equality _ = False
+            comparable (NominalType (AST.NonQualIdent "BOOLEAN") Nothing)
+                       (NominalType (AST.NonQualIdent "BOOLEAN") Nothing) = []
+            comparable (NominalType (AST.NonQualIdent "CHAR") Nothing)
+                       (NominalType (AST.NonQualIdent "CHAR") Nothing) = []
+            comparable StringType{} StringType{} = []
+            comparable StringType{} (ArrayType _ (NominalType (AST.NonQualIdent "CHAR") Nothing)) = []
+            comparable (ArrayType _ (NominalType (AST.NonQualIdent "CHAR") Nothing)) StringType{} = []
+            comparable (ArrayType _ (NominalType (AST.NonQualIdent "CHAR") Nothing))
+                       (ArrayType _ (NominalType (AST.NonQualIdent "CHAR") Nothing)) = []
+            comparable (NominalType (AST.NonQualIdent t1) Nothing)
+                       (NominalType (AST.NonQualIdent t2) Nothing) | isNumerical t1 && isNumerical t2 = []
+            comparable (NominalType (AST.NonQualIdent t1) Nothing) IntegerType{} | isNumerical t1 = []
+            comparable IntegerType{} (NominalType (AST.NonQualIdent t2) Nothing) | isNumerical t2 = []
+            comparable t1 t2 = [(pos, IncomparableTypes t1 t2)]
+            membershipCompatible IntegerType{} (NominalType (AST.NonQualIdent "SET") Nothing) = []
+            membershipCompatible (NominalType (AST.NonQualIdent t) Nothing)
+                                 (NominalType (AST.NonQualIdent "SET") Nothing) | isNumerical t = []
    attribution TypeCheck (pos, _) (inherited, AST.Positive expr) =
       (Synthesized SynTCExp{expressionErrors= unaryNumericOperatorErrors pos (syn expr),
                             inferredType= inferredType (syn expr)},
@@ -678,7 +697,7 @@ unaryNumericOperatorErrors :: Int -> SynTCExp -> [Error]
 unaryNumericOperatorErrors _ SynTCExp{expressionErrors= [], inferredType= IntegerType{}} = []
 unaryNumericOperatorErrors _ SynTCExp{expressionErrors= [],
                                       inferredType= NominalType (AST.NonQualIdent name) Nothing}
-  | name `elem` numericTypeNames = []
+  | isNumerical name = []
 unaryNumericOperatorErrors pos SynTCExp{expressionErrors= [], inferredType= t} = [(pos, NonNumericType t)]
 unaryNumericOperatorErrors _ SynTCExp{expressionErrors= errs} = errs
 
@@ -690,15 +709,15 @@ binaryNumericOperatorErrors :: Int -> SynTCExp -> SynTCExp -> [Error]
 binaryNumericOperatorErrors _
   SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent name1) Nothing}
   SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent name2) Nothing}
-  | name1 `elem` numericTypeNames, name2 `elem` numericTypeNames = []
+  | isNumerical name1, isNumerical name2 = []
 binaryNumericOperatorErrors _
   SynTCExp{expressionErrors= [], inferredType= IntegerType{}}
   SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent name) Nothing}
-  | name `elem` numericTypeNames = []
+  | isNumerical name = []
 binaryNumericOperatorErrors _
   SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent name) Nothing}
   SynTCExp{expressionErrors= [], inferredType= IntegerType{}}
-  | name `elem` numericTypeNames = []
+  | isNumerical name = []
 binaryNumericOperatorErrors _
   SynTCExp{expressionErrors= [], inferredType= IntegerType{}}
   SynTCExp{expressionErrors= [], inferredType= IntegerType{}} = []
@@ -764,7 +783,7 @@ assignmentCompatible pos expected actual
      Just index2 <- List.elemIndex name2 numericTypeNames, 
      index1 >= index2 = []
    | NominalType (AST.NonQualIdent name) Nothing <- expected,
-     IntegerType{} <- actual, name `elem` numericTypeNames = []
+     IntegerType{} <- actual, isNumerical name = []
    | expected == NominalType (AST.NonQualIdent "BASIC TYPE") Nothing,
      NominalType (AST.NonQualIdent q) Nothing <- actual,
      q `elem` ["BOOLEAN", "CHAR", "SHORTINT", "INTEGER", "LONGINT", "REAL", "LONGREAL", "SET"] = []
@@ -772,6 +791,8 @@ assignmentCompatible pos expected actual
    | expected == NominalType (AST.NonQualIdent "POINTER") Nothing, NominalType _ (Just t) <- actual =
        assignmentCompatible pos expected t
    | expected == NominalType (AST.NonQualIdent "CHAR") Nothing, actual == StringType 1 = []
+   | ReceiverType t <- actual = assignmentCompatible pos expected t
+   | ReceiverType t <- expected = assignmentCompatible pos t actual
    | NilType <- actual, PointerType{} <- expected = []
    | NilType <- actual, ProcedureType{} <- expected = []
    | NilType <- actual, NominalType _ (Just t) <- expected = assignmentCompatible pos t actual
@@ -788,6 +809,11 @@ RecordType ancestry _ `extends` NominalType q _ = q `elem` ancestry
 NominalType _ (Just t1) `extends` t2 = t1 `extends` t2
 t1 `extends` t2 = False -- error (show (t1, t2))
 
+ultimate :: Type -> Type
+ultimate (NominalType _ (Just t)) = ultimate t
+ultimate t = t
+
+isNumerical t = t `elem` numericTypeNames
 numericTypeNames = ["SHORTINT", "INTEGER", "LONGINT", "REAL", "LONGREAL"]
 
 PointerType t1 `targetExtends` PointerType t2 = t1 `extends` t2
