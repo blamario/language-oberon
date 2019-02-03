@@ -519,11 +519,11 @@ instance Attribution TypeCheck AST.Expression (Int, AST.Expression (Semantics Ty
                             inferredType= unaryNumericOperatorType negate (syn expr)},
        AST.Negative (Inherited $ inh inherited))
    attribution TypeCheck (pos, _) (inherited, AST.Add left right) =
-      (Synthesized SynTCExp{expressionErrors= binaryNumericOperatorErrors pos (syn left) (syn right),
+      (Synthesized SynTCExp{expressionErrors= binarySetOrNumericOperatorErrors pos (syn left) (syn right),
                             inferredType= binaryNumericOperatorType div (syn left) (syn right)},
        AST.Add (Inherited $ inh inherited) (Inherited $ inh inherited))
    attribution TypeCheck (pos, _) (inherited, AST.Subtract left right) =
-      (Synthesized SynTCExp{expressionErrors= binaryNumericOperatorErrors pos (syn left) (syn right),
+      (Synthesized SynTCExp{expressionErrors= binarySetOrNumericOperatorErrors pos (syn left) (syn right),
                             inferredType= binaryNumericOperatorType div (syn left) (syn right)},
        AST.Subtract (Inherited $ inh inherited) (Inherited $ inh inherited))
    attribution TypeCheck (pos, _) (inherited, AST.Or left right) =
@@ -531,7 +531,7 @@ instance Attribution TypeCheck AST.Expression (Int, AST.Expression (Semantics Ty
                             inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing},
        AST.Or (Inherited $ inh inherited) (Inherited $ inh inherited))
    attribution TypeCheck (pos, _) (inherited, AST.Multiply left right) =
-      (Synthesized SynTCExp{expressionErrors= binaryNumericOperatorErrors pos (syn left) (syn right),
+      (Synthesized SynTCExp{expressionErrors= binarySetOrNumericOperatorErrors pos (syn left) (syn right),
                             inferredType= binaryNumericOperatorType div (syn left) (syn right)},
        AST.Multiply (Inherited $ inh inherited) (Inherited $ inh inherited))
    attribution TypeCheck (pos, _) (inherited, AST.Divide left right) =
@@ -541,6 +541,10 @@ instance Attribution TypeCheck AST.Expression (Int, AST.Expression (Semantics Ty
                                             inferredType= NominalType (AST.NonQualIdent "REAL") Nothing},
                                    SynTCExp{expressionErrors= [],
                                             inferredType= NominalType (AST.NonQualIdent "REAL") Nothing}) -> []
+                                  (SynTCExp{expressionErrors= [],
+                                            inferredType= NominalType (AST.NonQualIdent "SET") Nothing},
+                                   SynTCExp{expressionErrors= [],
+                                            inferredType= NominalType (AST.NonQualIdent "SET") Nothing}) -> []
                                   (SynTCExp{expressionErrors= [], inferredType= t1},
                                    SynTCExp{expressionErrors= [], inferredType= t2})
                                     | t1 == t2 -> [(pos, UnrealType t1)]
@@ -729,27 +733,28 @@ unaryNumericOperatorType :: (Int -> Int) -> SynTCExp -> Type
 unaryNumericOperatorType f SynTCExp{inferredType= IntegerType x} = IntegerType (f x)
 unaryNumericOperatorType _ SynTCExp{inferredType= t} = t
 
-binaryNumericOperatorErrors :: Int -> SynTCExp -> SynTCExp -> [Error]
-binaryNumericOperatorErrors _
+binarySetOrNumericOperatorErrors :: Int -> SynTCExp -> SynTCExp -> [Error]
+binarySetOrNumericOperatorErrors _
   SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent name1) Nothing}
   SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent name2) Nothing}
   | isNumerical name1, isNumerical name2 = []
-binaryNumericOperatorErrors _
+  | name1 == "SET", name2 == "SET" = []
+binarySetOrNumericOperatorErrors _
   SynTCExp{expressionErrors= [], inferredType= IntegerType{}}
   SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent name) Nothing}
   | isNumerical name = []
-binaryNumericOperatorErrors _
+binarySetOrNumericOperatorErrors _
   SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent name) Nothing}
   SynTCExp{expressionErrors= [], inferredType= IntegerType{}}
   | isNumerical name = []
-binaryNumericOperatorErrors _
+binarySetOrNumericOperatorErrors _
   SynTCExp{expressionErrors= [], inferredType= IntegerType{}}
   SynTCExp{expressionErrors= [], inferredType= IntegerType{}} = []
-binaryNumericOperatorErrors pos SynTCExp{expressionErrors= [], inferredType= t1}
+binarySetOrNumericOperatorErrors pos SynTCExp{expressionErrors= [], inferredType= t1}
                                 SynTCExp{expressionErrors= [], inferredType= t2}
   | t1 == t2 = [(pos, NonNumericType t1)]
   | otherwise = [(pos, TypeMismatch t1 t2)]
-binaryNumericOperatorErrors _ SynTCExp{expressionErrors= errs1} SynTCExp{expressionErrors= errs2} = errs1 <> errs2
+binarySetOrNumericOperatorErrors _ SynTCExp{expressionErrors= errs1} SynTCExp{expressionErrors= errs2} = errs1 <> errs2
 
 binaryNumericOperatorType :: (Int -> Int -> Int) -> SynTCExp -> SynTCExp -> Type
 binaryNumericOperatorType f SynTCExp{inferredType= IntegerType x} SynTCExp{inferredType= IntegerType y} =
