@@ -612,10 +612,12 @@ instance Attribution TypeCheck AST.Expression (Int, AST.Expression (Semantics Ty
                                               <> foldMap (expressionErrors . syn) parameters',
                             inferredType= case syn designator
                                           of SynTCDes{designatorSelf= d,
-                                                      designatorType= ProcedureType _ _ (Just returnType)}
-                                               | IntegerType{} <- returnType ->
-                                                 IntegerType (callValue d $ inferredType . syn <$> parameters')
-                                               | otherwise -> returnType
+                                                      designatorType= t}
+                                               | ProcedureType _ _ (Just returnType) <- ultimate t ->
+                                                   case returnType
+                                                   of IntegerType{} ->
+                                                        IntegerType (callValue d $ inferredType . syn <$> parameters')
+                                                      _ -> returnType
                                              _ -> UnknownType},
        AST.FunctionCall (Inherited $ inh inherited) [Inherited $ inh inherited])
      where callValue (AST.Variable (AST.NonQualIdent "MAX"))
@@ -801,10 +803,14 @@ binaryBooleanOperatorErrors pos
 binaryBooleanOperatorErrors _ SynTCExp{expressionErrors= errs1} SynTCExp{expressionErrors= errs2} = errs1 <> errs2
 
 parameterCompatible :: Int -> (Bool, Type) -> Type -> [Error]
+parameterCompatible _ (_, expected@(ArrayType [] _)) actual
+  | arrayCompatible expected actual = []
 parameterCompatible pos (True, expected) actual
-   | expected == actual = []
-   | otherwise = [(pos, UnequalTypes expected actual)]
-parameterCompatible pos (False, expected) actual = assignmentCompatible pos expected actual
+  | expected == actual = []
+  | otherwise = [(pos, UnequalTypes expected actual)]
+parameterCompatible pos (False, expected) actual
+  | NominalType (AST.NonQualIdent "ARRAY") Nothing <- expected, ArrayType{} <- actual = []
+  | otherwise = assignmentCompatible pos expected actual
 
 assignmentCompatible :: Int -> Type -> Type -> [Error]
 assignmentCompatible pos expected actual
@@ -828,13 +834,18 @@ assignmentCompatible pos expected actual
    | NilType <- actual, PointerType{} <- expected = []
    | NilType <- actual, ProcedureType{} <- expected = []
    | NilType <- actual, NominalType _ (Just t) <- expected = assignmentCompatible pos t actual
-   | ArrayType [] (NominalType (AST.NonQualIdent "CHAR") Nothing) <- expected, StringType{} <- actual = []
+--   | ArrayType [] (NominalType (AST.NonQualIdent "CHAR") Nothing) <- expected, StringType{} <- actual = []
    | ArrayType [m] (NominalType (AST.NonQualIdent "CHAR") Nothing) <- expected, StringType n <- actual = 
       if m < n then [(pos, TooSmallArrayType expected)] else []
-   | NominalType (AST.NonQualIdent "ARRAY") Nothing <- expected, ArrayType{} <- actual = []
    | targetExtends actual expected = []
    | NominalType _ (Just t) <- expected, ProcedureType{} <- actual = assignmentCompatible pos t actual
    | otherwise = [(pos, IncompatibleTypes expected actual)]
+
+arrayCompatible (ArrayType [] t1) (ArrayType _ t2) = t1 == t2 || arrayCompatible t1 t2
+arrayCompatible (ArrayType [] (NominalType (AST.NonQualIdent "CHAR") Nothing)) StringType{} = True
+arrayCompatible (NominalType _ (Just t1)) t2 = arrayCompatible t1 t2
+arrayCompatible t1 (NominalType _ (Just t2)) = arrayCompatible t1 t2
+arrayCompatible _ _ = False
 
 extends, targetExtends :: Type -> Type -> Bool
 t1 `extends` t2 | t1 == t2 = True
