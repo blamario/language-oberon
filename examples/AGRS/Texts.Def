@@ -38,7 +38,27 @@ that part of a text changed. *)
    pos: LONGINT; (* Offset of Finder in text. *)
   END;
 
+  Handler* = PROCEDURE (e: Elem; VAR msg: ElemMsg);
+  ElemMsg* = RECORD END ;
+
+  Run = POINTER TO RunDesc;
+  RunDesc = RECORD
+   prev, next: Run;
+   len: LONGINT;
+   fnt: Fonts.Font;
+   col, voff: SHORTINT;
+   ascii: BOOLEAN
+  END ;
+
+  Elem* = POINTER TO ElemDesc;
+  ElemDesc* = RECORD (RunDesc)
+   W*, H*: LONGINT;
+   handle*: Handler;
+   base: Text
+  END ;
+
   Reader = RECORD (* Character-wise reader of a text stream. *)
+   elem*: Elem;
    lib: Objects.Library; (* Library of last character/object read. *)
    col: SHORTINT; (* Color index of last character read. *)
    voff: SHORTINT; (* vertical offset of last character read. *)

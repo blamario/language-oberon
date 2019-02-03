@@ -611,29 +611,32 @@ instance Attribution TypeCheck AST.Expression (Int, AST.Expression (Semantics Ty
                                                  SynTCDes{designatorErrors= errs} -> errs
                                               <> foldMap (expressionErrors . syn) parameters',
                             inferredType= case syn designator
-                                          of SynTCDes{designatorSelf= d,
+                                          of SynTCDes{designatorSelf= AST.Variable (AST.QualIdent "SYSTEM" name)}
+                                               | Just t <- systemCallType name (inferredType . syn <$> parameters') -> t
+                                             SynTCDes{designatorSelf= d,
                                                       designatorType= t}
                                                | ProcedureType _ _ (Just returnType) <- ultimate t ->
                                                    case returnType
-                                                   of IntegerType{} ->
-                                                        IntegerType (callValue d $ inferredType . syn <$> parameters')
+                                                   of UnknownType -> builtinType d (inferredType . syn <$> parameters')
                                                       _ -> returnType
                                              _ -> UnknownType},
        AST.FunctionCall (Inherited $ inh inherited) [Inherited $ inh inherited])
-     where callValue (AST.Variable (AST.NonQualIdent "MAX"))
-                     [NominalType (AST.NonQualIdent t) Nothing] =
-             case t
-             of "SET" -> 63
-                "SHORTINT" -> 2^15-1
-                "INTEGER" -> 2^31-1
-                "LONGLINT" -> 2^63-1
-           callValue (AST.Variable (AST.NonQualIdent "MIN"))
-                     [NominalType (AST.NonQualIdent t) Nothing] =
-             case t
-             of "SET" -> 0
-                "SHORTINT" -> -2^15
-                "INTEGER" -> -2^31
-                "LONGLINT" -> -2^63
+     where builtinType (AST.Variable (AST.NonQualIdent "MAX")) [t@(NominalType (AST.NonQualIdent name) Nothing)] =
+             case name
+             of "SET" -> IntegerType 63
+                "SHORTINT" -> IntegerType (2^15-1)
+                "INTEGER" -> IntegerType (2^31-1)
+                "LONGINT" -> IntegerType (2^63-1)
+                _ -> t
+           builtinType (AST.Variable (AST.NonQualIdent "MIN")) [t@(NominalType (AST.NonQualIdent name) Nothing)] =
+             case name
+             of "SET" -> IntegerType 0
+                "SHORTINT" -> IntegerType (-2^15)
+                "INTEGER" -> IntegerType (-2^31)
+                "LONGINT" -> IntegerType (-2^63)
+                _ -> t
+           systemCallType "VAL" [t1, t2] = Just t1
+           systemCallType _ _ = Nothing
    attribution TypeCheck (pos, _) (inherited, AST.Not expr) =
       (Synthesized SynTCExp{expressionErrors= booleanExpressionErrors pos (syn expr),
                             inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing},
@@ -952,8 +955,8 @@ predefined = Map.fromList $ map (first AST.NonQualIdent) $
             Just $ NominalType (AST.NonQualIdent "CHAR") Nothing),
     ("LEN", ProcedureType False [(False, NominalType (AST.NonQualIdent "ARRAY") Nothing)] $
             Just $ NominalType (AST.NonQualIdent "LONGINT") Nothing),
-    ("MAX", ProcedureType False [(False, NominalType (AST.NonQualIdent "BASIC TYPE") Nothing)] $ Just $ IntegerType 0),
-    ("MIN", ProcedureType False [(False, NominalType (AST.NonQualIdent "BASIC TYPE") Nothing)] $ Just $ IntegerType 0),
+    ("MAX", ProcedureType False [(False, NominalType (AST.NonQualIdent "BASIC TYPE") Nothing)] $ Just UnknownType),
+    ("MIN", ProcedureType False [(False, NominalType (AST.NonQualIdent "BASIC TYPE") Nothing)] $ Just UnknownType),
     ("ODD", ProcedureType False [(False, NominalType (AST.NonQualIdent "CHAR") Nothing)] $
             Just $ NominalType (AST.NonQualIdent "BOOLEAN") Nothing),
     ("SIZE", ProcedureType False [(False, NominalType (AST.NonQualIdent "CHAR") Nothing)] $
