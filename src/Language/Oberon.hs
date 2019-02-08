@@ -36,7 +36,7 @@ resolvePositions :: (p ~ Grammar.NodeWrap, q ~ NodeWrap, Deep.Functor (Rank2.Map
 resolvePositions src t = resolvePosition src Rank2.<$> t
 
 resolvePosition :: Text -> Grammar.NodeWrap a -> NodeWrap a
-resolvePosition src (Compose (pos, a)) = Compose (positionOffset pos src, a)
+resolvePosition src = \(Compose (pos, a))-> Compose (positionOffset src pos, a)
 
 moduleGrammar o2 = if o2 then Grammar.oberon2Grammar else Grammar.oberonGrammar
 definitionGrammar o2 = if o2 then Grammar.oberon2DefinitionGrammar else Grammar.oberonDefinitionGrammar
