@@ -2,7 +2,7 @@
 
 module Main where
 
-import Language.Oberon (Placed, parseAndResolveModule, resolvePosition, resolvePositions)
+import Language.Oberon (Placed, LanguageVersion(Oberon1, Oberon2), parseAndResolveModule, resolvePosition, resolvePositions)
 import Language.Oberon.AST (Module(..), StatementSequence, Statement, Expression)
 import qualified Language.Oberon.Grammar as Grammar
 import qualified Language.Oberon.Resolver as Resolver
@@ -44,7 +44,7 @@ data Output = Plain | Pretty Int | Tree
 
 data Opts = Opts
     { optsMode        :: GrammarMode
-    , optsOberon2     :: Bool
+    , optsVersion     :: LanguageVersion
     , optsIndex       :: Int
     , optsOutput      :: Output
     , optsInclude     :: Maybe FilePath
@@ -62,7 +62,9 @@ main = execParser opts >>= main'
     p :: Parser Opts
     p = Opts
         <$> mode
-        <*> (switch (long "oberon2"))
+        <*> (Oberon2 <$ switch (long "oberon2")
+             <|> Oberon1 <$ switch (long "oberon1")
+             <|> pure Oberon1)
         <*> (option auto (long "index" <> help "Index of ambiguous parse" <> showDefault <> value 0 <> metavar "INT"))
         <*> (Pretty <$> option auto (long "pretty" <> help "Pretty-print output" <> metavar "WIDTH")
              <|> Tree <$ switch (long "tree" <> help "Print the output as an abstract syntax tree")
@@ -89,11 +91,11 @@ main' Opts{..} =
         Just file -> (if file == "-" then getContents else readFile file)
                      >>= case optsMode
                          of TypeCheckedModuleMode ->
-                              \source-> parseAndResolveModule True optsOberon2
+                              \source-> parseAndResolveModule True optsVersion
                                 (fromMaybe (takeDirectory file) optsInclude) source
                               >>= succeed optsOutput
                             ModuleWithImportsMode ->
-                              \source-> parseAndResolveModule False optsOberon2
+                              \source-> parseAndResolveModule False optsVersion
                                 (fromMaybe (takeDirectory file) optsInclude) source
                               >>= succeed optsOutput
                             ModuleMode ->
@@ -124,9 +126,12 @@ main' Opts{..} =
                                                             >> succeed optsOutput (pure $ l !! optsIndex)
                                                  Left err -> Text.putStrLn (failureDescription src err 4)
   where
-    chosenGrammar = if optsOberon2 then Grammar.oberon2Grammar else Grammar.oberonGrammar
-    predefined = if optsOberon2 then Resolver.predefined2 else Resolver.predefined
-    
+    chosenGrammar = case optsVersion 
+                    of Oberon1 -> Grammar.oberonGrammar
+                       Oberon2 -> Grammar.oberon2Grammar 
+    predefined = case optsVersion 
+                 of Oberon1 -> Resolver.predefined
+                    Oberon2 -> Resolver.predefined2
     go :: (Show a, Data a, Pretty a, a ~ t f f,
            Deep.Functor (Rank2.Map Grammar.NodeWrap NodeWrap) t Grammar.NodeWrap NodeWrap) =>
           (t NodeWrap NodeWrap -> Validation (NonEmpty Resolver.Error) a)
