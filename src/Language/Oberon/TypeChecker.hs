@@ -65,7 +65,7 @@ data ErrorType = ArgumentCountMismatch Int Int
                | UnknownField AST.Ident Type
                deriving Show
 
-type Error = (Int, ErrorType)
+type Error = (AST.Ident, Int, ErrorType)
 
 instance Eq Type where
   NominalType q1 (Just t1) == t2@(NominalType q2 _) = q1 == q2 || t1 == t2
@@ -97,7 +97,10 @@ newtype Modules f' f = Modules (Map AST.Ident (f (AST.Module f' f')))
 
 data TypeCheck = TypeCheck
 
-data InhTC = InhTC{env :: Environment} deriving Show
+data InhTCRoot = InhTCRoot{rootEnv :: Environment}
+
+data InhTC = InhTC{env           :: Environment,
+                   currentModule :: AST.Ident} deriving Show
 
 data SynTC = SynTC{errors :: [Error]} deriving Show
 
@@ -144,7 +147,7 @@ instance Rank2.Apply (Modules f') where
    ~(Modules fs) <*> ~(Modules ms) = Modules (Map.intersectionWith Rank2.apply fs ms)
 
 -- * Boring attribute types
-type instance Atts (Inherited TypeCheck) (Modules f' f) = InhTC
+type instance Atts (Inherited TypeCheck) (Modules f' f) = InhTCRoot
 type instance Atts (Synthesized TypeCheck) (Modules f' f) = SynTC
 type instance Atts (Inherited TypeCheck) (AST.Module f' f) = InhTC
 type instance Atts (Synthesized TypeCheck) (AST.Module f' f) = SynTCMod
@@ -182,7 +185,9 @@ type instance Atts (Synthesized TypeCheck) (AST.WithAlternative f' f) = SynTC
 instance Attribution TypeCheck Modules (Int, Modules (Semantics TypeCheck) (Semantics TypeCheck)) where
    attribution TypeCheck (_, Modules self) (Inherited inheritance, Modules ms) =
      (Synthesized SynTC{errors= foldMap (moduleErrors . syn) ms},
-      Modules (Inherited InhTC{env= env inheritance <> foldMap (moduleEnv . syn) ms} <$ self))
+      Modules (Map.mapWithKey moduleInheritance self))
+     where moduleInheritance name mod = Inherited InhTC{env= rootEnv inheritance <> foldMap (moduleEnv . syn) ms,
+                                                        currentModule= name}
 
 instance Attribution TypeCheck AST.Module (Int, AST.Module (Semantics TypeCheck) (Semantics TypeCheck)) where
    attribution TypeCheck (pos, AST.Module ident1 imports decls body ident2) (Inherited inheritance, AST.Module _ _ decls' body' _) =
@@ -192,7 +197,7 @@ instance Attribution TypeCheck AST.Module (Int, AST.Module (Semantics TypeCheck)
        AST.Module ident1 imports [Inherited (localEnv, pointers)] (Inherited localEnv <$ body) ident2)
       where exportedEnv = exportNominal <$> Map.mapKeysMonotonic export newEnv
             newEnv = Map.unionsWith mergeTypeBoundProcedures (moduleEnv . syn <$> decls')
-            localEnv = InhTC (newEnv `Map.union` env inheritance)
+            localEnv = InhTC (newEnv `Map.union` env inheritance) (currentModule inheritance)
             export (AST.NonQualIdent name) = AST.QualIdent ident1 name
             export q = q
             exportNominal (NominalType (AST.NonQualIdent name) (Just t)) =
@@ -248,7 +253,7 @@ instance Attribution TypeCheck AST.Declaration (Int, AST.Declaration (Semantics 
                (Inherited inheritance, AST.VariableDeclaration _names declaredType) =
       (Synthesized SynTCMod{moduleErrors= typeErrors (syn declaredType) 
                                           <> case definedType (syn declaredType)
-                                             of ArrayType [] _ -> [(pos, OpenArrayVariable)]
+                                             of ArrayType [] _ -> [(currentModule $ fst inheritance, pos, OpenArrayVariable)]
                                                 _ -> [],
                             moduleEnv= foldMap (\name-> Map.singleton (AST.NonQualIdent $ defName name)
                                                         (definedType $ syn declaredType))
@@ -290,10 +295,12 @@ instance Attribution TypeCheck AST.Declaration (Int, AST.Declaration (Semantics 
                 Just (NominalType _ (Just RecordType{})) -> []
                 Just (NominalType _ (Just (PointerType RecordType{}))) -> []
                 Just t -> [NonRecordType t]
-           localInherited = InhTC (foldMap (moduleEnv . syn) declarations <> env bodyInherited)
+           localInherited = InhTC (foldMap (moduleEnv . syn) declarations <> env bodyInherited) 
+                                  (currentModule $ fst inheritance)
            bodyInherited = InhTC (foldMap receiverEnv receiver
                                   `Map.union` foldMap (signatureEnv . syn) signature'
                                   `Map.union` env (fst inheritance))
+                                 (currentModule $ fst inheritance)
    attribution TypeCheck (pos, AST.ForwardDeclaration namedef@(AST.IdentDef name _) signature)
                (Inherited inheritance, AST.ForwardDeclaration _namedef signature') =
       (Synthesized SynTCMod{moduleErrors= foldMap (signatureErrors . syn) signature',
@@ -311,7 +318,7 @@ instance Attribution TypeCheck AST.FormalParameters (Int, AST.FormalParameters (
        AST.FormalParameters (pure $ Inherited inheritance) returnType)
       where typeRefErrors q
                | Map.member q (env inheritance) = []
-               | otherwise = [(pos, UnknownName q)]
+               | otherwise = [(currentModule inheritance, pos, UnknownName q)]
 
 instance Attribution TypeCheck AST.FPSection (Int, AST.FPSection (Semantics TypeCheck) (Semantics TypeCheck)) where
    attribution TypeCheck (pos, AST.FPSection var names _typeDef) (Inherited inheritance, AST.FPSection _var _names typeDef) =
@@ -324,7 +331,8 @@ instance Attribution TypeCheck AST.FPSection (Int, AST.FPSection (Semantics Type
 
 instance Attribution TypeCheck AST.Type (Int, AST.Type (Semantics TypeCheck) (Semantics TypeCheck)) where
    attribution TypeCheck (pos, AST.TypeReference q) (Inherited inheritance, _) = 
-      (Synthesized SynTCType{typeErrors= if Map.member q (env inheritance) then [] else [(pos, UnknownName q)],
+      (Synthesized SynTCType{typeErrors= if Map.member q (env inheritance) then []
+                                         else [(currentModule inheritance, pos, UnknownName q)],
                              typeName= case q 
                                        of AST.NonQualIdent name -> Just name
                                           _ -> Nothing,
@@ -339,7 +347,7 @@ instance Attribution TypeCheck AST.Type (Int, AST.Type (Semantics TypeCheck) (Se
                              definedType= ArrayType (integerValue . syn <$> dimensions') (definedType $ syn itemType)},
        AST.ArrayType [Inherited inheritance] (Inherited inheritance))
      where expectInteger SynTCExp{inferredType= IntegerType{}} = []
-           expectInteger SynTCExp{inferredType= t} = [(pos, NonIntegerType t)]
+           expectInteger SynTCExp{inferredType= t} = [(currentModule inheritance, pos, NonIntegerType t)]
            integerValue SynTCExp{inferredType= IntegerType n} = n
            integerValue _ = 0
    attribution TypeCheck (pos, AST.RecordType base fields) (Inherited inheritance, AST.RecordType _base fields') =
@@ -353,8 +361,9 @@ instance Attribution TypeCheck AST.Type (Int, AST.Type (Semantics TypeCheck) (Se
      where baseRecord = case flip Map.lookup (env inheritance) <$> base
                         of Just (Just t@RecordType{}) -> ([], Just t)
                            Just (Just (NominalType _ (Just t@RecordType{}))) -> ([], Just t)
-                           Just (Just t) -> ([(pos, NonRecordType t)], Nothing)
-                           Just Nothing -> (foldMap ((:[]) . (,) pos . UnknownName) base, Nothing)
+                           Just (Just t) -> ([(currentModule inheritance, pos, NonRecordType t)], Nothing)
+                           Just Nothing -> (foldMap ((:[]) . (,,) (currentModule inheritance) pos . UnknownName) base,
+                                            Nothing)
                            Nothing -> ([], Nothing)
    attribution TypeCheck _self (Inherited inheritance, AST.PointerType targetType') =
       (Synthesized SynTCType{typeErrors= typeErrors (syn targetType'),
@@ -382,7 +391,7 @@ instance Attribution TypeCheck AST.FieldList (Int, AST.FieldList (Semantics Type
 
 instance Attribution TypeCheck (Deep.Product AST.Expression AST.StatementSequence) (Int, (Deep.Product AST.Expression AST.StatementSequence) (Semantics TypeCheck) (Semantics TypeCheck)) where
    attribution TypeCheck (pos, _) (Inherited inheritance, Deep.Pair condition statements) =
-      (Synthesized SynTC{errors= booleanExpressionErrors pos (syn condition) <> errors (syn statements)},
+      (Synthesized SynTC{errors= booleanExpressionErrors inheritance pos (syn condition) <> errors (syn statements)},
        Deep.Pair (Inherited inheritance) (Inherited inheritance))
 
 instance Attribution TypeCheck AST.StatementSequence (Int, AST.StatementSequence (Semantics TypeCheck) (Semantics TypeCheck)) where
@@ -393,9 +402,11 @@ instance Attribution TypeCheck AST.StatementSequence (Int, AST.StatementSequence
 instance Attribution TypeCheck AST.Statement (Int, AST.Statement (Semantics TypeCheck) (Semantics TypeCheck)) where
    attribution TypeCheck _ (Inherited inheritance, AST.EmptyStatement) = (Synthesized SynTC{errors= []}, AST.EmptyStatement)
    attribution TypeCheck (pos, _) (Inherited inheritance, AST.Assignment var value) = {-# SCC "Assignment" #-}
-      (Synthesized SynTC{errors= assignmentCompatible pos (designatorType $ syn var) (inferredType $ syn value)},
+      (Synthesized SynTC{errors= assignmentCompatible inheritance pos (designatorType $ syn var) (inferredType $ syn value)},
        AST.Assignment (Inherited inheritance) (Inherited inheritance))
-   attribution TypeCheck (pos, AST.ProcedureCall _proc parameters) (Inherited inheritance, AST.ProcedureCall procedure' parameters') =
+   attribution TypeCheck 
+      (pos, AST.ProcedureCall _proc parameters) 
+      (Inherited inheritance, AST.ProcedureCall procedure' parameters') =
       (Synthesized SynTC{errors= case syn procedure'
                                  of SynTCDes{designatorErrors= [],
                                              designatorType= t} -> procedureErrors t
@@ -409,11 +420,11 @@ instance Attribution TypeCheck AST.Statement (Int, AST.Statement (Semantics Type
                     || length formalTypes == 1 && (length <$> parameters) == Just 2
                     && designatorSelf (syn procedure') == AST.Variable (AST.NonQualIdent "NEW")
                     && all (all (isIntegerType . inferredType . syn) . tail) parameters') =
-                 [(pos, ArgumentCountMismatch (length formalTypes) $ maybe 0 length parameters)]
-             | otherwise = concat (zipWith (parameterCompatible pos) formalTypes
+                 [(currentModule inheritance, pos, ArgumentCountMismatch (length formalTypes) $ maybe 0 length parameters)]
+             | otherwise = concat (zipWith (parameterCompatible inheritance pos) formalTypes
                                    $ maybe [] (inferredType . syn <$>) parameters')
            procedureErrors (NominalType _ (Just t)) = procedureErrors t
-           procedureErrors t = [(pos, NonProcedureType t)]
+           procedureErrors t = [(currentModule inheritance, pos, NonProcedureType t)]
    attribution TypeCheck self (Inherited inheritance, AST.If branches fallback) =
       (Synthesized SynTC{errors= foldMap (errors . syn) branches <> foldMap (errors . syn) fallback},
        AST.If (pure $ Inherited inheritance) (Just $ Inherited inheritance))
@@ -423,19 +434,21 @@ instance Attribution TypeCheck AST.Statement (Int, AST.Statement (Semantics Type
        AST.CaseStatement (Inherited inheritance) (pure $ Inherited (inheritance, inferredType $ syn value))
                          (Just $ Inherited inheritance))
    attribution TypeCheck (pos, _) (Inherited inheritance, AST.While condition body) =
-      (Synthesized SynTC{errors= booleanExpressionErrors pos (syn condition) <> errors (syn body)},
+      (Synthesized SynTC{errors= booleanExpressionErrors inheritance pos (syn condition) <> errors (syn body)},
        AST.While (Inherited inheritance) (Inherited inheritance))
    attribution TypeCheck (pos, _) (Inherited inheritance, AST.Repeat body condition) =
-      (Synthesized SynTC{errors= booleanExpressionErrors pos (syn condition) <> errors (syn body)},
+      (Synthesized SynTC{errors= booleanExpressionErrors inheritance pos (syn condition) <> errors (syn body)},
        AST.Repeat (Inherited inheritance) (Inherited inheritance))
    attribution TypeCheck (pos, AST.For counter _start _end _step _body) 
                          (Inherited inheritance, AST.For _counter start end step body) =
-      (Synthesized SynTC{errors= integerExpressionErrors pos (syn start) <> integerExpressionErrors pos (syn end)
-                                 <> foldMap (integerExpressionErrors pos . syn) step <> errors (syn body)},
+      (Synthesized SynTC{errors= integerExpressionErrors inheritance pos (syn start) 
+                                 <> integerExpressionErrors inheritance pos (syn end)
+                                 <> foldMap (integerExpressionErrors inheritance pos . syn) step <> errors (syn body)},
        AST.For counter (Inherited inheritance) (Inherited inheritance) (Just $ Inherited inheritance)
-                       (Inherited $ InhTC $
-                        Map.insert (AST.NonQualIdent counter) (NominalType (AST.NonQualIdent "INTEGER") Nothing)
-                        $ env inheritance))
+                       (Inherited $ 
+                        InhTC (Map.insert (AST.NonQualIdent counter) (NominalType (AST.NonQualIdent "INTEGER") Nothing)
+                               $ env inheritance)
+                              (currentModule inheritance)))
    attribution TypeCheck self (Inherited inheritance, AST.Loop body) = (Synthesized SynTC{errors= errors (syn body)},
                                                                         AST.Loop (Inherited inheritance))
    attribution TypeCheck self (Inherited inheritance, AST.With branches fallback) =
@@ -451,13 +464,14 @@ instance Attribution TypeCheck AST.WithAlternative (Int, AST.WithAlternative (Se
                          (Inherited inheritance, AST.WithAlternative _var _subtype body) =
       (Synthesized SynTC{errors= case (Map.lookup var (env inheritance),
                                        Map.lookup subtype (env inheritance))
-                                 of (Just supertype, Just subtypeDef) -> assignmentCompatible pos supertype subtypeDef
-                                    (Nothing, _) -> [(pos, UnknownName var)]
-                                    (_, Nothing) -> [(pos, UnknownName subtype)]
+                                 of (Just supertype, Just subtypeDef) -> assignmentCompatible inheritance pos supertype subtypeDef
+                                    (Nothing, _) -> [(currentModule inheritance, pos, UnknownName var)]
+                                    (_, Nothing) -> [(currentModule inheritance, pos, UnknownName subtype)]
                                  <> errors (syn body)},
-       AST.WithAlternative var subtype (Inherited $ InhTC $
-                                        maybe id (Map.insert var) (Map.lookup subtype $ env inheritance) 
-                                        $ env inheritance))
+       AST.WithAlternative var subtype (Inherited $ 
+                                        InhTC (maybe id (Map.insert var) (Map.lookup subtype $ env inheritance) 
+                                               $ env inheritance)
+                                              (currentModule inheritance)))
 
 instance Attribution TypeCheck AST.Case (Int, AST.Case (Semantics TypeCheck) (Semantics TypeCheck)) where
    attribution TypeCheck self (Inherited inheritance, AST.Case labels body) =
@@ -467,23 +481,23 @@ instance Attribution TypeCheck AST.Case (Int, AST.Case (Semantics TypeCheck) (Se
 
 instance Attribution TypeCheck AST.CaseLabels (Int, AST.CaseLabels (Semantics TypeCheck) (Semantics TypeCheck)) where
    attribution TypeCheck (pos, _) (Inherited inheritance, AST.SingleLabel value) =
-      (Synthesized SynTC{errors= assignmentCompatible pos (snd inheritance) (inferredType $ syn value)},
+      (Synthesized SynTC{errors= assignmentCompatible (fst inheritance) pos (snd inheritance) (inferredType $ syn value)},
        AST.SingleLabel (Inherited $ fst inheritance))
-   attribution TypeCheck (pos, _) (Inherited inheritance, AST.LabelRange start end) =
-      (Synthesized SynTC{errors= assignmentCompatible pos (snd inheritance) (inferredType $ syn start)
-                                 <> assignmentCompatible pos (snd inheritance) (inferredType $ syn end)},
-       AST.LabelRange (Inherited $ fst inheritance) (Inherited $ fst inheritance))
+   attribution TypeCheck (pos, _) (Inherited (inheritance, caseType), AST.LabelRange start end) =
+      (Synthesized SynTC{errors= assignmentCompatible inheritance pos caseType (inferredType $ syn start)
+                                 <> assignmentCompatible inheritance pos caseType (inferredType $ syn end)},
+       AST.LabelRange (Inherited inheritance) (Inherited inheritance))
 
 instance Attribution TypeCheck AST.Expression (Int, AST.Expression (Semantics TypeCheck) (Semantics TypeCheck)) where
    attribution TypeCheck (pos, AST.Relation op _ _) (Inherited inheritance, AST.Relation _op left right) =
       (Synthesized SynTCExp{expressionErrors= case expressionErrors (syn left) <> expressionErrors (syn right)
                                               of [] | t1 == t2 -> []
-                                                    | AST.Is <- op -> assignmentCompatible pos t1 t2
+                                                    | AST.Is <- op -> assignmentCompatible inheritance pos t1 t2
                                                     | AST.In <- op -> membershipCompatible (ultimate t1) (ultimate t2)
-                                                    | equality op, [] <- assignmentCompatible pos t1 t2 -> []
-                                                    | equality op, [] <- assignmentCompatible pos t2 t1 -> []
+                                                    | equality op, [] <- assignmentCompatible inheritance pos t1 t2 -> []
+                                                    | equality op, [] <- assignmentCompatible inheritance pos t2 t1 -> []
                                                     | op /= AST.Is -> comparable (ultimate t1) (ultimate t2)
-                                                    | otherwise -> [(pos, TypeMismatch t1 t2)]
+                                                    | otherwise -> [(currentModule inheritance, pos, TypeMismatch t1 t2)]
                                                  errs -> errs,
                             inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing},
        AST.Relation op (Inherited inheritance) (Inherited inheritance))
@@ -507,32 +521,32 @@ instance Attribution TypeCheck AST.Expression (Int, AST.Expression (Semantics Ty
                        (NominalType (AST.NonQualIdent t2) Nothing) | isNumerical t1 && isNumerical t2 = []
             comparable (NominalType (AST.NonQualIdent t1) Nothing) IntegerType{} | isNumerical t1 = []
             comparable IntegerType{} (NominalType (AST.NonQualIdent t2) Nothing) | isNumerical t2 = []
-            comparable t1 t2 = [(pos, IncomparableTypes t1 t2)]
+            comparable t1 t2 = [(currentModule inheritance, pos, IncomparableTypes t1 t2)]
             membershipCompatible IntegerType{} (NominalType (AST.NonQualIdent "SET") Nothing) = []
             membershipCompatible (NominalType (AST.NonQualIdent t) Nothing)
                                  (NominalType (AST.NonQualIdent "SET") Nothing) | isNumerical t = []
    attribution TypeCheck (pos, _) (Inherited inheritance, AST.Positive expr) =
-      (Synthesized SynTCExp{expressionErrors= unaryNumericOperatorErrors pos (syn expr),
+      (Synthesized SynTCExp{expressionErrors= unaryNumericOperatorErrors inheritance pos (syn expr),
                             inferredType= inferredType (syn expr)},
        AST.Positive (Inherited inheritance))
    attribution TypeCheck (pos, _) (Inherited inheritance, AST.Negative expr) =
-      (Synthesized SynTCExp{expressionErrors= unaryNumericOperatorErrors pos (syn expr),
+      (Synthesized SynTCExp{expressionErrors= unaryNumericOperatorErrors inheritance pos (syn expr),
                             inferredType= unaryNumericOperatorType negate (syn expr)},
        AST.Negative (Inherited inheritance))
    attribution TypeCheck (pos, _) (Inherited inheritance, AST.Add left right) =
-      (Synthesized SynTCExp{expressionErrors= binarySetOrNumericOperatorErrors pos (syn left) (syn right),
+      (Synthesized SynTCExp{expressionErrors= binarySetOrNumericOperatorErrors inheritance pos (syn left) (syn right),
                             inferredType= binaryNumericOperatorType div (syn left) (syn right)},
        AST.Add (Inherited inheritance) (Inherited inheritance))
    attribution TypeCheck (pos, _) (Inherited inheritance, AST.Subtract left right) =
-      (Synthesized SynTCExp{expressionErrors= binarySetOrNumericOperatorErrors pos (syn left) (syn right),
+      (Synthesized SynTCExp{expressionErrors= binarySetOrNumericOperatorErrors inheritance pos (syn left) (syn right),
                             inferredType= binaryNumericOperatorType div (syn left) (syn right)},
        AST.Subtract (Inherited inheritance) (Inherited inheritance))
    attribution TypeCheck (pos, _) (Inherited inheritance, AST.Or left right) =
-      (Synthesized SynTCExp{expressionErrors= binaryBooleanOperatorErrors pos (syn left) (syn right),
+      (Synthesized SynTCExp{expressionErrors= binaryBooleanOperatorErrors inheritance pos (syn left) (syn right),
                             inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing},
        AST.Or (Inherited inheritance) (Inherited inheritance))
    attribution TypeCheck (pos, _) (Inherited inheritance, AST.Multiply left right) =
-      (Synthesized SynTCExp{expressionErrors= binarySetOrNumericOperatorErrors pos (syn left) (syn right),
+      (Synthesized SynTCExp{expressionErrors= binarySetOrNumericOperatorErrors inheritance pos (syn left) (syn right),
                             inferredType= binaryNumericOperatorType div (syn left) (syn right)},
        AST.Multiply (Inherited inheritance) (Inherited inheritance))
    attribution TypeCheck (pos, _) (Inherited inheritance, AST.Divide left right) =
@@ -548,20 +562,20 @@ instance Attribution TypeCheck AST.Expression (Int, AST.Expression (Semantics Ty
                                             inferredType= NominalType (AST.NonQualIdent "SET") Nothing}) -> []
                                   (SynTCExp{expressionErrors= [], inferredType= t1},
                                    SynTCExp{expressionErrors= [], inferredType= t2})
-                                    | t1 == t2 -> [(pos, UnrealType t1)]
-                                    | otherwise -> [(pos, TypeMismatch t1 t2)],
+                                    | t1 == t2 -> [(currentModule inheritance, pos, UnrealType t1)]
+                                    | otherwise -> [(currentModule inheritance, pos, TypeMismatch t1 t2)],
                             inferredType= NominalType (AST.NonQualIdent "REAL") Nothing},
        AST.Divide (Inherited inheritance) (Inherited inheritance))
    attribution TypeCheck (pos, _) (Inherited inheritance, AST.IntegerDivide left right) =
-      (Synthesized SynTCExp{expressionErrors= binaryIntegerOperatorErrors pos (syn left) (syn right),
+      (Synthesized SynTCExp{expressionErrors= binaryIntegerOperatorErrors inheritance pos (syn left) (syn right),
                             inferredType= binaryNumericOperatorType div (syn left) (syn right)},
        AST.IntegerDivide (Inherited inheritance) (Inherited inheritance))
    attribution TypeCheck (pos, _) (Inherited inheritance, AST.Modulo left right) =
-      (Synthesized SynTCExp{expressionErrors= binaryIntegerOperatorErrors pos (syn left) (syn right),
+      (Synthesized SynTCExp{expressionErrors= binaryIntegerOperatorErrors inheritance pos (syn left) (syn right),
                             inferredType= binaryNumericOperatorType mod (syn left) (syn right)},
         AST.Modulo (Inherited inheritance) (Inherited inheritance))
    attribution TypeCheck (pos, _) (Inherited inheritance, AST.And left right) =
-      (Synthesized SynTCExp{expressionErrors= binaryBooleanOperatorErrors pos (syn left) (syn right),
+      (Synthesized SynTCExp{expressionErrors= binaryBooleanOperatorErrors inheritance pos (syn left) (syn right),
                             inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing},
        AST.And (Inherited inheritance) (Inherited inheritance))
    attribution TypeCheck (pos, AST.Integer x) (Inherited inheritance, _) =
@@ -602,13 +616,13 @@ instance Attribution TypeCheck AST.Expression (Int, AST.Expression (Semantics Ty
                                               of SynTCDes{designatorErrors= [],
                                                           designatorType= ProcedureType _ formalTypes Just{}}
                                                    | length formalTypes /= length parameters ->
-                                                       [(pos,
+                                                       [(currentModule inheritance, pos,
                                                          ArgumentCountMismatch (length formalTypes)
                                                                                (length parameters))]
-                                                   | otherwise -> concat (zipWith (parameterCompatible pos) formalTypes
+                                                   | otherwise -> concat (zipWith (parameterCompatible inheritance pos) formalTypes
                                                                           $ inferredType . syn <$> parameters')
                                                  SynTCDes{designatorErrors= [],
-                                                          designatorType= t} -> [(pos, NonFunctionType t)]
+                                                          designatorType= t} -> [(currentModule inheritance, pos, NonFunctionType t)]
                                                  SynTCDes{designatorErrors= errs} -> errs
                                               <> foldMap (expressionErrors . syn) parameters',
                             inferredType= case syn designator
@@ -639,25 +653,25 @@ instance Attribution TypeCheck AST.Expression (Int, AST.Expression (Semantics Ty
            systemCallType "VAL" [t1, t2] = Just t1
            systemCallType _ _ = Nothing
    attribution TypeCheck (pos, _) (Inherited inheritance, AST.Not expr) =
-      (Synthesized SynTCExp{expressionErrors= booleanExpressionErrors pos (syn expr),
+      (Synthesized SynTCExp{expressionErrors= booleanExpressionErrors inheritance pos (syn expr),
                             inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing},
        AST.Not (Inherited inheritance))
 
 instance Attribution TypeCheck AST.Element (Int, AST.Element (Semantics TypeCheck) (Semantics TypeCheck)) where
    attribution TypeCheck (pos, _) (Inherited inheritance, AST.Element expr) =
-      (Synthesized SynTCExp{expressionErrors= integerExpressionErrors pos (syn expr),
+      (Synthesized SynTCExp{expressionErrors= integerExpressionErrors inheritance pos (syn expr),
                             inferredType= NominalType (AST.NonQualIdent "SET") Nothing},
        AST.Element (Inherited inheritance))
    attribution TypeCheck (pos, _) (Inherited inheritance, AST.Range low high) =
-      (Synthesized SynTCExp{expressionErrors= integerExpressionErrors pos (syn low)
-                                              <> integerExpressionErrors pos (syn high),
+      (Synthesized SynTCExp{expressionErrors= integerExpressionErrors inheritance pos (syn low)
+                                              <> integerExpressionErrors inheritance pos (syn high),
                             inferredType= NominalType (AST.NonQualIdent "SET") Nothing},
        AST.Range (Inherited inheritance) (Inherited inheritance))
 
 instance Attribution TypeCheck AST.Designator (Int, AST.Designator (Semantics TypeCheck) (Semantics TypeCheck)) where
    attribution TypeCheck (pos, AST.Variable q) (Inherited inheritance, _) =
       (Synthesized SynTCDes{designatorErrors= case designatorType
-                                              of Nothing -> [(pos, UnknownName q)]
+                                              of Nothing -> [(currentModule inheritance, pos, UnknownName q)]
                                                  Just{} -> [],
                             designatorSelf= AST.Variable q,
                             designatorType= fromMaybe UnknownType designatorType},
@@ -667,8 +681,8 @@ instance Attribution TypeCheck AST.Designator (Int, AST.Designator (Semantics Ty
       (Synthesized SynTCDes{designatorErrors= case syn record
                                               of SynTCDes{designatorErrors= [],
                                                           designatorType= t} ->
-                                                   maybe [(pos, NonRecordType t)]
-                                                         (maybe [(pos, UnknownField fieldName t)] $ const [])
+                                                   maybe [(currentModule inheritance, pos, NonRecordType t)]
+                                                         (maybe [(currentModule inheritance, pos, UnknownField fieldName t)] $ const [])
                                                          (access True t)
                                                  SynTCDes{designatorErrors= errors} -> errors,
                             designatorSelf= AST.Field (Identity $ designatorSelf $ syn record) fieldName,
@@ -693,18 +707,18 @@ instance Attribution TypeCheck AST.Designator (Int, AST.Designator (Semantics Ty
       where access _ (ArrayType dimensions t)
               | length dimensions == length indexes = Right t
               | length dimensions == 0 && length indexes == 1 = Right t
-              | otherwise = Left [(pos, ExtraDimensionalIndex t)]
+              | otherwise = Left [(currentModule inheritance, pos, ExtraDimensionalIndex t)]
             access allowPtr (NominalType _ (Just t)) = access allowPtr t
             access allowPtr (ReceiverType t) = access allowPtr t
             access True (PointerType t) = access False t
-            access _ t = Left [(pos, NonArrayType t)]
+            access _ t = Left [(currentModule inheritance, pos, NonArrayType t)]
    attribution TypeCheck (pos, AST.TypeGuard _designator q) (Inherited inheritance, AST.TypeGuard designator _q) =
       (Synthesized SynTCDes{designatorErrors= case (syn designator, targetType)
                                               of (SynTCDes{designatorErrors= [],
                                                            designatorType= t}, 
-                                                  Just t') -> assignmentCompatible pos t t'
+                                                  Just t') -> assignmentCompatible inheritance pos t t'
                                                  (SynTCDes{designatorErrors= errors}, 
-                                                  Nothing) -> (pos, UnknownName q) : errors
+                                                  Nothing) -> (currentModule inheritance, pos, UnknownName q) : errors
                                                  (SynTCDes{designatorErrors= errors}, _) -> errors,
                             designatorType= fromMaybe UnknownType targetType},
        AST.TypeGuard (Inherited inheritance) q)
@@ -718,7 +732,7 @@ instance Attribution TypeCheck AST.Designator (Int, AST.Designator (Semantics Ty
                                                  SynTCDes{designatorErrors= [],
                                                           designatorType= ProcedureType True _ _} -> []
                                                  SynTCDes{designatorErrors= [],
-                                                          designatorType= t} -> [(pos, NonPointerType t)]
+                                                          designatorType= t} -> [(currentModule inheritance, pos, NonPointerType t)]
                                                  SynTCDes{designatorErrors= errors} -> errors,
                             designatorType= case designatorType (syn pointer)
                                             of NominalType _ (Just (PointerType t)) -> t
@@ -727,40 +741,41 @@ instance Attribution TypeCheck AST.Designator (Int, AST.Designator (Semantics Ty
                                                _ -> UnknownType},
        AST.Dereference (Inherited inheritance))
 
-unaryNumericOperatorErrors :: Int -> SynTCExp -> [Error]
-unaryNumericOperatorErrors _ SynTCExp{expressionErrors= [], inferredType= IntegerType{}} = []
-unaryNumericOperatorErrors _ SynTCExp{expressionErrors= [],
-                                      inferredType= NominalType (AST.NonQualIdent name) Nothing}
+unaryNumericOperatorErrors :: InhTC -> Int -> SynTCExp -> [Error]
+unaryNumericOperatorErrors _ _ SynTCExp{expressionErrors= [], inferredType= IntegerType{}} = []
+unaryNumericOperatorErrors _ _ SynTCExp{expressionErrors= [],
+                                        inferredType= NominalType (AST.NonQualIdent name) Nothing}
   | isNumerical name = []
-unaryNumericOperatorErrors pos SynTCExp{expressionErrors= [], inferredType= t} = [(pos, NonNumericType t)]
-unaryNumericOperatorErrors _ SynTCExp{expressionErrors= errs} = errs
+unaryNumericOperatorErrors inheritance pos SynTCExp{expressionErrors= [], inferredType= t} = 
+   [(currentModule inheritance, pos, NonNumericType t)]
+unaryNumericOperatorErrors _ _ SynTCExp{expressionErrors= errs} = errs
 
 unaryNumericOperatorType :: (Int -> Int) -> SynTCExp -> Type
 unaryNumericOperatorType f SynTCExp{inferredType= IntegerType x} = IntegerType (f x)
 unaryNumericOperatorType _ SynTCExp{inferredType= t} = t
 
-binarySetOrNumericOperatorErrors :: Int -> SynTCExp -> SynTCExp -> [Error]
-binarySetOrNumericOperatorErrors _
+binarySetOrNumericOperatorErrors :: InhTC -> Int -> SynTCExp -> SynTCExp -> [Error]
+binarySetOrNumericOperatorErrors _ _
   SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent name1) Nothing}
   SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent name2) Nothing}
   | isNumerical name1, isNumerical name2 = []
   | name1 == "SET", name2 == "SET" = []
-binarySetOrNumericOperatorErrors _
+binarySetOrNumericOperatorErrors _ _
   SynTCExp{expressionErrors= [], inferredType= IntegerType{}}
   SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent name) Nothing}
   | isNumerical name = []
-binarySetOrNumericOperatorErrors _
+binarySetOrNumericOperatorErrors _ _
   SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent name) Nothing}
   SynTCExp{expressionErrors= [], inferredType= IntegerType{}}
   | isNumerical name = []
-binarySetOrNumericOperatorErrors _
+binarySetOrNumericOperatorErrors _ _
   SynTCExp{expressionErrors= [], inferredType= IntegerType{}}
   SynTCExp{expressionErrors= [], inferredType= IntegerType{}} = []
-binarySetOrNumericOperatorErrors pos SynTCExp{expressionErrors= [], inferredType= t1}
-                                SynTCExp{expressionErrors= [], inferredType= t2}
-  | t1 == t2 = [(pos, NonNumericType t1)]
-  | otherwise = [(pos, TypeMismatch t1 t2)]
-binarySetOrNumericOperatorErrors _ SynTCExp{expressionErrors= errs1} SynTCExp{expressionErrors= errs2} = errs1 <> errs2
+binarySetOrNumericOperatorErrors inheritance pos SynTCExp{expressionErrors= [], inferredType= t1}
+                                 SynTCExp{expressionErrors= [], inferredType= t2}
+  | t1 == t2 = [(currentModule inheritance, pos, NonNumericType t1)]
+  | otherwise = [(currentModule inheritance, pos, TypeMismatch t1 t2)]
+binarySetOrNumericOperatorErrors _ _ SynTCExp{expressionErrors= errs1} SynTCExp{expressionErrors= errs2} = errs1 <> errs2
 
 binaryNumericOperatorType :: (Int -> Int -> Int) -> SynTCExp -> SynTCExp -> Type
 binaryNumericOperatorType f SynTCExp{inferredType= IntegerType x} SynTCExp{inferredType= IntegerType y} =
@@ -776,13 +791,14 @@ binaryNumericOperatorType _ SynTCExp{inferredType= t1} SynTCExp{inferredType= t2
       NominalType (AST.NonQualIdent $ numericTypeNames !! max index1 index2) Nothing
   | otherwise = t1
 
-binaryIntegerOperatorErrors :: Int ->  SynTCExp -> SynTCExp -> [Error]
-binaryIntegerOperatorErrors pos syn1 syn2 = integerExpressionErrors pos syn1 <> integerExpressionErrors pos syn2
+binaryIntegerOperatorErrors :: InhTC -> Int ->  SynTCExp -> SynTCExp -> [Error]
+binaryIntegerOperatorErrors inheritance pos syn1 syn2 = integerExpressionErrors inheritance pos syn1 
+                                                      <> integerExpressionErrors inheritance pos syn2
 
-integerExpressionErrors pos SynTCExp{expressionErrors= [], inferredType= t}
+integerExpressionErrors inheritance pos SynTCExp{expressionErrors= [], inferredType= t}
   | isIntegerType t = []
-  | otherwise = [(pos, NonIntegerType t)]
-integerExpressionErrors _ SynTCExp{expressionErrors= errs} = errs
+  | otherwise = [(currentModule inheritance, pos, NonIntegerType t)]
+integerExpressionErrors _ _ SynTCExp{expressionErrors= errs} = errs
 
 isIntegerType IntegerType{} = True
 isIntegerType (NominalType (AST.NonQualIdent "SHORTINT") Nothing) = True
@@ -790,34 +806,35 @@ isIntegerType (NominalType (AST.NonQualIdent "INTEGER") Nothing) = True
 isIntegerType (NominalType (AST.NonQualIdent "LONGINT") Nothing) = True
 isIntegerType t = False
 
-booleanExpressionErrors _ SynTCExp{expressionErrors= [],
+booleanExpressionErrors _ _ SynTCExp{expressionErrors= [],
                                    inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing} = []
-booleanExpressionErrors pos SynTCExp{expressionErrors= [], inferredType= t} = [(pos, NonBooleanType t)]
-booleanExpressionErrors _ SynTCExp{expressionErrors= errs} = errs
+booleanExpressionErrors inheritance pos SynTCExp{expressionErrors= [], inferredType= t} = 
+   [(currentModule inheritance, pos, NonBooleanType t)]
+booleanExpressionErrors _ _ SynTCExp{expressionErrors= errs} = errs
 
-binaryBooleanOperatorErrors :: Int -> SynTCExp -> SynTCExp -> [Error]
-binaryBooleanOperatorErrors _pos
+binaryBooleanOperatorErrors :: InhTC -> Int -> SynTCExp -> SynTCExp -> [Error]
+binaryBooleanOperatorErrors _inh _pos
   SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing}
   SynTCExp{expressionErrors= [], inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing} = []
-binaryBooleanOperatorErrors pos
+binaryBooleanOperatorErrors inheritance pos
   SynTCExp{expressionErrors= [], inferredType= t1}
   SynTCExp{expressionErrors= [], inferredType= t2}
-  | t1 == t2 = [(pos, NonBooleanType t1)]
-  | otherwise = [(pos, TypeMismatch t1 t2)]
-binaryBooleanOperatorErrors _ SynTCExp{expressionErrors= errs1} SynTCExp{expressionErrors= errs2} = errs1 <> errs2
+  | t1 == t2 = [(currentModule inheritance, pos, NonBooleanType t1)]
+  | otherwise = [(currentModule inheritance, pos, TypeMismatch t1 t2)]
+binaryBooleanOperatorErrors _ _ SynTCExp{expressionErrors= errs1} SynTCExp{expressionErrors= errs2} = errs1 <> errs2
 
-parameterCompatible :: Int -> (Bool, Type) -> Type -> [Error]
-parameterCompatible _ (_, expected@(ArrayType [] _)) actual
+parameterCompatible :: InhTC -> Int -> (Bool, Type) -> Type -> [Error]
+parameterCompatible _ _ (_, expected@(ArrayType [] _)) actual
   | arrayCompatible expected actual = []
-parameterCompatible pos (True, expected) actual
+parameterCompatible inheritance pos (True, expected) actual
   | expected == actual = []
-  | otherwise = [(pos, UnequalTypes expected actual)]
-parameterCompatible pos (False, expected) actual
+  | otherwise = [(currentModule inheritance, pos, UnequalTypes expected actual)]
+parameterCompatible inheritance pos (False, expected) actual
   | NominalType (AST.NonQualIdent "ARRAY") Nothing <- expected, ArrayType{} <- actual = []
-  | otherwise = assignmentCompatible pos expected actual
+  | otherwise = assignmentCompatible inheritance pos expected actual
 
-assignmentCompatible :: Int -> Type -> Type -> [Error]
-assignmentCompatible pos expected actual
+assignmentCompatible :: InhTC -> Int -> Type -> Type -> [Error]
+assignmentCompatible inheritance pos expected actual
    | expected == actual = []
    | NominalType (AST.NonQualIdent name1) Nothing <- expected,
      NominalType (AST.NonQualIdent name2) Nothing <- actual,
@@ -831,19 +848,19 @@ assignmentCompatible pos expected actual
      q `elem` ["BOOLEAN", "CHAR", "SHORTINT", "INTEGER", "LONGINT", "REAL", "LONGREAL", "SET"] = []
    | expected == NominalType (AST.NonQualIdent "POINTER") Nothing, PointerType{} <- actual = []
    | expected == NominalType (AST.NonQualIdent "POINTER") Nothing, NominalType _ (Just t) <- actual =
-       assignmentCompatible pos expected t
+       assignmentCompatible inheritance pos expected t
    | expected == NominalType (AST.NonQualIdent "CHAR") Nothing, actual == StringType 1 = []
-   | ReceiverType t <- actual = assignmentCompatible pos expected t
-   | ReceiverType t <- expected = assignmentCompatible pos t actual
+   | ReceiverType t <- actual = assignmentCompatible inheritance pos expected t
+   | ReceiverType t <- expected = assignmentCompatible inheritance pos t actual
    | NilType <- actual, PointerType{} <- expected = []
    | NilType <- actual, ProcedureType{} <- expected = []
-   | NilType <- actual, NominalType _ (Just t) <- expected = assignmentCompatible pos t actual
+   | NilType <- actual, NominalType _ (Just t) <- expected = assignmentCompatible inheritance pos t actual
 --   | ArrayType [] (NominalType (AST.NonQualIdent "CHAR") Nothing) <- expected, StringType{} <- actual = []
    | ArrayType [m] (NominalType (AST.NonQualIdent "CHAR") Nothing) <- expected, StringType n <- actual = 
-      if m < n then [(pos, TooSmallArrayType expected)] else []
+      if m < n then [(currentModule inheritance, pos, TooSmallArrayType expected)] else []
    | targetExtends actual expected = []
-   | NominalType _ (Just t) <- expected, ProcedureType{} <- actual = assignmentCompatible pos t actual
-   | otherwise = [(pos, IncompatibleTypes expected actual)]
+   | NominalType _ (Just t) <- expected, ProcedureType{} <- actual = assignmentCompatible inheritance pos t actual
+   | otherwise = [(currentModule inheritance, pos, IncompatibleTypes expected actual)]
 
 arrayCompatible (ArrayType [] t1) (ArrayType _ t2) = t1 == t2 || arrayCompatible t1 t2
 arrayCompatible (ArrayType [] (NominalType (AST.NonQualIdent "CHAR") Nothing)) StringType{} = True
@@ -932,7 +949,7 @@ checkModules :: Environment -> Map AST.Ident (AST.Module Placed Placed) -> [Erro
 checkModules predef modules =
    errors (syn (TypeCheck Shallow.<$> (0, TypeCheck Deep.<$> Modules modules')
                 `Rank2.apply`
-                Inherited (InhTC predef)))
+                Inherited (InhTCRoot predef)))
    where modules' = ((,) 0) <$> modules
 
 predefined, predefined2 :: Environment

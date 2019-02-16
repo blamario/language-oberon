@@ -32,7 +32,7 @@ import Options.Applicative
 import Text.Grampa (Ambiguous, Grammar, ParseResults, parseComplete, failureDescription, offsetContext)
 import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
 import ReprTree
-import System.FilePath (FilePath, takeDirectory)
+import System.FilePath (FilePath, addExtension, combine, takeDirectory)
 
 import Prelude hiding (getLine, getContents, readFile)
 
@@ -92,13 +92,13 @@ main' Opts{..} =
         Just file -> (if file == "-" then getContents else readFile file)
                      >>= case optsMode
                          of TypeCheckedModuleMode ->
-                              \source-> parseAndResolveModule True optsVersion
-                                (fromMaybe (takeDirectory file) optsInclude) source
-                                >>= succeed optsOutput id
+                               let dir = fromMaybe (takeDirectory file) optsInclude
+                               in \source-> parseAndResolveModule True optsVersion dir source
+                                            >>= succeed optsOutput (reportTypeErrorIn dir) id
                             ModuleWithImportsMode ->
                               \source-> parseAndResolveModule False optsVersion
-                                (fromMaybe (takeDirectory file) optsInclude) source
-                                >>= succeed optsOutput id
+                                          (fromMaybe (takeDirectory file) optsInclude) source
+                                        >>= succeed optsOutput (error "no type checking") id
                             ModuleMode ->
                               go (Resolver.resolveModule predefined mempty) Grammar.module_prod chosenGrammar file
                             DefinitionMode ->
@@ -121,10 +121,12 @@ main' Opts{..} =
                 StatementsMode      -> go pure Grammar.statementSequence chosenGrammar "<stdin>"
                 ExpressionMode      -> \src-> case getCompose ((resolvePosition src . (resolvePositions src <$>))
                                                                <$> Grammar.expression (parseComplete chosenGrammar src))
-                                              of Right [x] -> succeed optsOutput Left (pure x)
+                                              of Right [x] -> succeed optsOutput (error "no type checking") 
+                                                                      Left (pure x)
                                                  Right l -> putStrLn ("Ambiguous: " ++ show optsIndex ++ "/"
                                                                       ++ show (length l) ++ " parses")
-                                                            >> succeed optsOutput Left (pure $ l !! optsIndex)
+                                                            >> succeed optsOutput (error "no type checking") 
+                                                                       Left (pure $ l !! optsIndex)
                                                  Left err -> Text.putStrLn (failureDescription src err 4)
   where
     chosenGrammar = case optsVersion 
@@ -141,25 +143,29 @@ main' Opts{..} =
        -> String -> Text -> IO ()
     go resolve production grammar filename contents =
        case getCompose (resolvePositions contents <$> production (parseComplete grammar contents))
-       of Right [x] -> succeed optsOutput Left (resolve x)
+       of Right [x] -> succeed optsOutput (reportTypeErrorIn $ takeDirectory filename) Left (resolve x)
           Right l -> putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
-                     >> succeed optsOutput Left (resolve $ l !! optsIndex)
+                     >> succeed optsOutput (reportTypeErrorIn $ takeDirectory filename) Left (resolve $ l !! optsIndex)
           Left err -> Text.putStrLn (failureDescription contents err 4)
 
 type NodeWrap = Compose ((,) Int) Ambiguous
 
 succeed :: (Data a, Pretty a, Show a) 
-        => Output -> (err -> Either (NonEmpty Resolver.Error) (NonEmpty TypeChecker.Error)) -> Validation err a -> IO ()
-succeed out prepare x = either (reportFailure . prepare) showSuccess (validationToEither x)
+        => Output -> (TypeChecker.Error -> IO ()) -> (err -> Either (NonEmpty Resolver.Error) (NonEmpty TypeChecker.Error)) 
+           -> Validation err a -> IO ()
+succeed out reportTypeError prepare x = either (reportFailure . prepare) showSuccess (validationToEither x)
    where reportFailure (Left (Resolver.UnparseableModule err :| [])) = Text.putStrLn err
          reportFailure (Left errs) = print errs
          reportFailure (Right errs) = mapM_ reportTypeError errs
-         reportTypeError (pos, err) = putStrLn ("Type error: " ++ show err ++ " at " ++ show pos)
---                                      >> Text.putStrLn (offsetContext input pos 4)
          showSuccess = case out
                        of Pretty width -> putDocW width . pretty
                           Tree -> putStrLn . reprTreeString
                           Plain -> print
+
+reportTypeErrorIn directory (moduleName, pos, err) =
+   do contents <- readFile (combine directory $ addExtension (unpack moduleName) "Mod")
+      putStrLn ("Type error: " ++ show err)
+      Text.putStrLn (offsetContext contents pos 4)
 
 instance Pretty (Module Placed Placed) where
    pretty m = pretty ((Identity . snd) Rank2.<$> m)
