@@ -407,11 +407,11 @@ instance Attribution TypeCheck AST.Statement (Int, AST.Statement (Semantics Type
    attribution TypeCheck 
       (pos, AST.ProcedureCall _proc parameters) 
       (Inherited inheritance, AST.ProcedureCall procedure' parameters') =
-      (Synthesized SynTC{errors= case syn procedure'
-                                 of SynTCDes{designatorErrors= [],
-                                             designatorType= t} -> procedureErrors t
-                                    SynTCDes{designatorErrors= errs} -> errs
-                                      <> foldMap (foldMap (expressionErrors . syn)) parameters'},
+      (Synthesized SynTC{errors= (case syn procedure'
+                                  of SynTCDes{designatorErrors= [],
+                                              designatorType= t} -> procedureErrors t
+                                     SynTCDes{designatorErrors= errs} -> errs)
+                                 <> foldMap (foldMap (expressionErrors . syn)) parameters'},
        AST.ProcedureCall (Inherited inheritance) (Just [Inherited inheritance]))
      where procedureErrors (ProcedureType _ formalTypes Nothing)
              | length formalTypes /= maybe 0 length parameters,
