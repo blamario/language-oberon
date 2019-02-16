@@ -16,6 +16,7 @@ import Control.Monad (when)
 import Data.Either.Validation (Validation(..))
 import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.List.NonEmpty (NonEmpty((:|)))
+import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map.Lazy as Map
 import Data.Map.Lazy (Map)
 import Data.Monoid ((<>))
@@ -80,10 +81,10 @@ parseImportsOf version path modules =
 -- | Given a directory path for module imports, parse the given module text and all the module files it imports, then
 -- use all the information to resolve the syntactic ambiguities.
 parseAndResolveModule :: Bool -> LanguageVersion -> FilePath -> Text
-                      -> IO (Validation (NonEmpty Resolver.Error) (Module Placed Placed))
+                      -> IO (Validation (Either (NonEmpty Resolver.Error) (NonEmpty TypeChecker.Error)) (Module Placed Placed))
 parseAndResolveModule checkTypes version path source =
    case parseModule version source
-   of Left err -> return (Failure $ Resolver.UnparseableModule (failureDescription source err 4) :| [])
+   of Left err -> return (Failure $ Left $ Resolver.UnparseableModule (failureDescription source err 4) :| [])
       Right [rootModule@(Module moduleName imports _ _ _)] ->
          do importedModules <- parseImportsOf version path (Map.singleton moduleName rootModule)
             let resolvedImportMap = Resolver.resolveModule predefinedScope resolvedImportMap <$> importedModules
@@ -92,17 +93,20 @@ parseAndResolveModule checkTypes version path source =
                                      Oberon2 -> Resolver.predefined2
                 successful (Success a) = Just a
                 successful _ = Nothing
+                addLeft (Failure resolutionErrors) = Failure (Left resolutionErrors)
+                addLeft (Success result) = Success result
                 typeErrors = TypeChecker.checkModules
                                 (case version 
                                  of Oberon1 -> TypeChecker.predefined
                                     Oberon2 -> TypeChecker.predefined2)
                                 (Map.mapMaybe successful resolvedImportMap)
-            when (checkTypes && not (null typeErrors)) (error $ show typeErrors)
-            return $ resolvedImportMap Map.! moduleName
-      Right _ -> return (Failure $ Resolver.AmbiguousParses :| [])
+            return (if checkTypes && not (null typeErrors)
+                    then Failure (Right (NonEmpty.fromList typeErrors))
+                    else addLeft $ resolvedImportMap Map.! moduleName)
+      Right _ -> return (Failure $ Left $ Resolver.AmbiguousParses :| [])
 
 -- | Parse the module file at the given path, assuming all its imports are in the same directory.
 parseAndResolveModuleFile :: Bool -> LanguageVersion -> FilePath
-                          -> IO (Validation (NonEmpty Resolver.Error) (Module Placed Placed))
+                          -> IO (Validation (Either (NonEmpty Resolver.Error) (NonEmpty TypeChecker.Error)) (Module Placed Placed))
 parseAndResolveModuleFile checkTypes version path =
   readFile path >>= parseAndResolveModule checkTypes version (takeDirectory path)

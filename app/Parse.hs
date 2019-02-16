@@ -6,6 +6,7 @@ import Language.Oberon (Placed, LanguageVersion(Oberon1, Oberon2), parseAndResol
 import Language.Oberon.AST (Module(..), StatementSequence, Statement, Expression)
 import qualified Language.Oberon.Grammar as Grammar
 import qualified Language.Oberon.Resolver as Resolver
+import qualified Language.Oberon.TypeChecker as TypeChecker
 import qualified Language.Oberon.Pretty ()
 
 import qualified Transformation.Rank2 as Rank2
@@ -28,7 +29,7 @@ import Data.Text.IO (getLine, readFile, getContents)
 import qualified Data.Text.IO as Text
 import Data.Typeable (Typeable)
 import Options.Applicative
-import Text.Grampa (Ambiguous, Grammar, ParseResults, parseComplete, failureDescription)
+import Text.Grampa (Ambiguous, Grammar, ParseResults, parseComplete, failureDescription, offsetContext)
 import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
 import ReprTree
 import System.FilePath (FilePath, takeDirectory)
@@ -93,11 +94,11 @@ main' Opts{..} =
                          of TypeCheckedModuleMode ->
                               \source-> parseAndResolveModule True optsVersion
                                 (fromMaybe (takeDirectory file) optsInclude) source
-                              >>= succeed optsOutput
+                                >>= succeed optsOutput id
                             ModuleWithImportsMode ->
                               \source-> parseAndResolveModule False optsVersion
                                 (fromMaybe (takeDirectory file) optsInclude) source
-                              >>= succeed optsOutput
+                                >>= succeed optsOutput id
                             ModuleMode ->
                               go (Resolver.resolveModule predefined mempty) Grammar.module_prod chosenGrammar file
                             DefinitionMode ->
@@ -120,10 +121,10 @@ main' Opts{..} =
                 StatementsMode      -> go pure Grammar.statementSequence chosenGrammar "<stdin>"
                 ExpressionMode      -> \src-> case getCompose ((resolvePosition src . (resolvePositions src <$>))
                                                                <$> Grammar.expression (parseComplete chosenGrammar src))
-                                              of Right [x] -> succeed optsOutput (pure x)
+                                              of Right [x] -> succeed optsOutput Left (pure x)
                                                  Right l -> putStrLn ("Ambiguous: " ++ show optsIndex ++ "/"
                                                                       ++ show (length l) ++ " parses")
-                                                            >> succeed optsOutput (pure $ l !! optsIndex)
+                                                            >> succeed optsOutput Left (pure $ l !! optsIndex)
                                                  Left err -> Text.putStrLn (failureDescription src err 4)
   where
     chosenGrammar = case optsVersion 
@@ -140,16 +141,21 @@ main' Opts{..} =
        -> String -> Text -> IO ()
     go resolve production grammar filename contents =
        case getCompose (resolvePositions contents <$> production (parseComplete grammar contents))
-       of Right [x] -> succeed optsOutput (resolve x)
+       of Right [x] -> succeed optsOutput Left (resolve x)
           Right l -> putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
-                     >> succeed optsOutput (resolve $ l !! optsIndex)
+                     >> succeed optsOutput Left (resolve $ l !! optsIndex)
           Left err -> Text.putStrLn (failureDescription contents err 4)
 
 type NodeWrap = Compose ((,) Int) Ambiguous
 
-succeed out x = either reportFailure showSuccess (validationToEither x)
-   where reportFailure (Resolver.UnparseableModule err :| []) = Text.putStrLn err
-         reportFailure errs = print errs
+succeed :: (Data a, Pretty a, Show a) 
+        => Output -> (err -> Either (NonEmpty Resolver.Error) (NonEmpty TypeChecker.Error)) -> Validation err a -> IO ()
+succeed out prepare x = either (reportFailure . prepare) showSuccess (validationToEither x)
+   where reportFailure (Left (Resolver.UnparseableModule err :| [])) = Text.putStrLn err
+         reportFailure (Left errs) = print errs
+         reportFailure (Right errs) = mapM_ reportTypeError errs
+         reportTypeError (pos, err) = putStrLn ("Type error: " ++ show err ++ " at " ++ show pos)
+--                                      >> Text.putStrLn (offsetContext input pos 4)
          showSuccess = case out
                        of Pretty width -> putDocW width . pretty
                           Tree -> putStrLn . reprTreeString
