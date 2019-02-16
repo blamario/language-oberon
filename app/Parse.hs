@@ -164,7 +164,7 @@ succeed out reportTypeError prepare x = either (reportFailure . prepare) showSuc
 
 reportTypeErrorIn directory (moduleName, pos, err) =
    do contents <- readFile (combine directory $ addExtension (unpack moduleName) "Mod")
-      putStrLn ("Type error: " ++ show err)
+      putStrLn ("Type error: " ++ TypeChecker.errorMessage err)
       Text.putStrLn (offsetContext contents pos 4)
 
 instance Pretty (Module Placed Placed) where

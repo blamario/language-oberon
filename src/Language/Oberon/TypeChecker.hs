@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
              TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
-module Language.Oberon.TypeChecker (Error(..), checkModules, predefined, predefined2) where
+module Language.Oberon.TypeChecker (Error(..), errorMessage, checkModules, predefined, predefined2) where
 
 import Control.Applicative (liftA2)
 import Control.Arrow (first)
@@ -44,11 +44,10 @@ data Type = NominalType AST.QualIdent (Maybe Type)
           | UnknownType
 
 data ErrorType = ArgumentCountMismatch Int Int
-               | DuplicateBinding AST.Ident
-               | ExtraDimensionalIndex Type
+               | ExtraDimensionalIndex Int Int
                | IncomparableTypes Type Type
                | IncompatibleTypes Type Type
-               | TooSmallArrayType Type
+               | TooSmallArrayType Int Int
                | OpenArrayVariable
                | NonArrayType Type
                | NonBooleanType Type
@@ -90,6 +89,55 @@ instance Show Type where
   show (StringType len) = "StringType " ++ show len
   show NilType = "NilType"
   show UnknownType = "UnknownType"
+
+errorMessage :: ErrorType -> String
+errorMessage (ArgumentCountMismatch expected actual) =
+   "Expected " <> show expected <> ", received " <> show actual <> " arguments"
+errorMessage (ExtraDimensionalIndex expected actual) =
+   "Expected " <> show expected <> ", received " <> show actual <> " indexes"
+errorMessage (IncomparableTypes left right) = 
+   "Values of types " <> typeMessage left <> " and " <> typeMessage right <> " cannot be compared"
+errorMessage (IncompatibleTypes left right) =
+   "Incompatible types " <> typeMessage left <> " and " <> typeMessage right
+errorMessage (TooSmallArrayType expected actual) = 
+   "The array of length " <> show expected <> " cannot contain " <> show actual <> " items"
+errorMessage OpenArrayVariable = "A variable cannot be declared an open array"
+errorMessage (NonArrayType t) = "Trying to index a non-array type " <> typeMessage t
+errorMessage (NonBooleanType t) = "Type " <> typeMessage t <> " is not Boolean"
+errorMessage (NonFunctionType t) = "Trying to invoke a " <> typeMessage t <> " as a function"
+errorMessage (NonIntegerType t) = "Type " <> typeMessage t <> " is not an integer type"
+errorMessage (NonNumericType t) = "Type " <> typeMessage t <> " is not a numeric type"
+errorMessage (NonPointerType t) = "Trying to dereference a non-pointer type " <> typeMessage t
+errorMessage (NonProcedureType t) = "Trying to invoke a " <> typeMessage t <> " as a procedure"
+errorMessage (NonRecordType t) = "Trying to access a field of a non-record type " <> typeMessage t
+errorMessage (TypeMismatch t1 t2) = "Type mismatch between " <> typeMessage t1 <> " and " <> typeMessage t2
+errorMessage (UnequalTypes t1 t2) = "Unequal types " <> typeMessage t1 <> " and " <> typeMessage t2
+errorMessage (UnrealType t) = "Type " <> typeMessage t <> " is not a numeric real type"
+errorMessage (UnknownName q) = "Unknown name " <> show q
+errorMessage (UnknownField name t) = "Unknown field " <> show name <> " of type " <> typeMessage t
+
+typeMessage :: Type -> String
+typeMessage (NominalType name _) = nameMessage name
+typeMessage (RecordType ancestry fields) = 
+   "RECORD " ++ foldMap (("(" ++) . (++ ") ") . nameMessage) ancestry
+   ++ List.intercalate ";\n" (fieldMessage <$> Map.toList fields) ++ "END"
+   where fieldMessage (name, t) = "\n  " <> Text.unpack name <> ": " <> typeMessage t
+typeMessage (ArrayType dimensions itemType) = 
+   "ARRAY " ++ List.intercalate ", " (show <$> dimensions) ++ " OF " ++ typeMessage itemType
+typeMessage (PointerType targetType) = "POINTER TO " ++ typeMessage targetType
+typeMessage (ProcedureType _ parameters result) =
+   "PROCEDURE (" ++ List.intercalate ", " (argMessage <$> parameters) ++ "): " ++ foldMap typeMessage result
+   where argMessage (True, t) = "VAR " <> typeMessage t
+         argMessage (False, t) = typeMessage t
+typeMessage (ReceiverType t) = typeMessage t
+typeMessage (IntegerType n) = "INTEGER"
+typeMessage (StringType len) = "STRING [" ++ shows len "]"
+typeMessage NilType = "NIL"
+typeMessage UnknownType = "[Unknown]"
+
+nameMessage :: AST.QualIdent -> String
+nameMessage (AST.QualIdent mod name) = Text.unpack mod <> "." <> Text.unpack name
+nameMessage (AST.NonQualIdent name) = Text.unpack name
 
 type Environment = Map AST.QualIdent Type
 
@@ -707,7 +755,7 @@ instance Attribution TypeCheck AST.Designator (Int, AST.Designator (Semantics Ty
       where access _ (ArrayType dimensions t)
               | length dimensions == length indexes = Right t
               | length dimensions == 0 && length indexes == 1 = Right t
-              | otherwise = Left [(currentModule inheritance, pos, ExtraDimensionalIndex t)]
+              | otherwise = Left [(currentModule inheritance, pos, ExtraDimensionalIndex (length dimensions) (length indexes))]
             access allowPtr (NominalType _ (Just t)) = access allowPtr t
             access allowPtr (ReceiverType t) = access allowPtr t
             access True (PointerType t) = access False t
@@ -857,7 +905,7 @@ assignmentCompatible inheritance pos expected actual
    | NilType <- actual, NominalType _ (Just t) <- expected = assignmentCompatible inheritance pos t actual
 --   | ArrayType [] (NominalType (AST.NonQualIdent "CHAR") Nothing) <- expected, StringType{} <- actual = []
    | ArrayType [m] (NominalType (AST.NonQualIdent "CHAR") Nothing) <- expected, StringType n <- actual = 
-      if m < n then [(currentModule inheritance, pos, TooSmallArrayType expected)] else []
+      if m < n then [(currentModule inheritance, pos, TooSmallArrayType m n)] else []
    | targetExtends actual expected = []
    | NominalType _ (Just t) <- expected, ProcedureType{} <- actual = assignmentCompatible inheritance pos t actual
    | otherwise = [(currentModule inheritance, pos, IncompatibleTypes expected actual)]
