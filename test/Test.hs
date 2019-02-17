@@ -16,7 +16,7 @@ import Test.Tasty.HUnit (assertFailure, assertEqual, testCase)
 
 import qualified Transformation.Rank2 as Rank2
 
-import Language.Oberon (parseAndResolveModule, Placed)
+import Language.Oberon (parseAndResolveModule, LanguageVersion(Oberon2), Placed)
 import Language.Oberon.AST (Module)
 import Language.Oberon.Pretty ()
 import qualified Language.Oberon.Resolver as Resolver
@@ -44,9 +44,9 @@ exampleTree ancestry path =
 
 prettyFile :: FilePath -> Text -> IO Text
 prettyFile dirPath source = do
-   resolvedModule <- parseAndResolveModule True True dirPath source
+   resolvedModule <- parseAndResolveModule True Oberon2 dirPath source
    case resolvedModule
-      of Failure (Resolver.UnparseableModule err :| []) -> assertFailure (unpack err)
+      of Failure (Left (Resolver.UnparseableModule err :| [])) -> assertFailure (unpack err)
          Failure errs -> assertFailure (show errs)
          Success mod -> return (renderStrict $ layoutPretty defaultLayoutOptions $ pretty mod)
 
