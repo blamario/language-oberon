@@ -129,7 +129,7 @@ instance {-# overlaps #-} Shallow.Traversable
 
 instance {-# overlaps #-} Shallow.Traversable
                           Resolution NodeWrap Placed Resolved (Declaration NodeWrap NodeWrap) where
-   traverse res (Compose (pos, Ambiguous (proc@(ProcedureDeclaration heading body _) :| []))) =
+   traverse res (Compose (pos, Ambiguous (proc@(ProcedureDeclaration heading body) :| []))) =
       StateT $ \s@(scope, state)->
          let ProcedureHeading receiver _indirect _name parameters = heading
              ProcedureBody declarations statements = body
@@ -234,7 +234,7 @@ resolveModules predefinedScope modules = traverseWithKey extractErrors modules'
 
 resolveModule :: Scope -> Map Ident (Validation (NonEmpty Error) (Module Placed Placed))
                -> Module NodeWrap NodeWrap -> Validation (NonEmpty Error) (Module Placed Placed)
-resolveModule predefined modules m@(Module moduleName imports declarations body _) =
+resolveModule predefined modules m@(Module moduleName imports declarations body) =
    evalStateT (Deep.traverseDown res m) (moduleGlobalScope, ModuleState)
    where res = Resolution moduleExports
          importedModules = Map.delete mempty (Map.mapKeysWith clashingRenames importedAs modules)
@@ -265,7 +265,7 @@ declarationBinding _ (TypeDeclaration (IdentDef name export) typeDef) =
    [(name, (export, DeclaredType typeDef))]
 declarationBinding _ (VariableDeclaration names typeDef) =
    [(name, (export, DeclaredVariable typeDef)) | (IdentDef name export) <- NonEmpty.toList names]
-declarationBinding moduleName (ProcedureDeclaration (ProcedureHeading _ _ (IdentDef name export) parameters) _ _) =
+declarationBinding moduleName (ProcedureDeclaration (ProcedureHeading _ _ (IdentDef name export) parameters) _) =
    [(name, (export, DeclaredProcedure (moduleName == "SYSTEM") parameters))]
 declarationBinding _ (ForwardDeclaration (IdentDef name export) parameters) =
    [(name, (export, DeclaredProcedure False parameters))]
@@ -353,7 +353,7 @@ exportsOfModule = fmap Success . Map.mapMaybe isExported . globalsOfModule
          isExported (_, binding) = Just binding
 
 globalsOfModule :: Module Placed Placed -> Map Ident (AccessMode, DeclarationRHS Placed Placed)
-globalsOfModule (Module name imports declarations _ _) =
+globalsOfModule (Module name imports declarations _) =
    Map.fromList (concatMap (declarationBinding name . snd) declarations)
 
 unique :: (NonEmpty Error -> Error) -> ([a] -> Error) -> NodeWrap (Validation (NonEmpty Error) a)

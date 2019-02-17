@@ -134,11 +134,17 @@ definitionGrammar g@OberonGrammar{..} = definitionMixin (grammar g)
 definitionGrammar2 g@OberonGrammar{..} = definitionMixin (grammar2 g)
 
 definitionMixin g@OberonGrammar{..} = g{
-   module_prod = Module <$ (lexicalWhiteSpace *> keyword "DEFINITION") <*> ident <* delimiter ";"
-                 <*> moptional importList <*> declarationSequence
-                 <*> pure Nothing <* keyword "END" <*> ident <* delimiter ".",
-   procedureDeclaration = ProcedureDeclaration <$> procedureHeading
-                          <*> (pure $ ProcedureBody [] Nothing) <*> pure mempty,
+   module_prod = do lexicalWhiteSpace 
+                    keyword "DEFINITION"
+                    name <- ident
+                    delimiter ";"
+                    imports <- moptional importList
+                    declarations <- declarationSequence
+                    keyword "END"
+                    lexicalToken (string name)
+                    delimiter "."
+                    return (Module name imports declarations Nothing),
+   procedureDeclaration = ProcedureDeclaration <$> procedureHeading <*> (pure $ ProcedureBody [] Nothing),
    identdef = IdentDef <$> ident <*> pure Exported <* optional (delimiter "*")}
 
 grammar2 g@OberonGrammar{..} = g1{
@@ -163,11 +169,19 @@ grammar2 g@OberonGrammar{..} = g1{
    where g1@OberonGrammar{statement= statement1, string_prod= string_prod1} = grammar g
          withAlternative = WithAlternative <$> qualident <* delimiter ":" <*> qualident
                                            <*  keyword "DO" <*> wrap statementSequence
-   
+
 grammar OberonGrammar{..} = OberonGrammar{
-   module_prod = Module <$ (lexicalWhiteSpace *> keyword "MODULE") <*> ident <* delimiter ";"
-                 <*> moptional importList <*> declarationSequence
-                 <*> optional (keyword "BEGIN" *> wrap statementSequence) <* keyword "END" <*> ident <* delimiter ".",
+   module_prod = do lexicalWhiteSpace
+                    keyword "MODULE"
+                    name <- ident
+                    delimiter ";"
+                    imports <- moptional importList
+                    declarations <- declarationSequence
+                    body <- optional (keyword "BEGIN" *> wrap statementSequence)
+                    keyword "END"
+                    lexicalToken (string name)
+                    delimiter "."
+                    return (Module name imports declarations body),
    ident = identifier,
    letter = satisfyCharInput isLetter,
    digit = satisfyCharInput isDigit,
@@ -247,7 +261,12 @@ grammar OberonGrammar{..} = OberonGrammar{
    pointerType = PointerType <$ keyword "POINTER" <* keyword "TO" <*> wrap type_prod,
    procedureType = ProcedureType <$ keyword "PROCEDURE" <*> optional (wrap formalParameters),
    variableDeclaration = VariableDeclaration <$> identList <* delimiter ":" <*> wrap type_prod,
-   procedureDeclaration = ProcedureDeclaration <$> procedureHeading <* delimiter ";" <*> procedureBody <*> ident,
+   procedureDeclaration = do heading <- procedureHeading
+                             delimiter ";"
+                             body <- procedureBody
+                             let ProcedureHeading _  _ (IdentDef procedureName _) _ = heading
+                             lexicalToken (string procedureName)
+                             return (ProcedureDeclaration heading body),
    procedureHeading = ProcedureHeading Nothing <$ keyword "PROCEDURE" <*> (True <$ delimiter "*" <|> pure False) 
                       <*> identdef <*> optional (wrap formalParameters),
    formalParameters = FormalParameters <$> parens (sepBy (wrap fPSection) (delimiter ";"))

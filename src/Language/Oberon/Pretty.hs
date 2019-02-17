@@ -16,14 +16,14 @@ import Transformation.Deep as Deep (Product(Pair))
 import Language.Oberon.AST
 
 instance Pretty (Module Identity Identity) where
-   pretty (Module name imports declarations body name') =
+   pretty (Module name imports declarations body) =
       vsep $ intersperse mempty $
       ["MODULE" <+> pretty name <> semi,
        if null imports then mempty
        else "IMPORT" <+> align (fillSep (punctuate comma $ prettyImport <$> imports)) <> semi]
       <> (pretty <$> declarations)
       <> [vsep (foldMap (\statements-> ["BEGIN" <#> prettyBlock statements]) body
-                <> ["END" <+> pretty name' <> "." <> line])]
+                <> ["END" <+> pretty name <> "." <> line])]
       where prettyImport (Nothing, mod) = pretty mod
             prettyImport (Just inner, mod) = pretty inner <> ":=" <+> pretty mod
 
@@ -32,9 +32,10 @@ instance Pretty (Declaration Identity Identity) where
    pretty (TypeDeclaration ident typeDef) = "TYPE" <+> pretty ident <+> "=" <+> pretty typeDef <> semi
    pretty (VariableDeclaration idents varType) =
       "VAR" <+> hsep (punctuate comma $ pretty <$> toList idents) <+> colon <+> pretty varType <> semi
-   pretty (ProcedureDeclaration heading body name) = vsep [pretty heading <> semi,
-                                                           pretty body,
-                                                           "END" <+> pretty name <> semi]
+   pretty (ProcedureDeclaration heading body) = vsep [pretty heading <> semi,
+                                                      pretty body,
+                                                      "END" <+> pretty name <> semi]
+      where ProcedureHeading  _ _ (IdentDef name _) _ = heading
    pretty (ForwardDeclaration ident parameters) = "PROCEDURE" <+> "^" <+> pretty ident <+> pretty parameters <> semi
 
 instance Pretty IdentDef where

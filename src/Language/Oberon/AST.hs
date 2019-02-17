@@ -15,7 +15,7 @@ import Transformation.Deep (Product)
 import qualified Transformation.Deep.TH
 import qualified Rank2.TH
 
-data Module f' f = Module Ident [Import] ([f (Declaration f' f')]) (Maybe (f (StatementSequence f' f'))) Ident
+data Module f' f = Module Ident [Import] [f (Declaration f' f')] (Maybe (f (StatementSequence f' f')))
 
 deriving instance (Typeable f, Typeable f',
                    Data (f (Declaration f' f')), Data (f (StatementSequence f' f'))) => Data (Module f' f)
@@ -28,7 +28,7 @@ type Import = (Maybe Ident, Ident)
 data Declaration f' f = ConstantDeclaration IdentDef (f (ConstExpression f' f'))
                       | TypeDeclaration IdentDef (f (Type f' f'))
                       | VariableDeclaration IdentList (f (Type f' f'))
-                      | ProcedureDeclaration (ProcedureHeading f' f) (ProcedureBody f' f) Ident
+                      | ProcedureDeclaration (ProcedureHeading f' f) (ProcedureBody f' f)
                       | ForwardDeclaration IdentDef (Maybe (f (FormalParameters f' f')))
 
 deriving instance (Typeable f, Typeable f',

@@ -238,18 +238,19 @@ instance Attribution TypeCheck Modules (Int, Modules (Semantics TypeCheck) (Sema
                                                         currentModule= name}
 
 instance Attribution TypeCheck AST.Module (Int, AST.Module (Semantics TypeCheck) (Semantics TypeCheck)) where
-   attribution TypeCheck (pos, AST.Module ident1 imports decls body ident2) (Inherited inheritance, AST.Module _ _ decls' body' _) =
+   attribution TypeCheck (pos, AST.Module moduleName imports decls body) 
+               (Inherited inheritance, AST.Module _ _ decls' body') =
       (Synthesized SynTCMod{moduleErrors= foldMap (moduleErrors . syn) decls' <> foldMap (errors . syn) body',
                             moduleEnv= exportedEnv,
                             pointerTargets= pointers},
-       AST.Module ident1 imports [Inherited (localEnv, pointers)] (Inherited localEnv <$ body) ident2)
+       AST.Module moduleName imports [Inherited (localEnv, pointers)] (Inherited localEnv <$ body))
       where exportedEnv = exportNominal <$> Map.mapKeysMonotonic export newEnv
             newEnv = Map.unionsWith mergeTypeBoundProcedures (moduleEnv . syn <$> decls')
             localEnv = InhTC (newEnv `Map.union` env inheritance) (currentModule inheritance)
-            export (AST.NonQualIdent name) = AST.QualIdent ident1 name
+            export (AST.NonQualIdent name) = AST.QualIdent moduleName name
             export q = q
             exportNominal (NominalType (AST.NonQualIdent name) (Just t)) =
-              NominalType (AST.QualIdent ident1 name) (Just $ exportNominal' t)
+              NominalType (AST.QualIdent moduleName name) (Just $ exportNominal' t)
             exportNominal t = exportNominal' t
             exportNominal' (RecordType ancestry fields) = RecordType (export <$> ancestry) (exportNominal' <$> fields)
             exportNominal' (ProcedureType False parameters result) =
@@ -257,7 +258,7 @@ instance Attribution TypeCheck AST.Module (Int, AST.Module (Semantics TypeCheck)
             exportNominal' (PointerType target) = PointerType (exportNominal' target)
             exportNominal' (ArrayType dimensions itemType) = ArrayType dimensions (exportNominal' itemType)
             exportNominal' (NominalType q@(AST.NonQualIdent name) (Just t)) =
-              fromMaybe (NominalType (AST.QualIdent ident1 name) $ Just $ exportNominal' t) (Map.lookup q exportedEnv)
+              fromMaybe (NominalType (AST.QualIdent moduleName name) $ Just $ exportNominal' t) (Map.lookup q exportedEnv)
             exportNominal' t = t
             pointers= foldMap (pointerTargets . syn) decls'
             mergeTypeBoundProcedures (NominalType (AST.NonQualIdent "") (Just t1)) t2 = mergeTypeBoundProcedures t1 t2
@@ -311,10 +312,10 @@ instance Attribution TypeCheck AST.Declaration (Int, AST.Declaration (Semantics 
       where defName (AST.IdentDef name _) = name
    attribution TypeCheck (pos, AST.ProcedureDeclaration (AST.ProcedureHeading receiver indirect
                                                          namedef@(AST.IdentDef name _) signature) 
-                               _body name')
+                               _body)
                (Inherited inheritance,
                 AST.ProcedureDeclaration (AST.ProcedureHeading _receiver _indirect _ signature') 
-                 body@(AST.ProcedureBody declarations statements) _name') =
+                 body@(AST.ProcedureBody declarations statements)) =
       (Synthesized SynTCMod{moduleErrors= foldMap (signatureErrors . syn) signature'
                                           <> foldMap (moduleErrors . syn) declarations
                                           <> foldMap (errors . syn) statements,
@@ -328,8 +329,7 @@ instance Attribution TypeCheck AST.Declaration (Int, AST.Declaration (Semantics 
                             pointerTargets= mempty},
        AST.ProcedureDeclaration
           (AST.ProcedureHeading receiver indirect namedef (Inherited (fst inheritance) <$ signature))
-          (AST.ProcedureBody [Inherited (localInherited, mempty)] (Just $ Inherited localInherited))
-          name')
+          (AST.ProcedureBody [Inherited (localInherited, mempty)] (Just $ Inherited localInherited)))
      where receiverEnv (_, formalName, typeName) =
              foldMap (Map.singleton (AST.NonQualIdent formalName) . ReceiverType)
                      (Map.lookup (AST.NonQualIdent typeName) $ env $ fst inheritance)
@@ -988,8 +988,8 @@ instance Shallow.Functor TypeCheck Placed (Semantics TypeCheck)
 -- * Unsafe Rank2 AST instances
 
 instance Rank2.Apply (AST.Module f') where
-   AST.Module ident1a imports1 decls1 body1 ident1b <*> ~(AST.Module ident2a imports2 decls2 body2 ident2b) =
-      AST.Module ident1a imports1 (liftA2 Rank2.apply decls1 decls2) (liftA2 Rank2.apply body1 body2) ident1b
+   AST.Module name1 imports1 decls1 body1 <*> ~(AST.Module name2 imports2 decls2 body2) =
+      AST.Module name1 imports1 (liftA2 Rank2.apply decls1 decls2) (liftA2 Rank2.apply body1 body2)
 
 type Placed = ((,) Int)
 
