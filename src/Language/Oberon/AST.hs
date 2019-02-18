@@ -7,7 +7,6 @@
 module Language.Oberon.AST where
 
 import Data.Data (Data, Typeable)
-import Data.Functor.Identity (Identity)
 import Data.List.NonEmpty
 import Data.Text (Text)
 
@@ -28,14 +27,14 @@ type Import = (Maybe Ident, Ident)
 data Declaration f' f = ConstantDeclaration IdentDef (f (ConstExpression f' f'))
                       | TypeDeclaration IdentDef (f (Type f' f'))
                       | VariableDeclaration IdentList (f (Type f' f'))
-                      | ProcedureDeclaration (ProcedureHeading f' f) (ProcedureBody f' f)
+                      | ProcedureDeclaration (f (ProcedureHeading f' f')) (ProcedureBody f' f)
                       | ForwardDeclaration IdentDef (Maybe (f (FormalParameters f' f')))
 
 deriving instance (Typeable f, Typeable f',
                    Data (f (Type f' f')), Data (f (ConstExpression f' f')), Data (f (FormalParameters f' f')),
-                   Data (ProcedureHeading f' f), Data (ProcedureBody f' f)) => Data (Declaration f' f)
+                   Data (f (ProcedureHeading f' f')), Data (ProcedureBody f' f)) => Data (Declaration f' f)
 deriving instance (Show (f (Type f' f')), Show (f (ConstExpression f' f')), Show (f (FormalParameters f' f')),
-                   Show (ProcedureHeading f' f), Show (ProcedureBody f' f)) => Show (Declaration f' f)
+                   Show (f (ProcedureHeading f' f')), Show (ProcedureBody f' f)) => Show (Declaration f' f)
 
 data IdentDef = IdentDef Ident AccessMode
    deriving (Data, Eq, Ord, Show)
@@ -119,8 +118,9 @@ deriving instance (Show (f (Type f' f')), Show (f (Expression f' f'))) => Show (
 
 type IdentList = NonEmpty IdentDef
 
-data ProcedureHeading f' f = 
-   ProcedureHeading (Maybe (Bool, Ident, Ident)) Bool IdentDef (Maybe (f (FormalParameters f' f')))
+data ProcedureHeading f' f = ProcedureHeading                  Bool IdentDef (Maybe (f (FormalParameters f' f')))
+                           | TypeBoundHeading Bool Ident Ident Bool IdentDef (Maybe (f (FormalParameters f' f')))
+
 data FormalParameters f' f = FormalParameters [f (FPSection f' f')] (Maybe QualIdent)
 
 data FPSection f' f = FPSection Bool (NonEmpty Ident) (f (Type f' f'))

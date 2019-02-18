@@ -72,7 +72,7 @@ data OberonGrammar f p = OberonGrammar {
    procedureType :: p (Type f f),
    variableDeclaration :: p (Declaration f f),
    procedureDeclaration :: p (Declaration f f),
-   procedureHeading :: p (ProcedureHeading f f),
+   procedureHeading :: p (Ident, ProcedureHeading f f),
    formalParameters :: p (FormalParameters f f),
    fPSection :: p (FPSection f f),
    formalType :: p (Type f f),
@@ -144,19 +144,27 @@ definitionMixin g@OberonGrammar{..} = g{
                     lexicalToken (string name)
                     delimiter "."
                     return (Module name imports declarations Nothing),
-   procedureDeclaration = ProcedureDeclaration <$> procedureHeading <*> (pure $ ProcedureBody [] Nothing),
+   procedureDeclaration = ProcedureDeclaration . snd . sequenceA 
+                          <$> wrap procedureHeading 
+                          <*> (pure $ ProcedureBody [] Nothing),
    identdef = IdentDef <$> ident <*> pure Exported <* optional (delimiter "*")}
 
 grammar2 g@OberonGrammar{..} = g1{
    identdef = IdentDef <$> ident <*> (Exported <$ delimiter "*" <|> ReadOnly <$ delimiter "-" <|> pure PrivateOnly),
    
    string_prod = string_prod1 <|> lexicalToken (char '\'' *> takeWhile (/= "'") <* char '\''),
-   procedureHeading = ProcedureHeading <$ keyword "PROCEDURE"
-                      <*> optional (parens
-                                    ((,,) <$> (True <$ keyword "VAR" <|> pure False)
-                                          <*> ident <* delimiter ":" <*> ident))
-                      <*> (True <$ delimiter "*" <|> pure False) 
-                      <*> identdef <*> optional (wrap formalParameters),
+   procedureHeading = procedureHeading1
+                      <|> TypeBoundHeading <$ keyword "PROCEDURE"
+                          <* delimiter "("
+                          <*> (True <$ keyword "VAR" <|> pure False)
+                          <*> ident
+                          <* delimiter ":"
+                          <*> ident
+                          <* delimiter ")"
+                          <*> (True <$ delimiter "*" <|> pure False)
+                          <**> do idd@(IdentDef n _) <- identdef
+                                  params <- optional (wrap formalParameters)
+                                  pure (\proc-> (n, proc idd params)),
    arrayType = 
       ArrayType <$ keyword "ARRAY" <*> sepBy length (delimiter ",") <* keyword "OF" <*> wrap type_prod,
    statement = statement1 <|> forStatement,
@@ -166,7 +174,7 @@ grammar2 g@OberonGrammar{..} = g1{
       <*> wrap statementSequence <* keyword "END",
    withStatement = With <$ keyword "WITH" <*> sepByNonEmpty (wrap withAlternative) (delimiter "|")
                         <*> optional (keyword "ELSE" *> wrap statementSequence) <* keyword "END"}
-   where g1@OberonGrammar{statement= statement1, string_prod= string_prod1} = grammar g
+   where g1@OberonGrammar{statement= statement1, string_prod= string_prod1, procedureHeading= procedureHeading1} = grammar g
          withAlternative = WithAlternative <$> qualident <* delimiter ":" <*> qualident
                                            <*  keyword "DO" <*> wrap statementSequence
 
@@ -261,14 +269,15 @@ grammar OberonGrammar{..} = OberonGrammar{
    pointerType = PointerType <$ keyword "POINTER" <* keyword "TO" <*> wrap type_prod,
    procedureType = ProcedureType <$ keyword "PROCEDURE" <*> optional (wrap formalParameters),
    variableDeclaration = VariableDeclaration <$> identList <* delimiter ":" <*> wrap type_prod,
-   procedureDeclaration = do heading <- procedureHeading
+   procedureDeclaration = do (procedureName, heading) <- sequenceA <$> wrap procedureHeading
                              delimiter ";"
                              body <- procedureBody
-                             let ProcedureHeading _  _ (IdentDef procedureName _) _ = heading
                              lexicalToken (string procedureName)
                              return (ProcedureDeclaration heading body),
-   procedureHeading = ProcedureHeading Nothing <$ keyword "PROCEDURE" <*> (True <$ delimiter "*" <|> pure False) 
-                      <*> identdef <*> optional (wrap formalParameters),
+   procedureHeading = ProcedureHeading <$ keyword "PROCEDURE" <*> (True <$ delimiter "*" <|> pure False)
+                      <**> do idd@(IdentDef n _) <- identdef
+                              params <- optional (wrap formalParameters)
+                              return (\proc-> (n, proc idd params)),
    formalParameters = FormalParameters <$> parens (sepBy (wrap fPSection) (delimiter ";"))
                       <*> optional (delimiter ":" *> qualident),
    fPSection = FPSection <$> (True <$ keyword "VAR" <|> pure False) 

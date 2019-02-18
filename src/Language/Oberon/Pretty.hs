@@ -35,7 +35,9 @@ instance Pretty (Declaration Identity Identity) where
    pretty (ProcedureDeclaration heading body) = vsep [pretty heading <> semi,
                                                       pretty body,
                                                       "END" <+> pretty name <> semi]
-      where ProcedureHeading  _ _ (IdentDef name _) _ = heading
+      where name = case runIdentity heading
+                   of ProcedureHeading _ (IdentDef nm _) _ -> nm
+                      TypeBoundHeading _ _ _ _ (IdentDef nm _) _ -> nm
    pretty (ForwardDeclaration ident parameters) = "PROCEDURE" <+> "^" <+> pretty ident <+> pretty parameters <> semi
 
 instance Pretty IdentDef where
@@ -113,12 +115,12 @@ instance Pretty (FieldList Identity Identity) where
    pretty EmptyFieldList = mempty
 
 instance Pretty (ProcedureHeading Identity Identity) where
-   pretty (ProcedureHeading receiver indirect ident parameters) =
-      "PROCEDURE" <> (if indirect then "* " else space) <> foldMap prettyReceiver receiver
-      <> pretty ident <> pretty parameters
-      where prettyReceiver (var, name, t) = parens ((if var then "VAR " else mempty)
-                                                        <> pretty name <> colon <+> pretty t)
-                                            <> space
+   pretty (ProcedureHeading indirect ident parameters) =
+      "PROCEDURE" <> (if indirect then "* " else space) <> pretty ident <> pretty parameters
+   pretty (TypeBoundHeading var receiverName receiverType indirect ident parameters) =
+      "PROCEDURE" <> space 
+      <> parens ((if var then "VAR " else mempty) <> pretty receiverName <> colon <+> pretty receiverType)
+      <> space <> (if indirect then "* " else space) <> pretty ident <> pretty parameters
 
 instance Pretty (FormalParameters Identity Identity) where
    pretty (FormalParameters sections result) =

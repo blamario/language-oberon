@@ -109,12 +109,12 @@ errorMessage (NonIntegerType t) = "Type " <> typeMessage t <> " is not an intege
 errorMessage (NonNumericType t) = "Type " <> typeMessage t <> " is not a numeric type"
 errorMessage (NonPointerType t) = "Trying to dereference a non-pointer type " <> typeMessage t
 errorMessage (NonProcedureType t) = "Trying to invoke a " <> typeMessage t <> " as a procedure"
-errorMessage (NonRecordType t) = "Trying to access a field of a non-record type " <> typeMessage t
+errorMessage (NonRecordType t) = "Non-record type " <> typeMessage t
 errorMessage (TypeMismatch t1 t2) = "Type mismatch between " <> typeMessage t1 <> " and " <> typeMessage t2
 errorMessage (UnequalTypes t1 t2) = "Unequal types " <> typeMessage t1 <> " and " <> typeMessage t2
 errorMessage (UnrealType t) = "Type " <> typeMessage t <> " is not a numeric real type"
 errorMessage (UnknownName q) = "Unknown name " <> show q
-errorMessage (UnknownField name t) = "Unknown field " <> show name <> " of type " <> typeMessage t
+errorMessage (UnknownField name t) = "Record type " <> typeMessage t <> " has no field " <> show name
 
 typeMessage :: Type -> String
 typeMessage (NominalType name _) = nameMessage name
@@ -167,6 +167,10 @@ data SynTCType = SynTCType{typeErrors :: [Error],
 data SynTCFields = SynTCFields{fieldErrors :: [Error],
                                fieldEnv :: Map AST.Ident Type} deriving Show
 
+data SynTCHead = SynTCHead{headingErrors :: [Error],
+                           insideEnv :: Environment,
+                           outsideEnv :: Environment} deriving Show
+
 data SynTCSig = SynTCSig{signatureErrors :: [Error],
                          signatureEnv :: Environment,
                          signatureType :: Type} deriving Show
@@ -201,6 +205,8 @@ type instance Atts (Inherited TypeCheck) (AST.Module f' f) = InhTC
 type instance Atts (Synthesized TypeCheck) (AST.Module f' f) = SynTCMod
 type instance Atts (Inherited TypeCheck) (AST.Declaration f' f) = (InhTC, Map AST.Ident AST.Ident)
 type instance Atts (Synthesized TypeCheck) (AST.Declaration f' f) = SynTCMod
+type instance Atts (Inherited TypeCheck) (AST.ProcedureHeading f' f) = (InhTC, Map AST.Ident AST.Ident)
+type instance Atts (Synthesized TypeCheck) (AST.ProcedureHeading f' f) = SynTCHead
 type instance Atts (Inherited TypeCheck) (AST.FormalParameters f' f) = InhTC
 type instance Atts (Synthesized TypeCheck) (AST.FormalParameters f' f) = SynTCSig
 type instance Atts (Inherited TypeCheck) (AST.FPSection f' f) = InhTC
@@ -310,51 +316,56 @@ instance Attribution TypeCheck AST.Declaration (Int, AST.Declaration (Semantics 
                             pointerTargets= mempty},
        AST.VariableDeclaration names (Inherited $ fst inheritance))
       where defName (AST.IdentDef name _) = name
-   attribution TypeCheck (pos, AST.ProcedureDeclaration (AST.ProcedureHeading receiver indirect
-                                                         namedef@(AST.IdentDef name _) signature) 
-                               _body)
+   attribution TypeCheck (pos, AST.ProcedureDeclaration _heading _body)
                (Inherited inheritance,
-                AST.ProcedureDeclaration (AST.ProcedureHeading _receiver _indirect _ signature') 
-                 body@(AST.ProcedureBody declarations statements)) =
-      (Synthesized SynTCMod{moduleErrors= foldMap (signatureErrors . syn) signature'
+                AST.ProcedureDeclaration heading body@(AST.ProcedureBody declarations statements)) =
+      (Synthesized SynTCMod{moduleErrors= headingErrors (syn heading)
                                           <> foldMap (moduleErrors . syn) declarations
                                           <> foldMap (errors . syn) statements,
-                            moduleEnv= case receiver
-                                       of Just (_, _, typeName)
-                                             | Just targetName <- Map.lookup typeName (snd inheritance) ->
-                                                Map.singleton (AST.NonQualIdent targetName) methodType
-                                             | otherwise -> Map.singleton (AST.NonQualIdent typeName) methodType
-                                                
-                                          Nothing -> Map.singleton (AST.NonQualIdent name) procedureType,
+                            moduleEnv= outsideEnv (syn heading),
                             pointerTargets= mempty},
        AST.ProcedureDeclaration
-          (AST.ProcedureHeading receiver indirect namedef (Inherited (fst inheritance) <$ signature))
+          (Inherited inheritance)
           (AST.ProcedureBody [Inherited (localInherited, mempty)] (Just $ Inherited localInherited)))
-     where receiverEnv (_, formalName, typeName) =
-             foldMap (Map.singleton (AST.NonQualIdent formalName) . ReceiverType)
-                     (Map.lookup (AST.NonQualIdent typeName) $ env $ fst inheritance)
-           methodType = NominalType (AST.NonQualIdent "") (Just $ RecordType [] $ Map.singleton name procedureType)
-           procedureType = maybe (ProcedureType False [] Nothing) (signatureType . syn) signature'
-           receiverError (_, formalName, typeName) =
-             case Map.lookup (AST.NonQualIdent typeName) (env $ fst inheritance)
-             of Nothing -> [UnknownName $ AST.NonQualIdent typeName]
-                Just RecordType{} -> []
-                Just (PointerType RecordType{}) -> []
-                Just (NominalType _ (Just RecordType{})) -> []
-                Just (NominalType _ (Just (PointerType RecordType{}))) -> []
-                Just t -> [NonRecordType t]
-           localInherited = InhTC (foldMap (moduleEnv . syn) declarations <> env bodyInherited) 
+      where localInherited = InhTC (foldMap (moduleEnv . syn) declarations <> env bodyInherited)
+                                   (currentModule $ fst inheritance)
+            bodyInherited = InhTC (insideEnv (syn heading) `Map.union` env (fst inheritance))
                                   (currentModule $ fst inheritance)
-           bodyInherited = InhTC (foldMap receiverEnv receiver
-                                  `Map.union` foldMap (signatureEnv . syn) signature'
-                                  `Map.union` env (fst inheritance))
-                                 (currentModule $ fst inheritance)
-   attribution TypeCheck (pos, AST.ForwardDeclaration namedef@(AST.IdentDef name _) signature)
-               (Inherited inheritance, AST.ForwardDeclaration _namedef signature') =
-      (Synthesized SynTCMod{moduleErrors= foldMap (signatureErrors . syn) signature',
-                            moduleEnv= foldMap (Map.singleton (AST.NonQualIdent name) . signatureType . syn) signature',
+   attribution TypeCheck (pos, AST.ForwardDeclaration namedef@(AST.IdentDef name _) _signature)
+               (Inherited inheritance, AST.ForwardDeclaration _namedef signature) =
+      (Synthesized SynTCMod{moduleErrors= foldMap (signatureErrors . syn) signature,
+                            moduleEnv= foldMap (Map.singleton (AST.NonQualIdent name) . signatureType . syn) signature,
                             pointerTargets= mempty},
-       AST.ForwardDeclaration namedef (Inherited (fst inheritance) <$ signature))
+       AST.ForwardDeclaration namedef (Just (Inherited $ fst inheritance)))
+
+instance Attribution TypeCheck AST.ProcedureHeading (Int, AST.ProcedureHeading (Semantics TypeCheck) (Semantics TypeCheck)) where
+   attribution TypeCheck (pos, AST.ProcedureHeading indirect namedef@(AST.IdentDef name _) _signature)
+      (Inherited inheritance, AST.ProcedureHeading _indirect _ signature) =
+      (Synthesized SynTCHead{headingErrors= foldMap (signatureErrors . syn) signature,
+                             outsideEnv= Map.singleton (AST.NonQualIdent name) $
+                                         maybe (ProcedureType False [] Nothing) (signatureType . syn) signature,
+                             insideEnv= foldMap (signatureEnv . syn) signature},
+       AST.ProcedureHeading indirect namedef (Just $ Inherited $ fst inheritance))
+   attribution TypeCheck (pos, AST.TypeBoundHeading var receiverName receiverType indirect namedef@(AST.IdentDef name _) _signature)
+      (Inherited inheritance, AST.TypeBoundHeading _var _name _type _indirect _ signature) =
+      (Synthesized SynTCHead{headingErrors= receiverError <> foldMap (signatureErrors . syn) signature,
+                             outsideEnv= case Map.lookup receiverType (snd inheritance)
+                                         of Just targetName -> Map.singleton (AST.NonQualIdent targetName) methodType
+                                            Nothing -> Map.singleton (AST.NonQualIdent receiverType) methodType,
+                             insideEnv= receiverEnv `Map.union` foldMap (signatureEnv . syn) signature},
+       AST.TypeBoundHeading var receiverName receiverType indirect namedef (Just $ Inherited $ fst inheritance))
+      where receiverEnv =
+               foldMap (Map.singleton (AST.NonQualIdent receiverName) . ReceiverType)
+                       (Map.lookup (AST.NonQualIdent receiverType) $ env $ fst inheritance)
+            methodType = NominalType (AST.NonQualIdent "") (Just $ RecordType [] $ Map.singleton name procedureType)
+            procedureType = maybe (ProcedureType False [] Nothing) (signatureType . syn) signature
+            receiverError =
+               case Map.lookup (AST.NonQualIdent receiverType) (env $ fst inheritance)
+               of Nothing -> [(currentModule $ fst inheritance, pos, UnknownName $ AST.NonQualIdent receiverType)]
+                  Just t 
+                     | RecordType{} <- ultimate t -> []
+                     | PointerType t' <- ultimate t, RecordType{} <- ultimate t' -> []
+                     | otherwise -> [(currentModule $ fst inheritance, pos, NonRecordType t)]
 
 instance Attribution TypeCheck AST.FormalParameters (Int, AST.FormalParameters (Semantics TypeCheck) (Semantics TypeCheck)) where
    attribution TypeCheck (pos, AST.FormalParameters sections returnType)
@@ -944,6 +955,9 @@ instance Shallow.Functor TypeCheck Placed (Semantics TypeCheck)
    (<$>) = AG.mapDefault id snd
 instance Shallow.Functor TypeCheck Placed (Semantics TypeCheck)
          (AST.Declaration (Semantics TypeCheck) (Semantics TypeCheck)) where
+   (<$>) = AG.mapDefault id snd
+instance Shallow.Functor TypeCheck Placed (Semantics TypeCheck)
+         (AST.ProcedureHeading (Semantics TypeCheck) (Semantics TypeCheck)) where
    (<$>) = AG.mapDefault id snd
 instance Shallow.Functor TypeCheck Placed (Semantics TypeCheck)
          (AST.FormalParameters (Semantics TypeCheck) (Semantics TypeCheck)) where

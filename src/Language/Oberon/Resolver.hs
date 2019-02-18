@@ -11,7 +11,7 @@ module Language.Oberon.Resolver (Error(..),
 
 import Control.Applicative (Alternative)
 import Control.Monad ((>=>))
-import Control.Monad.Trans.State (StateT(..), evalStateT)
+import Control.Monad.Trans.State (StateT(..), evalStateT, execStateT, get, put)
 import Data.Either (partitionEithers)
 import Data.Either.Validation (Validation(..), validationToEither)
 import Data.Foldable (toList)
@@ -130,14 +130,20 @@ instance {-# overlaps #-} Shallow.Traversable
 instance {-# overlaps #-} Shallow.Traversable
                           Resolution NodeWrap Placed Resolved (Declaration NodeWrap NodeWrap) where
    traverse res (Compose (pos, Ambiguous (proc@(ProcedureDeclaration heading body) :| []))) =
+      do s@(scope, state) <- get
+         let ProcedureBody declarations statements = body
+             Success (headingScope, _) = execStateT (Shallow.traverse res heading) s
+             innerScope = localScope res "" declarations (headingScope `Map.union` scope)
+         put (innerScope, state)
+         return (pos, proc)
+   traverse res (Compose (pos, Ambiguous (dec :| []))) = pure (pos, dec)
+   traverse _ declarations = StateT (const $ Failure $ pure $ AmbiguousDeclaration $ toList declarations)
+
+instance {-# overlaps #-} Shallow.Traversable
+                          Resolution NodeWrap Placed Resolved (ProcedureHeading NodeWrap NodeWrap) where
+   traverse res (Compose (pos, Ambiguous (proc@(ProcedureHeading _ _ parameters) :| []))) =
       StateT $ \s@(scope, state)->
-         let ProcedureHeading receiver _indirect _name parameters = heading
-             ProcedureBody declarations statements = body
-             innerScope = localScope res "" declarations (parameterScope `Map.union` receiverScope `Map.union` scope)
-             receiverScope = maybe mempty receiverBinding receiver
-             receiverBinding :: (Bool, Ident, Ident) -> Map Ident (Validation e (DeclarationRHS f' Placed))
-             receiverBinding (_, name, ty) = Map.singleton name (Success $ DeclaredVariable $ (,) pos $ TypeReference
-                                                                 $ NonQualIdent ty)
+         let innerScope = parameterScope `Map.union` scope
              parameterScope = case parameters
                               of Nothing -> mempty
                                  Just (Compose (_, Ambiguous (FormalParameters sections _ :| [])))
@@ -145,8 +151,19 @@ instance {-# overlaps #-} Shallow.Traversable
              binding (Compose (_, Ambiguous (FPSection _ names types :| []))) =
                 [(v, evalStateT (Deep.traverseDown res $ DeclaredVariable types) s) | v <- NonEmpty.toList names]
          in Success ((pos, proc), (innerScope, state))
-   traverse res (Compose (pos, Ambiguous (dec :| []))) = pure (pos, dec)
-   traverse _ declarations = StateT (const $ Failure $ pure $ AmbiguousDeclaration $ toList declarations)
+   traverse res (Compose (pos, Ambiguous (proc@(TypeBoundHeading var receiverName receiverType _ _ parameters) :| []))) =
+      StateT $ \s@(scope, state)->
+         let innerScope = parameterScope `Map.union` receiverBinding `Map.union` scope
+             receiverBinding :: Map Ident (Validation e (DeclarationRHS f' Placed))
+             receiverBinding = Map.singleton receiverName (Success $ DeclaredVariable $ (,) pos $ TypeReference
+                                                                 $ NonQualIdent receiverType)
+             parameterScope = case parameters
+                              of Nothing -> mempty
+                                 Just (Compose (_, Ambiguous (FormalParameters sections _ :| [])))
+                                    -> Map.fromList (concatMap binding sections)
+             binding (Compose (_, Ambiguous (FPSection _ names types :| []))) =
+                [(v, evalStateT (Deep.traverseDown res $ DeclaredVariable types) s) | v <- NonEmpty.toList names]
+         in Success ((pos, proc), (innerScope, state))
 
 instance {-# overlaps #-} Shallow.Traversable
                           Resolution NodeWrap Placed Resolved (ProcedureBody NodeWrap NodeWrap) where
@@ -258,15 +275,18 @@ localScope res qual declarations outerScope = innerScope
                             -> Validation (NonEmpty Error) (DeclarationRHS Placed Placed)
          resolveBinding res scope dr = evalStateT (Deep.traverseDown res dr) (scope, DeclarationState)
 
-declarationBinding :: Ident -> Declaration f f -> [(Ident, (AccessMode, DeclarationRHS f f))]
+declarationBinding :: Foldable f => Ident -> Declaration f f -> [(Ident, (AccessMode, DeclarationRHS f f))]
 declarationBinding _ (ConstantDeclaration (IdentDef name export) expr) =
    [(name, (export, DeclaredConstant expr))]
 declarationBinding _ (TypeDeclaration (IdentDef name export) typeDef) =
    [(name, (export, DeclaredType typeDef))]
 declarationBinding _ (VariableDeclaration names typeDef) =
    [(name, (export, DeclaredVariable typeDef)) | (IdentDef name export) <- NonEmpty.toList names]
-declarationBinding moduleName (ProcedureDeclaration (ProcedureHeading _ _ (IdentDef name export) parameters) _) =
-   [(name, (export, DeclaredProcedure (moduleName == "SYSTEM") parameters))]
+declarationBinding moduleName (ProcedureDeclaration heading _) = procedureHeadBinding (foldr1 const heading)
+   where procedureHeadBinding (ProcedureHeading _ (IdentDef name export) parameters) =
+            [(name, (export, DeclaredProcedure (moduleName == "SYSTEM") parameters))]
+         procedureHeadBinding (TypeBoundHeading _ _ _ _ (IdentDef name export) parameters) =
+            [(name, (export, DeclaredProcedure (moduleName == "SYSTEM") parameters))]
 declarationBinding _ (ForwardDeclaration (IdentDef name export) parameters) =
    [(name, (export, DeclaredProcedure False parameters))]
 
