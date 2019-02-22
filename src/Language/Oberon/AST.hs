@@ -1,10 +1,11 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances, MultiParamTypeClasses, UndecidableInstances,
-             StandaloneDeriving, TemplateHaskell #-}
+             StandaloneDeriving, TemplateHaskell, TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 
 -- | Oberon Abstract Syntax Tree definitions
 
-module Language.Oberon.AST where
+module Language.Oberon.AST (module Language.Oberon.AST,
+                            QualIdent(..), RelOp(..)) where
 
 import Data.Data (Data, Typeable)
 import Data.List.NonEmpty
@@ -13,6 +14,121 @@ import Data.Text (Text)
 import Transformation.Deep (Product)
 import qualified Transformation.Deep.TH
 import qualified Rank2.TH
+
+import qualified Language.Oberon.Abstract as Abstract
+import Language.Oberon.Abstract (BaseType, QualIdent(..), RelOp(..))
+
+data Language
+
+instance Abstract.Oberon Language where
+   type Module Language = Module
+   type Declaration Language = Declaration
+   type Type Language = Type
+   type Statement Language = Statement
+   type Expression Language = Expression
+   type Designator Language = Designator
+
+   type FieldList Language = FieldList
+   type ProcedureHeading Language = ProcedureHeading
+   type FormalParameters Language = FormalParameters
+   type FPSection Language = FPSection
+   type ProcedureBody Language = ProcedureBody
+   type StatementSequence Language = StatementSequence
+   type WithAlternative Language = WithAlternative
+   type Case Language = Case
+   type CaseLabels Language = CaseLabels
+   type Element Language = Element
+
+   type IdentDef Language = IdentDef
+   type AccessMode Language = AccessMode
+
+   moduleUnit = Module
+
+   -- Declaration
+   constantDeclaration = ConstantDeclaration
+   typeDeclaration = TypeDeclaration
+   variableDeclaration = VariableDeclaration
+   procedureDeclaration = ProcedureDeclaration
+   forwardDeclaration = ForwardDeclaration
+
+   procedureHeading = ProcedureHeading
+   formalParameters = FormalParameters
+   fpSection = FPSection
+   procedureBody = ProcedureBody
+   
+   identDef = IdentDef
+   exported = Exported
+   privateOnly = PrivateOnly
+
+   fieldList = FieldList
+   emptyFieldList = EmptyFieldList
+
+   -- Type
+   arrayType = ArrayType
+   pointerType = PointerType
+   procedureType = ProcedureType
+   recordType = RecordType
+   typeReference = TypeReference
+
+   -- Statement
+   assignment = Assignment
+   caseStatement = CaseStatement
+   emptyStatement = EmptyStatement
+   exitStatement = Exit
+   ifStatement = If
+   loopStatement = Loop
+   procedureCall = ProcedureCall
+   repeatStatement = Repeat
+   returnStatement = Return
+   whileStatement = While
+   withStatement alt = With (alt :| []) Nothing
+
+   withAlternative = WithAlternative
+   caseAlternative = Case
+   emptyCase = EmptyCase
+   labelRange = LabelRange
+   singleLabel = SingleLabel
+   
+   statementSequence = StatementSequence
+
+   -- Expression
+   add = Add
+   subtract = Subtract
+   and = And
+   or = Or
+   charCode = CharCode
+   charConstant = CharConstant
+   divide = Divide
+   integerDivide = IntegerDivide
+   modulo = Modulo
+   multiply = Multiply
+   functionCall = FunctionCall
+   integer = Integer
+   negative = Negative
+   positive = Positive
+   nil = Nil
+   not = Not
+   read = Read
+   real = Real
+   relation = Relation
+   set = Set
+   string = String
+
+   element = Element
+   range = Range
+
+   -- Designator
+   variable = Variable
+   field = Field
+   index = Index
+   typeGuard = TypeGuard
+   dereference = Dereference
+
+instance Abstract.Oberon2 Language where
+   readOnly = ReadOnly
+   typeBoundHeading = TypeBoundHeading
+   forStatement = For
+   variantWithStatement = With
 
 data Module f' f = Module Ident [Import] [f (Declaration f' f')] (Maybe (f (StatementSequence f' f')))
 
@@ -72,9 +188,6 @@ deriving instance (Show (f (Designator f' f')),
                    Show (f (Element f' f')), Show (f (Expression f' f'))) => Show (Expression f' f)
 deriving instance (Eq (f (Designator f' f')), Eq (f (Element f' f')), Eq (f (Expression f' f'))) => Eq (Expression f' f)
 
-data RelOp = Equal | Unequal | Less | LessOrEqual | Greater | GreaterOrEqual | In | Is
-   deriving (Data, Eq, Show)
-
 data Element f' f = Element (f (Expression f' f'))
                   | Range (f (Expression f' f')) (f (Expression f' f'))
 
@@ -103,12 +216,6 @@ deriving instance (Typeable f, Typeable f', Data (f (Type f' f')), Data (f (Cons
                    Data (f (FormalParameters f' f')), Data (f (FieldList f' f'))) => Data (Type f' f)
 deriving instance (Show (f (Type f' f')), Show (f (ConstExpression f' f')),
                    Show (f (FormalParameters f' f')), Show (f (FieldList f' f'))) => Show (Type f' f)
-
-data QualIdent = QualIdent Ident Ident 
-               | NonQualIdent Ident
-   deriving (Data, Eq, Ord, Show)
-
-type BaseType  = QualIdent
 
 data FieldList f' f = FieldList IdentList (f (Type f' f'))
                     | EmptyFieldList

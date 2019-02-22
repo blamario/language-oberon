@@ -4,6 +4,7 @@ module Main where
 
 import Language.Oberon (Placed, LanguageVersion(Oberon1, Oberon2), parseAndResolveModule, resolvePosition, resolvePositions)
 import Language.Oberon.AST (Module(..), StatementSequence, Statement, Expression)
+import qualified Language.Oberon.AST as AST
 import qualified Language.Oberon.Grammar as Grammar
 import qualified Language.Oberon.Resolver as Resolver
 import qualified Language.Oberon.TypeChecker as TypeChecker
@@ -138,8 +139,8 @@ main' Opts{..} =
     go :: (Show a, Data a, Pretty a, a ~ t f f,
            Deep.Functor (Rank2.Map Grammar.NodeWrap NodeWrap) t Grammar.NodeWrap NodeWrap) =>
           (t NodeWrap NodeWrap -> Validation (NonEmpty Resolver.Error) a)
-       -> (forall p. Grammar.OberonGrammar Grammar.NodeWrap p -> p (t Grammar.NodeWrap Grammar.NodeWrap))
-       -> (Grammar (Grammar.OberonGrammar Grammar.NodeWrap) LeftRecursive.Parser Text)
+       -> (forall p. Grammar.OberonGrammar AST.Language Grammar.NodeWrap p -> p (t Grammar.NodeWrap Grammar.NodeWrap))
+       -> (Grammar (Grammar.OberonGrammar AST.Language Grammar.NodeWrap) LeftRecursive.Parser Text)
        -> String -> Text -> IO ()
     go resolve production grammar filename contents =
        case getCompose (resolvePositions contents <$> production (parseComplete grammar contents))

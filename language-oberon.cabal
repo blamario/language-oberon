@@ -32,7 +32,7 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:       src
   exposed-modules:      Language.Oberon,
-                        Language.Oberon.AST, Language.Oberon.Grammar,
+                        Language.Oberon.AST, Language.Oberon.Abstract, Language.Oberon.Grammar,
                         Language.Oberon.Pretty, Language.Oberon.Resolver, Language.Oberon.TypeChecker,
                         Transformation, Transformation.Deep, Transformation.Deep.TH,
                         Transformation.Rank2, Transformation.AG
