@@ -1,5 +1,5 @@
-{-# Language DefaultSignatures, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes,
-             StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
+{-# Language FlexibleContexts, MultiParamTypeClasses, RankNTypes, StandaloneDeriving, TypeFamilies, TypeOperators,
+             UndecidableInstances #-}
 
 module Transformation.AG where
 

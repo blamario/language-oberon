@@ -1,5 +1,4 @@
-{-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, FunctionalDependencies, MultiParamTypeClasses, 
-             PolyKinds, RankNTypes, StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
+{-# Language FlexibleInstances, FunctionalDependencies, MultiParamTypeClasses #-}
 
 module Transformation where
 
