@@ -178,7 +178,6 @@ grammar2 g@OberonGrammar{..} = g1{
                                   pure (\proc-> (n, proc idd params)),
    arrayType =
       Abstract.arrayType <$ keyword "ARRAY" <*> sepBy length (delimiter ",") <* keyword "OF" <*> wrap type_prod,
-   statement = statement1 <|> forStatement,
    forStatement = 
       Abstract.forStatement <$ keyword "FOR" <*> ident <* delimiter ":=" <*> expression <* keyword "TO" <*> expression
       <*> optional (keyword "BY" *> constExpression) <* keyword "DO"
@@ -186,7 +185,7 @@ grammar2 g@OberonGrammar{..} = g1{
    withStatement = Abstract.variantWithStatement <$ keyword "WITH"
                       <*> sepByNonEmpty (wrap withAlternative) (delimiter "|")
                       <*> optional (keyword "ELSE" *> wrap statementSequence) <* keyword "END"}
-   where g1@OberonGrammar{statement= statement1, string_prod= string_prod1, procedureHeading= procedureHeading1} = grammar g
+   where g1@OberonGrammar{string_prod= string_prod1, procedureHeading= procedureHeading1} = grammar g
          withAlternative = Abstract.withAlternative <$> qualident <* delimiter ":" <*> qualident
                                                     <*  keyword "DO" <*> wrap statementSequence
 
@@ -237,7 +236,7 @@ grammar OberonGrammar{..} = OberonGrammar{
              <$> lexicalToken (digit <> (takeCharsWhile isDigit <|> takeCharsWhile isHexDigit <> string "H")),
    hexDigit = satisfyCharInput isHexDigit,
    real = Abstract.real <$> lexicalToken (digit <> takeCharsWhile isDigit <> string "."
-                                          *> takeCharsWhile isDigit <> moptional scaleFactor),
+                                          <> takeCharsWhile isDigit <> moptional scaleFactor),
    scaleFactor = (string "E" <|> string "D") <> moptional (string "+" <|> string "-") <> digit <> takeCharsWhile isDigit,
    charConstant = lexicalToken (empty -- Abstract.charConstant <$ char '"' <*> anyChar <* char '"'
                                 <|> Abstract.charCode . fst . head . readHex . unpack
@@ -308,7 +307,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                         <*> identdef <*> optional (wrap formalParameters),
    statementSequence = Abstract.statementSequence <$> sepByNonEmpty (wrapAmbiguous statement) (delimiter ";"),
    statement = assignment <|> procedureCall <|> ifStatement <|> caseStatement 
-               <|> whileStatement <|> repeatStatement <|> loopStatement <|> withStatement 
+               <|> whileStatement <|> repeatStatement <|> loopStatement <|> forStatement <|> withStatement 
                <|> Abstract.exitStatement <$ keyword "EXIT" 
                <|> Abstract.returnStatement <$ keyword "RETURN" <*> optional expression
                <|> pure Abstract.emptyStatement
