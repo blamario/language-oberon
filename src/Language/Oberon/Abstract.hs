@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable, KindSignatures, PolyKinds, TypeFamilies, TypeFamilyDependencies #-}
 {-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 
--- | Oberon Abstracter Syntax Tree definitions
+-- | Oberon Finally Tagless Abstract Syntax Tree definitions
 
 module Language.Oberon.Abstract where
 
@@ -21,10 +21,10 @@ data QualIdent = QualIdent Ident Ident
 
 type BaseType  = QualIdent
 
-data RelOp = Equal | Unequal | Less | LessOrEqual | Greater | GreaterOrEqual | In | Is
+data RelOp = Equal | Unequal | Less | LessOrEqual | Greater | GreaterOrEqual | In
    deriving (Data, Eq, Show)
 
-class Oberon l where
+class Wirthy l where
    type Module l      = (m :: (* -> *) -> (* -> *) -> *) | m -> l
    type Declaration l = (d :: (* -> *) -> (* -> *) -> *) | d -> l
    type Type l        = (t :: (* -> *) -> (* -> *) -> *) | t -> l
@@ -44,7 +44,6 @@ class Oberon l where
    type Element l           = (x :: (* -> *) -> (* -> *) -> *) | x -> l
    
    type IdentDef l   = x | x -> l
-   type AccessMode l = x | x -> l
 
    -- Module
    moduleUnit :: Ident -> [Import] -> [f (Declaration l f' f')] -> Maybe (f (StatementSequence l f' f')) -> Module l f' f
@@ -61,9 +60,7 @@ class Oberon l where
    fpSection :: Bool -> NonEmpty Ident -> f (Type l f' f') -> FPSection l f' f
    procedureBody :: [f (Declaration l f' f')] -> Maybe (f (StatementSequence l f' f')) -> ProcedureBody l f' f
    
-   identDef :: Ident -> AccessMode l -> IdentDef l
-   exported :: AccessMode l
-   privateOnly :: AccessMode l
+   identDef :: Ident -> IdentDef l
 
    fieldList :: NonEmpty (IdentDef l) -> f (Type l f' f') -> FieldList l f' f
    emptyFieldList :: FieldList l f' f
@@ -127,8 +124,12 @@ class Oberon l where
    typeGuard :: f (Designator l f' f') -> QualIdent -> Designator l f' f
    dereference :: f (Designator l f' f') -> Designator l f' f
 
+class Wirthy l => Oberon l where
+   is :: f (Expression l f' f') -> QualIdent -> Expression l f' f
+   exported :: Ident -> IdentDef l
+
 class Oberon l => Oberon2 l where
-   readOnly :: AccessMode l
+   readOnly :: Ident -> IdentDef l
    typeBoundHeading :: Bool -> Ident -> Ident -> Bool -> IdentDef l -> Maybe (f (FormalParameters l f' f'))
                     -> ProcedureHeading l f' f
    forStatement :: Ident -> f (Expression l f' f') -> f (Expression l f' f') -> Maybe (f (Expression l f' f')) 

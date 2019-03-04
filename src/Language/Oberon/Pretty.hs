@@ -48,6 +48,7 @@ instance Pretty IdentDef where
 instance Pretty (Expression Identity Identity) where
    pretty = prettyPrec 0
       where prettyPrec 0 (Relation op left right) = prettyPrec' 1 left <+> pretty op <+> prettyPrec' 1 right
+            prettyPrec 0 (IsA left right) = prettyPrec' 1 left <+> "IS" <+> pretty right
             prettyPrec p (Positive e) | p < 2 = "+" <> prettyPrec' 2 e
             prettyPrec p (Negative e) | p < 2 = "-" <> prettyPrec' 2 e
             prettyPrec p (Add left right) | p < 3 = prettyPrec' 3 left <> "+" <> prettyPrec' 3 right
@@ -83,7 +84,6 @@ instance Pretty RelOp where
    pretty Greater = ">"
    pretty GreaterOrEqual = ">="
    pretty In = "IN"
-   pretty Is = "IS"
 
 instance Pretty (Element Identity Identity) where
    pretty (Element e) = pretty e

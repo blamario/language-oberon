@@ -122,7 +122,11 @@ instance {-# overlaps #-} Shallow.Traversable
                    | Success{} <- evalStateT (traverse (Shallow.traverse res) parameters) (scope, ExpressionState)
                      -> pure (e, ExpressionState)
                    | otherwise -> Failure (pure $ InvalidFunctionParameters parameters)
-          resolveExpression e@(Relation Is lefts rights) = pure (e, ExpressionOrTypeState)
+          resolveExpression e@(IsA lefts q) =
+            case resolveName res scope q
+            of Failure err ->  Failure err
+               Success DeclaredType{} -> pure (e, ExpressionState)
+               Success _ -> Failure (NotAType q :| [])
           resolveExpression e = pure (e, state)
       in (\(pos, (r, s))-> ((pos, r), (scope, s)))
          <$> unique InvalidExpression (AmbiguousExpression . (fst <$>)) (resolveExpression <$> expressions)

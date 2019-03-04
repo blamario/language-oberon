@@ -551,12 +551,10 @@ instance Attribution TypeCheck AST.Expression (Int, AST.Expression (Semantics Ty
    attribution TypeCheck (pos, AST.Relation op _ _) (Inherited inheritance, AST.Relation _op left right) =
       (Synthesized SynTCExp{expressionErrors= case expressionErrors (syn left) <> expressionErrors (syn right)
                                               of [] | t1 == t2 -> []
-                                                    | AST.Is <- op -> assignmentCompatible inheritance pos t1 t2
                                                     | AST.In <- op -> membershipCompatible (ultimate t1) (ultimate t2)
                                                     | equality op, [] <- assignmentCompatible inheritance pos t1 t2 -> []
                                                     | equality op, [] <- assignmentCompatible inheritance pos t2 t1 -> []
-                                                    | op /= AST.Is -> comparable (ultimate t1) (ultimate t2)
-                                                    | otherwise -> [(currentModule inheritance, pos, TypeMismatch t1 t2)]
+                                                    | otherwise -> comparable (ultimate t1) (ultimate t2)
                                                  errs -> errs,
                             inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing},
        AST.Relation op (Inherited inheritance) (Inherited inheritance))
@@ -584,6 +582,12 @@ instance Attribution TypeCheck AST.Expression (Int, AST.Expression (Semantics Ty
             membershipCompatible IntegerType{} (NominalType (AST.NonQualIdent "SET") Nothing) = []
             membershipCompatible (NominalType (AST.NonQualIdent t) Nothing)
                                  (NominalType (AST.NonQualIdent "SET") Nothing) | isNumerical t = []
+   attribution TypeCheck (pos, AST.IsA _ q) (Inherited inheritance, AST.IsA left _) =
+      (Synthesized SynTCExp{expressionErrors= case Map.lookup q (env inheritance)
+                                              of Nothing -> [(currentModule inheritance, pos, UnknownName q)]
+                                                 Just t -> assignmentCompatible inheritance pos (inferredType $ syn left) t,
+                            inferredType= NominalType (AST.NonQualIdent "BOOLEAN") Nothing},
+       AST.IsA (Inherited inheritance) q)
    attribution TypeCheck (pos, _) (Inherited inheritance, AST.Positive expr) =
       (Synthesized SynTCExp{expressionErrors= unaryNumericOperatorErrors inheritance pos (syn expr),
                             inferredType= inferredType (syn expr)},

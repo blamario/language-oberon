@@ -154,13 +154,13 @@ definitionMixin g@OberonGrammar{..} = g{
    procedureDeclaration = Abstract.procedureDeclaration . snd . sequenceA 
                           <$> wrap procedureHeading 
                           <*> (pure $ Abstract.procedureBody [] Nothing),
-   identdef = Abstract.identDef <$> ident <*> pure Abstract.exported <* optional (delimiter "*")}
+   identdef = Abstract.exported <$> ident <* optional (delimiter "*")}
 
 grammar2 g@OberonGrammar{..} = g1{
-   identdef = Abstract.identDef <$> ident 
-              <*> (Abstract.exported <$ delimiter "*" 
-                   <|> Abstract.readOnly <$ delimiter "-" 
-                   <|> pure Abstract.privateOnly),
+   identdef = ident 
+              <**> (Abstract.exported <$ delimiter "*" 
+                    <|> Abstract.readOnly <$ delimiter "-" 
+                    <|> pure Abstract.identDef),
    
    string_prod = string_prod1 <|> lexicalToken (char '\'' *> takeWhile (/= "'") <* char '\''),
    procedureHeading = procedureHeading1
@@ -213,10 +213,11 @@ grammar OberonGrammar{..} = OberonGrammar{
                                   <|> wrap forwardDeclaration <* delimiter ";")
                          <?> "declarations",
    constantDeclaration = Abstract.constantDeclaration <$> identdef <* delimiter "=" <*> constExpression,
-   identdef = Abstract.identDef <$> ident <*> (Abstract.exported <$ delimiter "*" <|> pure Abstract.privateOnly),
+   identdef = ident <**> (Abstract.exported <$ delimiter "*" <|> pure Abstract.identDef),
    constExpression = expression,
    expression = simpleExpression
                 <|> wrap (flip Abstract.relation <$> simpleExpression <*> relation <*> simpleExpression)
+                <|> wrap (Abstract.is <$> simpleExpression <* keyword "IS" <*> qualident)
                 <?> "expression",
    simpleExpression = 
       (wrap (Abstract.positive <$ operator "+" <*> term) <|> wrap (Abstract.negative <$ operator "-" <*> term) <|> term)
@@ -263,7 +264,7 @@ grammar OberonGrammar{..} = OberonGrammar{
    relation = Abstract.Equal <$ operator "=" <|> Abstract.Unequal <$ operator "#" 
               <|> Abstract.Less <$ operator "<" <|> Abstract.LessOrEqual <$ operator "<=" 
               <|> Abstract.Greater <$ operator ">" <|> Abstract.GreaterOrEqual <$ operator ">=" 
-              <|> Abstract.In <$ keyword "IN" <|> Abstract.Is <$ keyword "IS",
+              <|> Abstract.In <$ keyword "IN",
    typeDeclaration = Abstract.typeDeclaration <$> identdef <* delimiter "=" <*> wrap type_prod,
    type_prod = Abstract.typeReference <$> qualident 
                <|> arrayType 

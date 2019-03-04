@@ -20,7 +20,7 @@ import Language.Oberon.Abstract (BaseType, QualIdent(..), RelOp(..))
 
 data Language
 
-instance Abstract.Oberon Language where
+instance Abstract.Wirthy Language where
    type Module Language = Module
    type Declaration Language = Declaration
    type Type Language = Type
@@ -40,7 +40,6 @@ instance Abstract.Oberon Language where
    type Element Language = Element
 
    type IdentDef Language = IdentDef
-   type AccessMode Language = AccessMode
 
    moduleUnit = Module
 
@@ -56,9 +55,7 @@ instance Abstract.Oberon Language where
    fpSection = FPSection
    procedureBody = ProcedureBody
    
-   identDef = IdentDef
-   exported = Exported
-   privateOnly = PrivateOnly
+   identDef = flip IdentDef PrivateOnly
 
    fieldList = FieldList
    emptyFieldList = EmptyFieldList
@@ -124,8 +121,12 @@ instance Abstract.Oberon Language where
    typeGuard = TypeGuard
    dereference = Dereference
 
+instance Abstract.Oberon Language where
+   exported = flip IdentDef Exported
+   is = IsA
+
 instance Abstract.Oberon2 Language where
-   readOnly = ReadOnly
+   readOnly = flip IdentDef ReadOnly
    typeBoundHeading = TypeBoundHeading
    forStatement = For
    variantWithStatement = With
@@ -161,6 +162,7 @@ data AccessMode = Exported | ReadOnly | PrivateOnly
 type ConstExpression = Expression
 
 data Expression f' f = Relation RelOp (f (Expression f' f')) (f (Expression f' f'))
+                     | IsA (f (Expression f' f')) QualIdent
                      | Positive (f (Expression f' f'))
                      | Negative (f (Expression f' f'))
                      | Add (f (Expression f' f')) (f (Expression f' f'))
