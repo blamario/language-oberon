@@ -17,7 +17,7 @@ import Test.Tasty.HUnit (assertFailure, assertEqual, testCase)
 import qualified Transformation.Rank2 as Rank2
 
 import Language.Oberon (parseAndResolveModule, LanguageVersion(Oberon2), Placed)
-import Language.Oberon.AST (Module)
+import Language.Oberon.AST (Language, Module)
 import Language.Oberon.Pretty ()
 import qualified Language.Oberon.Resolver as Resolver
 
@@ -50,5 +50,5 @@ prettyFile dirPath source = do
          Failure errs -> assertFailure (show errs)
          Success mod -> return (renderStrict $ layoutPretty defaultLayoutOptions $ pretty mod)
 
-instance Pretty (Module Placed Placed) where
+instance Pretty (Module Language Placed Placed) where
    pretty m = pretty ((Identity . snd) Rank2.<$> m)

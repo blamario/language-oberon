@@ -4,7 +4,7 @@
 module Language.Oberon (parseModule, parseAndResolveModule, parseAndResolveModuleFile,
                         resolvePosition, resolvePositions, Placed, LanguageVersion(..)) where
 
-import Language.Oberon.AST (Module(..))
+import Language.Oberon.AST (Language, Module(..))
 import qualified Language.Oberon.Grammar as Grammar
 import qualified Language.Oberon.Resolver as Resolver
 import qualified Language.Oberon.TypeChecker as TypeChecker
@@ -48,16 +48,16 @@ definitionGrammar Oberon1 = Grammar.oberonDefinitionGrammar
 definitionGrammar Oberon2 = Grammar.oberon2DefinitionGrammar 
 
 -- | Parse the given text of a single module, without resolving the syntactic ambiguities.
-parseModule :: LanguageVersion -> Text -> ParseResults [Module NodeWrap NodeWrap]
+parseModule :: LanguageVersion -> Text -> ParseResults [Module Language NodeWrap NodeWrap]
 parseModule version src =
   getCompose (resolvePositions src <$> Grammar.module_prod (parseComplete (moduleGrammar version) src))
 
 -- | Parse the given text of a single /definition/ module, without resolving the syntactic ambiguities.
-parseDefinitionModule :: LanguageVersion -> Text -> ParseResults [Module NodeWrap NodeWrap]
+parseDefinitionModule :: LanguageVersion -> Text -> ParseResults [Module Language NodeWrap NodeWrap]
 parseDefinitionModule version src =
   getCompose (resolvePositions src <$> Grammar.module_prod (parseComplete (definitionGrammar version) src))
 
-parseNamedModule :: LanguageVersion -> FilePath -> Text -> IO (ParseResults [Module NodeWrap NodeWrap])
+parseNamedModule :: LanguageVersion -> FilePath -> Text -> IO (ParseResults [Module Language NodeWrap NodeWrap])
 parseNamedModule version path name =
    do let basePath = combine path (unpack name)
       isDefn <- doesFileExist (addExtension basePath "Def")
@@ -65,7 +65,8 @@ parseNamedModule version path name =
       src <- readFile (addExtension basePath $ if isDefn then "Def" else "Mod")
       return (getCompose $ resolvePositions src <$> Grammar.module_prod (parseComplete grammar src))
 
-parseImportsOf :: LanguageVersion -> FilePath -> Map Text (Module NodeWrap NodeWrap) -> IO (Map Text (Module NodeWrap NodeWrap))
+parseImportsOf :: LanguageVersion -> FilePath -> Map Text (Module Language NodeWrap NodeWrap)
+               -> IO (Map Text (Module Language NodeWrap NodeWrap))
 parseImportsOf version path modules =
    case filter (`Map.notMember` modules) moduleImports
    of [] -> return modules
@@ -81,7 +82,8 @@ parseImportsOf version path modules =
 -- | Given a directory path for module imports, parse the given module text and all the module files it imports, then
 -- use all the information to resolve the syntactic ambiguities.
 parseAndResolveModule :: Bool -> LanguageVersion -> FilePath -> Text
-                      -> IO (Validation (Either (NonEmpty Resolver.Error) (NonEmpty TypeChecker.Error)) (Module Placed Placed))
+                      -> IO (Validation (Either (NonEmpty (Resolver.Error Language)) (NonEmpty TypeChecker.Error))
+                                        (Module Language Placed Placed))
 parseAndResolveModule checkTypes version path source =
    case parseModule version source
    of Left err -> return (Failure $ Left $ Resolver.UnparseableModule (failureDescription source err 4) :| [])
@@ -107,6 +109,7 @@ parseAndResolveModule checkTypes version path source =
 
 -- | Parse the module file at the given path, assuming all its imports are in the same directory.
 parseAndResolveModuleFile :: Bool -> LanguageVersion -> FilePath
-                          -> IO (Validation (Either (NonEmpty Resolver.Error) (NonEmpty TypeChecker.Error)) (Module Placed Placed))
+                          -> IO (Validation (Either (NonEmpty (Resolver.Error Language)) (NonEmpty TypeChecker.Error))
+                                            (Module Language Placed Placed))
 parseAndResolveModuleFile checkTypes version path =
   readFile path >>= parseAndResolveModule checkTypes version (takeDirectory path)

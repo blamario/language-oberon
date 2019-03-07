@@ -34,45 +34,45 @@ import Text.Grampa (Ambiguous(..), Position(..), ParseFailure)
 
 import Language.Oberon.AST
 
-data DeclarationRHS f' f = DeclaredConstant (f (ConstExpression f' f'))
-                         | DeclaredType (f (Type f' f'))
-                         | DeclaredVariable (f (Type f' f'))
-                         | DeclaredProcedure Bool (Maybe (f (FormalParameters f' f')))
-deriving instance Show (DeclarationRHS Placed Placed)
-deriving instance Show (DeclarationRHS NodeWrap NodeWrap)
+data DeclarationRHS l f' f = DeclaredConstant (f (ConstExpression l f' f'))
+                           | DeclaredType (f (Type l f' f'))
+                           | DeclaredVariable (f (Type l f' f'))
+                           | DeclaredProcedure Bool (Maybe (f (FormalParameters l f' f')))
+deriving instance Show (DeclarationRHS l Placed Placed)
+deriving instance Show (DeclarationRHS l NodeWrap NodeWrap)
 
 -- | All possible resolution errors
-data Error = UnknownModule QualIdent
-           | UnknownLocal Ident
-           | UnknownImport QualIdent
-           | AmbiguousParses
-           | AmbiguousDeclaration [Declaration NodeWrap NodeWrap]
-           | AmbiguousDesignator [Designator NodeWrap NodeWrap]
-           | AmbiguousExpression [Expression NodeWrap NodeWrap]
-           | AmbiguousRecord [Designator NodeWrap NodeWrap]
-           | AmbiguousStatement [Statement NodeWrap NodeWrap]
-           | InvalidExpression (NonEmpty Error)
-           | InvalidFunctionParameters [NodeWrap (Expression NodeWrap NodeWrap)]
-           | InvalidRecord (NonEmpty Error)
-           | InvalidStatement (NonEmpty Error)
-           | NotARecord QualIdent
-           | NotAType QualIdent
-           | NotAValue QualIdent
-           | ClashingImports
-           | UnparseableModule Text
-           deriving (Show)
+data Error l = UnknownModule QualIdent
+             | UnknownLocal Ident
+             | UnknownImport QualIdent
+             | AmbiguousParses
+             | AmbiguousDeclaration [Declaration l NodeWrap NodeWrap]
+             | AmbiguousDesignator [Designator l NodeWrap NodeWrap]
+             | AmbiguousExpression [Expression l NodeWrap NodeWrap]
+             | AmbiguousRecord [Designator l NodeWrap NodeWrap]
+             | AmbiguousStatement [Statement l NodeWrap NodeWrap]
+             | InvalidExpression (NonEmpty (Error l))
+             | InvalidFunctionParameters [NodeWrap (Expression l NodeWrap NodeWrap)]
+             | InvalidRecord (NonEmpty (Error l))
+             | InvalidStatement (NonEmpty (Error l))
+             | NotARecord QualIdent
+             | NotAType QualIdent
+             | NotAValue QualIdent
+             | ClashingImports
+             | UnparseableModule Text
+             deriving (Show)
 
 type Placed = ((,) Int)
 type NodeWrap = Compose Placed Ambiguous
 
-type Scope = Map Ident (Validation (NonEmpty Error) (DeclarationRHS Placed Placed))
+type Scope l = Map Ident (Validation (NonEmpty (Error l)) (DeclarationRHS l Placed Placed))
 
 -- | A set of predefined declarations.
-type Predefined = Scope
+type Predefined l = Scope l
 
-data Resolution = Resolution{_modules :: Map Ident Scope}
+data Resolution l = Resolution{_modules :: Map Ident (Scope l)}
 
-type Resolved = StateT (Scope, ResolutionState) (Validation (NonEmpty Error))
+type Resolved l = StateT (Scope l, ResolutionState) (Validation (NonEmpty (Error l)))
 
 data ResolutionState = ModuleState
                      | DeclarationState
@@ -81,23 +81,23 @@ data ResolutionState = ModuleState
                      | ExpressionOrTypeState
                      deriving (Eq, Show)
 
-instance Monad (Validation (NonEmpty Error)) where
+instance Monad (Validation (NonEmpty (Error l))) where
    Success s >>= f = f s
    Failure errors >>= _ = Failure errors
 
-instance Shallow.Functor Resolution NodeWrap Resolved (Module Resolved Resolved) where
+instance Shallow.Functor (Resolution l) NodeWrap (Resolved l) (Module l (Resolved l) (Resolved l)) where
    (<$>) = mapResolveDefault
 
 instance {-# overlappable #-} Show (g Placed Placed) =>
-                              Shallow.Traversable Resolution NodeWrap Placed Resolved (g Placed Placed) where
+                              Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (g Placed Placed) where
    traverse = traverseResolveDefault
 
 instance {-# overlappable #-} Show (g NodeWrap NodeWrap) =>
-                              Shallow.Traversable Resolution NodeWrap Placed Resolved (g NodeWrap NodeWrap) where
+                              Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (g NodeWrap NodeWrap) where
    traverse = traverseResolveDefault
 
 instance {-# overlaps #-} Shallow.Traversable
-                          Resolution NodeWrap Placed Resolved (Designator NodeWrap NodeWrap) where
+                          (Resolution l) NodeWrap Placed (Resolved l) (Designator l NodeWrap NodeWrap) where
    traverse res (Compose (pos, Ambiguous designators)) = StateT $ \s@(scope, state)->
       case partitionEithers (NonEmpty.toList (validationToEither . resolveDesignator res scope state <$> designators))
       of (_, [x]) -> Success ((pos, x), s)
@@ -105,10 +105,10 @@ instance {-# overlaps #-} Shallow.Traversable
          (_, multi) -> Failure (AmbiguousDesignator multi :| [])
 
 instance {-# overlaps #-} Shallow.Traversable
-                          Resolution NodeWrap Placed Resolved (Expression NodeWrap NodeWrap) where
+                          (Resolution l) NodeWrap Placed (Resolved l) (Expression l NodeWrap NodeWrap) where
    traverse res expressions = StateT $ \s@(scope, state)->
-      let resolveExpression :: Expression NodeWrap NodeWrap
-                            -> Validation (NonEmpty Error) (Expression NodeWrap NodeWrap, ResolutionState)
+      let resolveExpression :: Expression l NodeWrap NodeWrap
+                            -> Validation (NonEmpty (Error l)) (Expression l NodeWrap NodeWrap, ResolutionState)
           resolveExpression e@(Read designators) =
              case evalStateT (Shallow.traverse res designators) s
              of Failure errors -> Failure errors
@@ -132,7 +132,7 @@ instance {-# overlaps #-} Shallow.Traversable
          <$> unique InvalidExpression (AmbiguousExpression . (fst <$>)) (resolveExpression <$> expressions)
 
 instance {-# overlaps #-} Shallow.Traversable
-                          Resolution NodeWrap Placed Resolved (Declaration NodeWrap NodeWrap) where
+                          (Resolution l) NodeWrap Placed (Resolved l) (Declaration l NodeWrap NodeWrap) where
    traverse res (Compose (pos, Ambiguous (proc@(ProcedureDeclaration heading body) :| []))) =
       do s@(scope, state) <- get
          let ProcedureBody declarations statements = body
@@ -144,7 +144,7 @@ instance {-# overlaps #-} Shallow.Traversable
    traverse _ declarations = StateT (const $ Failure $ pure $ AmbiguousDeclaration $ toList declarations)
 
 instance {-# overlaps #-} Shallow.Traversable
-                          Resolution NodeWrap Placed Resolved (ProcedureHeading NodeWrap NodeWrap) where
+                          (Resolution l) NodeWrap Placed (Resolved l) (ProcedureHeading l NodeWrap NodeWrap) where
    traverse res (Compose (pos, Ambiguous (proc@(ProcedureHeading _ _ parameters) :| []))) =
       StateT $ \s@(scope, state)->
          let innerScope = parameterScope `Map.union` scope
@@ -158,7 +158,7 @@ instance {-# overlaps #-} Shallow.Traversable
    traverse res (Compose (pos, Ambiguous (proc@(TypeBoundHeading var receiverName receiverType _ _ parameters) :| []))) =
       StateT $ \s@(scope, state)->
          let innerScope = parameterScope `Map.union` receiverBinding `Map.union` scope
-             receiverBinding :: Map Ident (Validation e (DeclarationRHS f' Placed))
+             receiverBinding :: Map Ident (Validation e (DeclarationRHS l f' Placed))
              receiverBinding = Map.singleton receiverName (Success $ DeclaredVariable $ (,) pos $ TypeReference
                                                                  $ NonQualIdent receiverType)
              parameterScope = case parameters
@@ -170,16 +170,16 @@ instance {-# overlaps #-} Shallow.Traversable
          in Success ((pos, proc), (innerScope, state))
 
 instance {-# overlaps #-} Shallow.Traversable
-                          Resolution NodeWrap Placed Resolved (ProcedureBody NodeWrap NodeWrap) where
+                          (Resolution l) NodeWrap Placed (Resolved l) (ProcedureBody l NodeWrap NodeWrap) where
    traverse res (Compose (pos, Ambiguous (body@(ProcedureBody declarations statements) :| []))) =
      StateT $ \(scope, state)-> Success ((pos, body), (localScope res "" declarations scope, state))
    traverse _ b = StateT (const $ Failure $ pure AmbiguousParses)
 
 instance {-# overlaps #-} Shallow.Traversable
-                          Resolution NodeWrap Placed Resolved (Statement NodeWrap NodeWrap) where
+                          (Resolution l) NodeWrap Placed (Resolved l) (Statement l NodeWrap NodeWrap) where
    traverse res statements = StateT $ \s@(scope, state)->
-      let resolveStatement :: Statement NodeWrap NodeWrap
-                            -> Validation (NonEmpty Error) (Statement NodeWrap NodeWrap, ResolutionState)
+      let resolveStatement :: Statement l NodeWrap NodeWrap
+                            -> Validation (NonEmpty (Error l)) (Statement l NodeWrap NodeWrap, ResolutionState)
           resolveStatement p@(ProcedureCall procedures parameters) =
              case evalStateT (Shallow.traverse res procedures) s
              of Failure errors -> Failure errors
@@ -188,20 +188,20 @@ instance {-# overlaps #-} Shallow.Traversable
       in (\(pos, (r, s))-> ((pos, r), (scope, s)))
          <$> unique InvalidStatement (AmbiguousStatement . (fst <$>)) (resolveStatement <$> statements)
 
-mapResolveDefault :: Resolution -> NodeWrap (g Resolved Resolved) -> Resolved (g Resolved Resolved)
+mapResolveDefault :: Resolution l -> NodeWrap (g (Resolved l) (Resolved l)) -> Resolved l (g (Resolved l) (Resolved l))
 mapResolveDefault Resolution{} (Compose (_, Ambiguous (x :| []))) = pure x
 mapResolveDefault Resolution{} _ = StateT (const $ Failure $ pure AmbiguousParses)
 
-traverseResolveDefault :: Show (g f f) => Resolution -> NodeWrap (g (f :: * -> *) f) -> Resolved (Placed (g f f))
+traverseResolveDefault :: Show (g f f) => Resolution l -> NodeWrap (g (f :: * -> *) f) -> Resolved l (Placed (g f f))
 traverseResolveDefault Resolution{} (Compose (pos, Ambiguous (x :| []))) = StateT (\s-> Success ((pos, x), s))
 traverseResolveDefault Resolution{} _ = StateT (const $ Failure $ pure AmbiguousParses)
 
-resolveDesignator :: Resolution -> Scope -> ResolutionState -> Designator NodeWrap NodeWrap
-                  -> Validation (NonEmpty Error) (Designator NodeWrap NodeWrap)
+resolveDesignator :: forall l. Resolution l -> Scope l -> ResolutionState -> Designator l NodeWrap NodeWrap
+                  -> Validation (NonEmpty (Error l)) (Designator l NodeWrap NodeWrap)
 resolveDesignator res scope state = resolveDesignator'
-   where resolveTypeName   :: QualIdent -> Validation (NonEmpty Error) QualIdent
+   where resolveTypeName   :: QualIdent -> Validation (NonEmpty (Error l)) QualIdent
          resolveDesignator',
-           resolveRecord :: Designator NodeWrap NodeWrap -> Validation (NonEmpty Error) (Designator NodeWrap NodeWrap)
+           resolveRecord :: Designator l NodeWrap NodeWrap -> Validation (NonEmpty (Error l)) (Designator l NodeWrap NodeWrap)
          resolveDesignator' (Variable q) =
             case resolveName res scope q
             of Failure err ->  Failure err
@@ -234,7 +234,7 @@ resolveDesignator res scope state = resolveDesignator'
                Success DeclaredType{} -> Success q
                Success _ -> Failure (NotAType q :| [])
 
-resolveName :: Resolution -> Scope -> QualIdent -> Validation (NonEmpty Error) (DeclarationRHS Placed Placed)
+resolveName :: Resolution l -> Scope l -> QualIdent -> Validation (NonEmpty (Error l)) (DeclarationRHS l Placed Placed)
 resolveName res scope q@(QualIdent moduleName name) =
    case Map.lookup moduleName (_modules res)
    of Nothing -> Failure (UnknownModule q :| [])
@@ -246,15 +246,15 @@ resolveName res scope (NonQualIdent name) =
    of Just (Success rhs) -> Success rhs
       _ -> Failure (UnknownLocal name :| [])
 
-resolveModules :: Predefined -> Map Ident (Module NodeWrap NodeWrap)
-                -> Validation (NonEmpty (Ident, NonEmpty Error)) (Map Ident (Module Placed Placed))
+resolveModules :: Predefined l -> Map Ident (Module l NodeWrap NodeWrap)
+                -> Validation (NonEmpty (Ident, NonEmpty (Error l))) (Map Ident (Module l Placed Placed))
 resolveModules predefinedScope modules = traverseWithKey extractErrors modules'
    where modules' = resolveModule predefinedScope modules' <$> modules
          extractErrors moduleKey (Failure e)   = Failure ((moduleKey, e) :| [])
          extractErrors _         (Success mod) = Success mod
 
-resolveModule :: Scope -> Map Ident (Validation (NonEmpty Error) (Module Placed Placed))
-               -> Module NodeWrap NodeWrap -> Validation (NonEmpty Error) (Module Placed Placed)
+resolveModule :: forall l. Scope l -> Map Ident (Validation (NonEmpty (Error l)) (Module l Placed Placed))
+               -> Module l NodeWrap NodeWrap -> Validation (NonEmpty (Error l)) (Module l Placed Placed)
 resolveModule predefined modules m@(Module moduleName imports declarations body) =
    evalStateT (Deep.traverseDown res m) (moduleGlobalScope, ModuleState)
    where res = Resolution moduleExports
@@ -264,22 +264,22 @@ resolveModule predefined modules m@(Module moduleName imports declarations body)
                                              Just (Just innerKey, _) -> innerKey
                                              Nothing -> mempty
                   clashingRenames _ _ = Failure (ClashingImports :| [])
-         resolveDeclaration :: NodeWrap (Declaration NodeWrap NodeWrap) -> Resolved (Declaration Placed Placed)
+         resolveDeclaration :: NodeWrap (Declaration l NodeWrap NodeWrap) -> Resolved l (Declaration l Placed Placed)
          resolveDeclaration d = snd <$> (traverse (Deep.traverseDown res) d >>= Shallow.traverse res)
          moduleExports = foldMap exportsOfModule <$> importedModules
          moduleGlobalScope = localScope res moduleName declarations predefined
 
-localScope :: Resolution -> Ident -> [NodeWrap (Declaration NodeWrap NodeWrap)] -> Scope -> Scope
+localScope :: forall l. Resolution l -> Ident -> [NodeWrap (Declaration l NodeWrap NodeWrap)] -> Scope l -> Scope l
 localScope res qual declarations outerScope = innerScope
    where innerScope = Map.union (snd <$> scopeAdditions) outerScope
          scopeAdditions = (resolveBinding res innerScope <$>)
                           <$> Map.fromList (concatMap (declarationBinding qual . unamb) declarations)
          unamb (Compose (offset, Ambiguous (x :| []))) = x
-         resolveBinding     :: Resolution -> Scope -> DeclarationRHS NodeWrap NodeWrap
-                            -> Validation (NonEmpty Error) (DeclarationRHS Placed Placed)
+         resolveBinding     :: Resolution l -> Scope l -> DeclarationRHS l NodeWrap NodeWrap
+                            -> Validation (NonEmpty (Error l)) (DeclarationRHS l Placed Placed)
          resolveBinding res scope dr = evalStateT (Deep.traverseDown res dr) (scope, DeclarationState)
 
-declarationBinding :: Foldable f => Ident -> Declaration f f -> [(Ident, (AccessMode, DeclarationRHS f f))]
+declarationBinding :: Foldable f => Ident -> Declaration l f f -> [(Ident, (AccessMode, DeclarationRHS l f f))]
 declarationBinding _ (ConstantDeclaration (IdentDef name export) expr) =
    [(name, (export, DeclaredConstant expr))]
 declarationBinding _ (TypeDeclaration (IdentDef name export) typeDef) =
@@ -294,7 +294,7 @@ declarationBinding moduleName (ProcedureDeclaration heading _) = procedureHeadBi
 declarationBinding _ (ForwardDeclaration (IdentDef name export) parameters) =
    [(name, (export, DeclaredProcedure False parameters))]
 
-predefined, predefined2 :: Predefined
+predefined, predefined2 :: Predefined l
 -- | The set of 'Predefined' types and procedures defined in the Oberon Language Report.
 predefined = Success <$> Map.fromList
    [("BOOLEAN", DeclaredType ((,) 0 $ TypeReference $ NonQualIdent "BOOLEAN")),
@@ -371,17 +371,17 @@ predefined2 = predefined <>
              FormalParameters [(,) 0 $ FPSection False (pure "s") $ (,) 0 $ TypeReference $ NonQualIdent "ARRAY",
                                (,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "ARRAY"] Nothing)])
 
-exportsOfModule :: Module Placed Placed -> Scope
+exportsOfModule :: Module l Placed Placed -> Scope l
 exportsOfModule = fmap Success . Map.mapMaybe isExported . globalsOfModule
    where isExported (PrivateOnly, _) = Nothing
          isExported (_, binding) = Just binding
 
-globalsOfModule :: Module Placed Placed -> Map Ident (AccessMode, DeclarationRHS Placed Placed)
+globalsOfModule :: Module l Placed Placed -> Map Ident (AccessMode, DeclarationRHS l Placed Placed)
 globalsOfModule (Module name imports declarations _) =
    Map.fromList (concatMap (declarationBinding name . snd) declarations)
 
-unique :: (NonEmpty Error -> Error) -> ([a] -> Error) -> NodeWrap (Validation (NonEmpty Error) a)
-       -> Validation (NonEmpty Error) (Placed a)
+unique :: (NonEmpty (Error l) -> Error l) -> ([a] -> Error l) -> NodeWrap (Validation (NonEmpty (Error l)) a)
+       -> Validation (NonEmpty (Error l)) (Placed a)
 unique _ _ (Compose (pos, Ambiguous (x :| []))) = (,) pos <$> x
 unique inv amb (Compose (pos, Ambiguous xs)) =
    case partitionEithers (validationToEither <$> NonEmpty.toList xs)

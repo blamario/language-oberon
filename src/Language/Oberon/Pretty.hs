@@ -15,7 +15,7 @@ import Transformation.Deep as Deep (Product(Pair))
 
 import Language.Oberon.AST
 
-instance Pretty (Module Identity Identity) where
+instance Pretty (Module l Identity Identity) where
    pretty (Module name imports declarations body) =
       vsep $ intersperse mempty $
       ["MODULE" <+> pretty name <> semi,
@@ -27,7 +27,7 @@ instance Pretty (Module Identity Identity) where
       where prettyImport (Nothing, mod) = pretty mod
             prettyImport (Just inner, mod) = pretty inner <> ":=" <+> pretty mod
 
-instance Pretty (Declaration Identity Identity) where
+instance Pretty (Declaration l Identity Identity) where
    pretty (ConstantDeclaration ident (Identity expr)) = "CONST" <+> pretty ident <+> "=" <+> pretty expr <> semi
    pretty (TypeDeclaration ident typeDef) = "TYPE" <+> pretty ident <+> "=" <+> pretty typeDef <> semi
    pretty (VariableDeclaration idents varType) =
@@ -40,12 +40,12 @@ instance Pretty (Declaration Identity Identity) where
                       TypeBoundHeading _ _ _ _ (IdentDef nm _) _ -> nm
    pretty (ForwardDeclaration ident parameters) = "PROCEDURE" <+> "^" <+> pretty ident <+> pretty parameters <> semi
 
-instance Pretty IdentDef where
+instance Pretty (IdentDef l) where
    pretty (IdentDef name Exported) = pretty name <> "*"
    pretty (IdentDef name ReadOnly) = pretty name <> "-"
    pretty (IdentDef name PrivateOnly) = pretty name
 
-instance Pretty (Expression Identity Identity) where
+instance Pretty (Expression l Identity Identity) where
    pretty = prettyPrec 0
       where prettyPrec 0 (Relation op left right) = prettyPrec' 1 left <+> pretty op <+> prettyPrec' 1 right
             prettyPrec 0 (IsA left right) = prettyPrec' 1 left <+> "IS" <+> pretty right
@@ -85,18 +85,18 @@ instance Pretty RelOp where
    pretty GreaterOrEqual = ">="
    pretty In = "IN"
 
-instance Pretty (Element Identity Identity) where
+instance Pretty (Element l Identity Identity) where
    pretty (Element e) = pretty e
    pretty (Range from to) = pretty from <+> ".." <+> pretty to
 
-instance Pretty (Designator Identity Identity) where
+instance Pretty (Designator l Identity Identity) where
    pretty (Variable q) = pretty q
    pretty (Field record name) = pretty record <> dot <> pretty name
    pretty (Index array indexes) = pretty array <> brackets (hsep $ punctuate comma $ pretty <$> toList indexes)
    pretty (TypeGuard scrutinee typeName) = pretty scrutinee <> parens (pretty typeName)
    pretty (Dereference pointer) = pretty pointer <> "^"
 
-instance Pretty (Type Identity Identity) where
+instance Pretty (Type l Identity Identity) where
    pretty (TypeReference q) = pretty q
    pretty (ArrayType dimensions itemType) =
       "ARRAY" <+> hsep (punctuate comma $ pretty . runIdentity <$> dimensions) <+> "OF" <+> pretty itemType
@@ -110,11 +110,11 @@ instance Pretty QualIdent where
    pretty (QualIdent moduleName memberName) = pretty moduleName <> "." <> pretty memberName
    pretty (NonQualIdent localName) = pretty localName
 
-instance Pretty (FieldList Identity Identity) where
+instance Pretty (FieldList l Identity Identity) where
    pretty (FieldList names t) = hsep (punctuate comma $ pretty <$> toList names) <+> ":" <+> pretty t
    pretty EmptyFieldList = mempty
 
-instance Pretty (ProcedureHeading Identity Identity) where
+instance Pretty (ProcedureHeading l Identity Identity) where
    pretty (ProcedureHeading indirect ident parameters) =
       "PROCEDURE" <> (if indirect then "* " else space) <> pretty ident <> pretty parameters
    pretty (TypeBoundHeading var receiverName receiverType indirect ident parameters) =
@@ -122,23 +122,23 @@ instance Pretty (ProcedureHeading Identity Identity) where
       <> parens ((if var then "VAR " else mempty) <> pretty receiverName <> colon <+> pretty receiverType)
       <> space <> (if indirect then "* " else space) <> pretty ident <> pretty parameters
 
-instance Pretty (FormalParameters Identity Identity) where
+instance Pretty (FormalParameters l Identity Identity) where
    pretty (FormalParameters sections result) =
       lparen <> hsep (punctuate semi $ pretty <$> sections) <> rparen <> foldMap (colon <+>) (pretty <$> result)
 
-instance Pretty (FPSection Identity Identity) where
+instance Pretty (FPSection l Identity Identity) where
    pretty (FPSection var names t) =
       (if var then ("VAR" <+>) else id) $ hsep (punctuate comma $ pretty <$> toList names) <+> colon <+> pretty t
    
-instance Pretty (ProcedureBody Identity Identity) where
+instance Pretty (ProcedureBody l Identity Identity) where
    pretty (ProcedureBody declarations body) =
       vsep ((indent 3 . pretty <$> declarations)
             ++ foldMap (\statements-> ["BEGIN", prettyBlock statements]) body)
 
-instance Pretty (StatementSequence Identity Identity) where
+instance Pretty (StatementSequence l Identity Identity) where
    pretty (StatementSequence statements) = pretty (runIdentity <$> statements)
 
-instance Pretty (Statement Identity Identity) where
+instance Pretty (Statement l Identity Identity) where
    prettyList l = vsep (dropEmptyTail $ punctuate semi $ pretty <$> l)
       where dropEmptyTail
                | not (null l), EmptyStatement <- last l = init
@@ -181,20 +181,20 @@ instance Pretty (Statement Identity Identity) where
    pretty Exit = "EXIT"
    pretty (Return result) = "RETURN" <+> foldMap pretty result
    
-instance Pretty (Case Identity Identity) where
+instance Pretty (Case l Identity Identity) where
    pretty (Case labels body) = vsep [hsep (punctuate comma (pretty <$> toList labels)) <+> colon,
                                      prettyBlock body]
    pretty EmptyCase = mempty
    
-instance Pretty (WithAlternative Identity Identity) where
+instance Pretty (WithAlternative l Identity Identity) where
    pretty (WithAlternative name t body) = vsep [pretty name <+> colon <+> pretty t <+> "DO",
                                                 prettyBlock body]
 
-instance Pretty (CaseLabels Identity Identity) where
+instance Pretty (CaseLabels l Identity Identity) where
    pretty (SingleLabel expression) = pretty expression
    pretty (LabelRange from to) = pretty from <+> ".." <+> pretty to
 
-prettyBlock :: Identity (StatementSequence Identity Identity) -> Doc ann
+prettyBlock :: Identity (StatementSequence l Identity Identity) -> Doc ann
 prettyBlock (Identity (StatementSequence statements)) = indent 3 (pretty $ runIdentity <$> statements)
 
 a <#> b = vsep [a, b]

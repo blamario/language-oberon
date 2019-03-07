@@ -3,7 +3,7 @@
 module Main where
 
 import Language.Oberon (Placed, LanguageVersion(Oberon1, Oberon2), parseAndResolveModule, resolvePosition, resolvePositions)
-import Language.Oberon.AST (Module(..), StatementSequence, Statement, Expression)
+import Language.Oberon.AST (Language, Module(..), StatementSequence, Statement, Expression)
 import qualified Language.Oberon.AST as AST
 import qualified Language.Oberon.Grammar as Grammar
 import qualified Language.Oberon.Resolver as Resolver
@@ -138,7 +138,7 @@ main' Opts{..} =
                     Oberon2 -> Resolver.predefined2
     go :: (Show a, Data a, Pretty a, a ~ t f f,
            Deep.Functor (Rank2.Map Grammar.NodeWrap NodeWrap) t Grammar.NodeWrap NodeWrap) =>
-          (t NodeWrap NodeWrap -> Validation (NonEmpty Resolver.Error) a)
+          (t NodeWrap NodeWrap -> Validation (NonEmpty (Resolver.Error Language)) a)
        -> (forall p. Grammar.OberonGrammar AST.Language Grammar.NodeWrap p -> p (t Grammar.NodeWrap Grammar.NodeWrap))
        -> (Grammar (Grammar.OberonGrammar AST.Language Grammar.NodeWrap) LeftRecursive.Parser Text)
        -> String -> Text -> IO ()
@@ -152,8 +152,9 @@ main' Opts{..} =
 type NodeWrap = Compose ((,) Int) Ambiguous
 
 succeed :: (Data a, Pretty a, Show a) 
-        => Output -> (TypeChecker.Error -> IO ()) -> (err -> Either (NonEmpty Resolver.Error) (NonEmpty TypeChecker.Error)) 
-           -> Validation err a -> IO ()
+        => Output -> (TypeChecker.Error -> IO ())
+        -> (err -> Either (NonEmpty (Resolver.Error Language)) (NonEmpty TypeChecker.Error)) 
+        -> Validation err a -> IO ()
 succeed out reportTypeError prepare x = either (reportFailure . prepare) showSuccess (validationToEither x)
    where reportFailure (Left (Resolver.UnparseableModule err :| [])) = Text.putStrLn err
          reportFailure (Left errs) = print errs
@@ -168,17 +169,17 @@ reportTypeErrorIn directory (moduleName, pos, err) =
       putStrLn ("Type error: " ++ TypeChecker.errorMessage err)
       Text.putStrLn (offsetContext contents pos 4)
 
-instance Pretty (Module Placed Placed) where
+instance Pretty (Module Language Placed Placed) where
    pretty m = pretty ((Identity . snd) Rank2.<$> m)
-instance Pretty (Module NodeWrap NodeWrap) where
+instance Pretty (Module Language NodeWrap NodeWrap) where
    pretty _ = error "Disambiguate before pretty-printing"
-instance Pretty (StatementSequence NodeWrap NodeWrap) where
+instance Pretty (StatementSequence Language NodeWrap NodeWrap) where
    pretty _ = error "Disambiguate before pretty-printing"
-instance Pretty (NodeWrap (Statement NodeWrap NodeWrap)) where
+instance Pretty (NodeWrap (Statement Language NodeWrap NodeWrap)) where
    pretty _ = error "Disambiguate before pretty-printing"
-instance Pretty (Statement NodeWrap NodeWrap) where
+instance Pretty (Statement Language NodeWrap NodeWrap) where
    pretty _ = error "Disambiguate before pretty-printing"
-instance Pretty (Expression NodeWrap NodeWrap) where
+instance Pretty (Expression Language NodeWrap NodeWrap) where
    pretty _ = error "Disambiguate before pretty-printing"
-instance Pretty (NodeWrap (Expression NodeWrap NodeWrap)) where
+instance Pretty (NodeWrap (Expression Language NodeWrap NodeWrap)) where
    pretty _ = error "Disambiguate before pretty-printing"
