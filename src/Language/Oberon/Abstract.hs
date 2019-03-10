@@ -124,6 +124,10 @@ class Wirthy l where
    typeGuard :: f (Designator l f' f') -> QualIdent -> Designator l f' f
    dereference :: f (Designator l f' f') -> Designator l f' f
 
+class Wirthy l => Nameable l where
+   getProcedureName :: ProcedureHeading l f' f -> Ident
+   getIdentDefName :: IdentDef l -> Ident
+
 class Wirthy l => Oberon l where
    is :: f (Expression l f' f') -> QualIdent -> Expression l f' f
    exported :: Ident -> IdentDef l

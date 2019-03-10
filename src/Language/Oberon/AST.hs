@@ -121,6 +121,11 @@ instance Abstract.Wirthy Language where
    typeGuard = TypeGuard
    dereference = Dereference
 
+instance Abstract.Nameable Language where
+   getProcedureName (ProcedureHeading _ iddef _) = Abstract.getIdentDefName iddef
+   getProcedureName (TypeBoundHeading _ _ _ _ iddef _) = Abstract.getIdentDefName iddef
+   getIdentDefName (IdentDef name _) = name
+
 instance Abstract.Oberon Language where
    exported = flip IdentDef Exported
    is = IsA
@@ -131,27 +136,29 @@ instance Abstract.Oberon2 Language where
    forStatement = For
    variantWithStatement = With
 
-data Module l f' f = Module Ident [Import] [f (Declaration l f' f')] (Maybe (f (StatementSequence l f' f')))
+data Module l f' f = Module Ident [Import] [f (Abstract.Declaration l f' f')] (Maybe (f (StatementSequence l f' f')))
 
 deriving instance (Typeable l, Typeable f, Typeable f',
-                   Data (f (Declaration l f' f')), Data (f (StatementSequence l f' f'))) => Data (Module l f' f)
-deriving instance (Show (f (Declaration l f' f')), Show (f (StatementSequence l f' f'))) => Show (Module l f' f)
+                   Data (f (Abstract.Declaration l f' f')), Data (f (StatementSequence l f' f'))) => Data (Module l f' f)
+deriving instance (Show (f (Abstract.Declaration l f' f')), Show (f (StatementSequence l f' f'))) => Show (Module l f' f)
 
 type Ident = Text
 
 type Import = (Maybe Ident, Ident)
 
-data Declaration l f' f = ConstantDeclaration (IdentDef l) (f (ConstExpression l f' f'))
-                        | TypeDeclaration (IdentDef l) (f (Type l f' f'))
-                        | VariableDeclaration (IdentList l) (f (Type l f' f'))
-                        | ProcedureDeclaration (f (ProcedureHeading l f' f')) (ProcedureBody l f' f)
-                        | ForwardDeclaration (IdentDef l) (Maybe (f (FormalParameters l f' f')))
+data Declaration l f' f = ConstantDeclaration (Abstract.IdentDef l) (f (ConstExpression l f' f'))
+                        | TypeDeclaration (Abstract.IdentDef l) (f (Abstract.Type l f' f'))
+                        | VariableDeclaration (IdentList l) (f (Abstract.Type l f' f'))
+                        | ProcedureDeclaration (f (Abstract.ProcedureHeading l f' f')) (ProcedureBody l f' f)
+                        | ForwardDeclaration (Abstract.IdentDef l) (Maybe (f (Abstract.FormalParameters l f' f')))
 
 deriving instance (Data l, Typeable f, Typeable f',
-                   Data (f (Type l f' f')), Data (f (ConstExpression l f' f')), Data (f (FormalParameters l f' f')),
-                   Data (f (ProcedureHeading l f' f')), Data (ProcedureBody l f' f)) => Data (Declaration l f' f)
-deriving instance (Show (f (Type l f' f')), Show (f (ConstExpression l f' f')), Show (f (FormalParameters l f' f')),
-                   Show (f (ProcedureHeading l f' f')), Show (ProcedureBody l f' f)) => Show (Declaration l f' f)
+                   Data (f (Abstract.Type l f' f')), Data (f (ConstExpression l f' f')),
+                   Data (f (Abstract.FormalParameters l f' f')), Data (f (Abstract.ProcedureHeading l f' f')),
+                   Data (ProcedureBody l f' f), Data (Abstract.IdentDef l)) => Data (Declaration l f' f)
+deriving instance (Show (f (Abstract.Type l f' f')), Show (f (ConstExpression l f' f')),
+                   Show (f (Abstract.FormalParameters l f' f')), Show (f (Abstract.ProcedureHeading l f' f')),
+                   Show (ProcedureBody l f' f), Show (Abstract.IdentDef l)) => Show (Declaration l f' f)
 
 data IdentDef l = IdentDef Ident AccessMode
    deriving (Data, Eq, Ord, Show)
@@ -209,48 +216,53 @@ deriving instance (Show (f (Designator l f' f')), Show (f (Expression l f' f')))
 deriving instance (Eq (f (Designator l f' f')), Eq (f (Expression l f' f'))) => Eq (Designator l f' f)
 
 data Type l f' f = TypeReference QualIdent 
-                 | ArrayType [f (ConstExpression l f' f')] (f (Type l f' f'))
-                 | RecordType (Maybe BaseType) (NonEmpty (f (FieldList l f' f')))
-                 | PointerType (f (Type l f' f'))
-                 | ProcedureType (Maybe (f (FormalParameters l f' f')))
+                 | ArrayType [f (ConstExpression l f' f')] (f (Abstract.Type l f' f'))
+                 | RecordType (Maybe BaseType) (NonEmpty (f (Abstract.FieldList l f' f')))
+                 | PointerType (f (Abstract.Type l f' f'))
+                 | ProcedureType (Maybe (f (Abstract.FormalParameters l f' f')))
 
-deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Type l f' f')), Data (f (ConstExpression l f' f')),
-                   Data (f (FormalParameters l f' f')), Data (f (FieldList l f' f'))) => Data (Type l f' f)
-deriving instance (Show (f (Type l f' f')), Show (f (ConstExpression l f' f')),
-                   Show (f (FormalParameters l f' f')), Show (f (FieldList l f' f'))) => Show (Type l f' f)
+deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Abstract.Type l f' f')), Data (f (ConstExpression l f' f')),
+                   Data (f (Abstract.FormalParameters l f' f')), Data (f (Abstract.FieldList l f' f'))) => Data (Type l f' f)
+deriving instance (Show (f (Abstract.Type l f' f')), Show (f (ConstExpression l f' f')),
+                   Show (f (Abstract.FormalParameters l f' f')), Show (f (Abstract.FieldList l f' f'))) => Show (Type l f' f)
 
-data FieldList l f' f = FieldList (IdentList l) (f (Type l f' f'))
+data FieldList l f' f = FieldList (IdentList l) (f (Abstract.Type l f' f'))
                       | EmptyFieldList
 
-deriving instance (Data l, Typeable f, Typeable f', Data (f (Type l f' f')), Data (f (Expression l f' f'))) => Data (FieldList l f' f)
-deriving instance (Show (f (Type l f' f')), Show (f (Expression l f' f'))) => Show (FieldList l f' f)
+deriving instance (Data l, Typeable f, Typeable f', Data (Abstract.IdentDef l), Data (f (Abstract.Type l f' f')),
+                   Data (f (Expression l f' f'))) => Data (FieldList l f' f)
+deriving instance (Show (Abstract.IdentDef l), Show (f (Abstract.Type l f' f')), Show (f (Expression l f' f'))) =>
+                  Show (FieldList l f' f)
 
-type IdentList l = NonEmpty (IdentDef l)
+type IdentList l = NonEmpty (Abstract.IdentDef l)
 
-data ProcedureHeading l f' f = ProcedureHeading                  Bool (IdentDef l) (Maybe (f (FormalParameters l f' f')))
-                             | TypeBoundHeading Bool Ident Ident Bool (IdentDef l) (Maybe (f (FormalParameters l f' f')))
+data ProcedureHeading l f' f =
+   ProcedureHeading                    Bool (Abstract.IdentDef l) (Maybe (f (Abstract.FormalParameters l f' f')))
+   | TypeBoundHeading Bool Ident Ident Bool (Abstract.IdentDef l) (Maybe (f (Abstract.FormalParameters l f' f')))
 
 data FormalParameters l f' f = FormalParameters [f (FPSection l f' f')] (Maybe QualIdent)
 
-data FPSection l f' f = FPSection Bool (NonEmpty Ident) (f (Type l f' f'))
+data FPSection l f' f = FPSection Bool (NonEmpty Ident) (f (Abstract.Type l f' f'))
 
-deriving instance (Data l, Typeable f, Typeable f', Data (f (FormalParameters l f' f'))) => Data (ProcedureHeading l f' f)
-deriving instance (Show (f (FormalParameters l f' f'))) => Show (ProcedureHeading l f' f)
+deriving instance (Data l, Typeable f, Typeable f', Data (Abstract.IdentDef l),
+                   Data (f (Abstract.FormalParameters l f' f'))) => Data (ProcedureHeading l f' f)
+deriving instance (Show (Abstract.IdentDef l), Show (f (Abstract.FormalParameters l f' f'))) =>
+                  Show (ProcedureHeading l f' f)
 
 deriving instance (Typeable l, Typeable f, Typeable f', Data (f (FPSection l f' f')),  Data (f (Expression l f' f'))) =>
                   Data (FormalParameters l f' f)
 deriving instance (Show (f (FPSection l f' f')), Show (f (Expression l f' f'))) => Show (FormalParameters l f' f)
 
-deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Type l f' f')),  Data (f (Expression l f' f'))) =>
-                  Data (FPSection l f' f)
-deriving instance (Show (f (Type l f' f')), Show (f (Expression l f' f'))) => Show (FPSection l f' f)
+deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Abstract.Type l f' f')),
+                   Data (f (Expression l f' f'))) => Data (FPSection l f' f)
+deriving instance (Show (f (Abstract.Type l f' f')), Show (f (Expression l f' f'))) => Show (FPSection l f' f)
 
-data ProcedureBody l f' f =  ProcedureBody [f (Declaration l f' f')] (Maybe (f (StatementSequence l f' f')))
+data ProcedureBody l f' f =  ProcedureBody [f (Abstract.Declaration l f' f')] (Maybe (f (StatementSequence l f' f')))
 
-deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Declaration l f' f')), Data (f (Designator l f' f')),
+deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Abstract.Declaration l f' f')), Data (f (Designator l f' f')),
                    Data (f (Expression l f' f')), Data (f (StatementSequence l f' f'))) =>
                   Data (ProcedureBody l f' f)
-deriving instance (Show (f (Declaration l f' f')), Show (f (Designator l f' f')),
+deriving instance (Show (f (Abstract.Declaration l f' f')), Show (f (Designator l f' f')),
                    Show (f (Expression l f' f')), Show (f (StatementSequence l f' f'))) => Show (ProcedureBody l f' f)
 
 newtype StatementSequence l f' f = StatementSequence (NonEmpty (f (Statement l f' f')))

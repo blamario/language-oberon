@@ -1,5 +1,5 @@
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, KindSignatures, MultiParamTypeClasses,
-             OverloadedStrings, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, KindSignatures, MultiParamTypeClasses, OverloadedStrings,
+             ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 
 -- | This module exports functions for resolving the syntactic ambiguities in a parsed module. For example, an Oberon
@@ -32,14 +32,17 @@ import qualified Transformation.Deep.TH
 import qualified Transformation.Rank2 as Rank2
 import Text.Grampa (Ambiguous(..), Position(..), ParseFailure)
 
+import qualified Language.Oberon.Abstract as Abstract
 import Language.Oberon.AST
 
 data DeclarationRHS l f' f = DeclaredConstant (f (ConstExpression l f' f'))
-                           | DeclaredType (f (Type l f' f'))
-                           | DeclaredVariable (f (Type l f' f'))
-                           | DeclaredProcedure Bool (Maybe (f (FormalParameters l f' f')))
-deriving instance Show (DeclarationRHS l Placed Placed)
-deriving instance Show (DeclarationRHS l NodeWrap NodeWrap)
+                           | DeclaredType (f (Abstract.Type l f' f'))
+                           | DeclaredVariable (f (Abstract.Type l f' f'))
+                           | DeclaredProcedure Bool (Maybe (f (Abstract.FormalParameters l f' f')))
+deriving instance (Show (Abstract.FormalParameters l Placed Placed), Show (Abstract.Type l Placed Placed)) =>
+                  Show (DeclarationRHS l Placed Placed)
+deriving instance (Show (Abstract.FormalParameters l NodeWrap NodeWrap), Show (Abstract.Type l NodeWrap NodeWrap)) =>
+                  Show (DeclarationRHS l NodeWrap NodeWrap)
 
 -- | All possible resolution errors
 data Error l = UnknownModule QualIdent
@@ -60,7 +63,7 @@ data Error l = UnknownModule QualIdent
              | NotAValue QualIdent
              | ClashingImports
              | UnparseableModule Text
-             deriving (Show)
+deriving instance Show (Declaration l NodeWrap NodeWrap) => Show (Error l)
 
 type Placed = ((,) Int)
 type NodeWrap = Compose Placed Ambiguous
@@ -88,11 +91,11 @@ instance Monad (Validation (NonEmpty (Error l))) where
 instance Shallow.Functor (Resolution l) NodeWrap (Resolved l) (Module l (Resolved l) (Resolved l)) where
    (<$>) = mapResolveDefault
 
-instance {-# overlappable #-} Show (g Placed Placed) =>
+instance {-# overlappable #-} --Show (g Placed Placed) =>
                               Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (g Placed Placed) where
    traverse = traverseResolveDefault
 
-instance {-# overlappable #-} Show (g NodeWrap NodeWrap) =>
+instance {-# overlappable #-} --Show (g NodeWrap NodeWrap) =>
                               Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (g NodeWrap NodeWrap) where
    traverse = traverseResolveDefault
 
@@ -131,8 +134,18 @@ instance {-# overlaps #-} Shallow.Traversable
       in (\(pos, (r, s))-> ((pos, r), (scope, s)))
          <$> unique InvalidExpression (AmbiguousExpression . (fst <$>)) (resolveExpression <$> expressions)
 
-instance {-# overlaps #-} Shallow.Traversable
-                          (Resolution l) NodeWrap Placed (Resolved l) (Declaration l NodeWrap NodeWrap) where
+instance {-# overlaps #-}
+   (BindableDeclaration l, CoFormalParameters l, Abstract.Wirthy l,
+    Deep.DownTraversable (Resolution l) (Abstract.Type l) NodeWrap Placed (Resolved l),
+    Deep.DownTraversable (Resolution l) (Abstract.ProcedureHeading l) NodeWrap Placed (Resolved l),
+    Deep.DownTraversable (Resolution l) (Abstract.FormalParameters l) NodeWrap Placed (Resolved l),
+    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
+                        (Abstract.Type l NodeWrap NodeWrap),
+    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
+                        (Abstract.ProcedureHeading l NodeWrap NodeWrap),
+    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
+                        (Abstract.FormalParameters l NodeWrap NodeWrap)) =>
+   Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Declaration l NodeWrap NodeWrap) where
    traverse res (Compose (pos, Ambiguous (proc@(ProcedureDeclaration heading body) :| []))) =
       do s@(scope, state) <- get
          let ProcedureBody declarations statements = body
@@ -143,34 +156,52 @@ instance {-# overlaps #-} Shallow.Traversable
    traverse res (Compose (pos, Ambiguous (dec :| []))) = pure (pos, dec)
    traverse _ declarations = StateT (const $ Failure $ pure $ AmbiguousDeclaration $ toList declarations)
 
-instance {-# overlaps #-} Shallow.Traversable
-                          (Resolution l) NodeWrap Placed (Resolved l) (ProcedureHeading l NodeWrap NodeWrap) where
+class CoFormalParameters l where
+   getFPSections :: Abstract.FormalParameters l f' f -> [f (Abstract.FPSection l f' f')]
+   evalFPSection :: Abstract.FPSection l f' f -> (Bool -> NonEmpty Ident -> f (Abstract.Type l f' f') -> r) -> r
+
+instance CoFormalParameters Language where
+   getFPSections (FormalParameters sections _) = sections
+   evalFPSection (FPSection var names types) f = f var names types
+
+instance {-# overlaps #-}
+   (Abstract.Wirthy l, CoFormalParameters l,
+    Deep.DownTraversable (Resolution l) (Abstract.Type l) NodeWrap Placed (Resolved l),
+    Deep.DownTraversable (Resolution l) (Abstract.FormalParameters l) NodeWrap Placed (Resolved l),
+    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.Type l NodeWrap NodeWrap),
+    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.FormalParameters l NodeWrap NodeWrap)) =>
+   Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (ProcedureHeading l NodeWrap NodeWrap) where
    traverse res (Compose (pos, Ambiguous (proc@(ProcedureHeading _ _ parameters) :| []))) =
       StateT $ \s@(scope, state)->
          let innerScope = parameterScope `Map.union` scope
              parameterScope = case parameters
                               of Nothing -> mempty
-                                 Just (Compose (_, Ambiguous (FormalParameters sections _ :| [])))
+                                 Just (Compose (_, Ambiguous (fp :| []))) | sections <- getFPSections fp
                                     -> Map.fromList (concatMap binding sections)
-             binding (Compose (_, Ambiguous (FPSection _ names types :| []))) =
+             binding (Compose (_, Ambiguous (section :| []))) = evalFPSection section $ \ _ names types->
                 [(v, evalStateT (Deep.traverseDown res $ DeclaredVariable types) s) | v <- NonEmpty.toList names]
          in Success ((pos, proc), (innerScope, state))
    traverse res (Compose (pos, Ambiguous (proc@(TypeBoundHeading var receiverName receiverType _ _ parameters) :| []))) =
       StateT $ \s@(scope, state)->
          let innerScope = parameterScope `Map.union` receiverBinding `Map.union` scope
              receiverBinding :: Map Ident (Validation e (DeclarationRHS l f' Placed))
-             receiverBinding = Map.singleton receiverName (Success $ DeclaredVariable $ (,) pos $ TypeReference
-                                                                 $ NonQualIdent receiverType)
+             receiverBinding = Map.singleton receiverName (Success $ DeclaredVariable $ (,) pos
+                                                           $ Abstract.typeReference $ NonQualIdent receiverType)
              parameterScope = case parameters
                               of Nothing -> mempty
-                                 Just (Compose (_, Ambiguous (FormalParameters sections _ :| [])))
+                                 Just (Compose (_, Ambiguous (fp :| []))) | sections <- getFPSections fp
                                     -> Map.fromList (concatMap binding sections)
-             binding (Compose (_, Ambiguous (FPSection _ names types :| []))) =
+             binding (Compose (_, Ambiguous (section :| []))) = evalFPSection section $ \ _ names types->
                 [(v, evalStateT (Deep.traverseDown res $ DeclaredVariable types) s) | v <- NonEmpty.toList names]
          in Success ((pos, proc), (innerScope, state))
 
-instance {-# overlaps #-} Shallow.Traversable
-                          (Resolution l) NodeWrap Placed (Resolved l) (ProcedureBody l NodeWrap NodeWrap) where
+instance {-# overlaps #-}
+   (BindableDeclaration l,
+    Deep.DownTraversable (Resolution l) (Abstract.Type l) NodeWrap Placed (Resolved l),
+    Deep.DownTraversable (Resolution l) (Abstract.FormalParameters l) NodeWrap Placed (Resolved l),
+    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.Type l NodeWrap NodeWrap),
+    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.FormalParameters l NodeWrap NodeWrap)) =>
+   Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (ProcedureBody l NodeWrap NodeWrap) where
    traverse res (Compose (pos, Ambiguous (body@(ProcedureBody declarations statements) :| []))) =
      StateT $ \(scope, state)-> Success ((pos, body), (localScope res "" declarations scope, state))
    traverse _ b = StateT (const $ Failure $ pure AmbiguousParses)
@@ -192,7 +223,7 @@ mapResolveDefault :: Resolution l -> NodeWrap (g (Resolved l) (Resolved l)) -> R
 mapResolveDefault Resolution{} (Compose (_, Ambiguous (x :| []))) = pure x
 mapResolveDefault Resolution{} _ = StateT (const $ Failure $ pure AmbiguousParses)
 
-traverseResolveDefault :: Show (g f f) => Resolution l -> NodeWrap (g (f :: * -> *) f) -> Resolved l (Placed (g f f))
+traverseResolveDefault :: Resolution l -> NodeWrap (g (f :: * -> *) f) -> Resolved l (Placed (g f f))
 traverseResolveDefault Resolution{} (Compose (pos, Ambiguous (x :| []))) = StateT (\s-> Success ((pos, x), s))
 traverseResolveDefault Resolution{} _ = StateT (const $ Failure $ pure AmbiguousParses)
 
@@ -246,15 +277,45 @@ resolveName res scope (NonQualIdent name) =
    of Just (Success rhs) -> Success rhs
       _ -> Failure (UnknownLocal name :| [])
 
-resolveModules :: Predefined l -> Map Ident (Module l NodeWrap NodeWrap)
+resolveModules :: forall l. (BindableDeclaration l, CoFormalParameters l, Abstract.Wirthy l,
+                             Deep.DownTraversable (Resolution l) (Abstract.Declaration l) NodeWrap Placed (Resolved l),
+                             Deep.DownTraversable (Resolution l) (Abstract.StatementSequence l) NodeWrap Placed (Resolved l),
+                             Deep.DownTraversable (Resolution l) (Abstract.Type l) NodeWrap Placed (Resolved l),
+                             Deep.DownTraversable (Resolution l) (Abstract.ProcedureHeading l) NodeWrap Placed (Resolved l),
+                             Deep.DownTraversable (Resolution l) (Abstract.FormalParameters l) NodeWrap Placed (Resolved l),
+                             Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
+                                                 (Abstract.Type l NodeWrap NodeWrap),
+                             Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
+                                                 (Abstract.Declaration l NodeWrap NodeWrap),
+                             Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
+                                                 (Abstract.StatementSequence l NodeWrap NodeWrap),
+                            Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
+                                                (Abstract.ProcedureHeading l NodeWrap NodeWrap),
+                            Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
+                                                (Abstract.FormalParameters l NodeWrap NodeWrap)) =>
+                  Predefined l -> Map Ident (Module l NodeWrap NodeWrap)
                 -> Validation (NonEmpty (Ident, NonEmpty (Error l))) (Map Ident (Module l Placed Placed))
 resolveModules predefinedScope modules = traverseWithKey extractErrors modules'
    where modules' = resolveModule predefinedScope modules' <$> modules
          extractErrors moduleKey (Failure e)   = Failure ((moduleKey, e) :| [])
          extractErrors _         (Success mod) = Success mod
 
-resolveModule :: forall l. Scope l -> Map Ident (Validation (NonEmpty (Error l)) (Module l Placed Placed))
-               -> Module l NodeWrap NodeWrap -> Validation (NonEmpty (Error l)) (Module l Placed Placed)
+resolveModule :: forall l. (BindableDeclaration l,
+                            Deep.DownTraversable (Resolution l) (Declaration l) NodeWrap Placed (Resolved l),
+                            Deep.DownTraversable (Resolution l) (Abstract.Declaration l) NodeWrap Placed (Resolved l),
+                            Deep.DownTraversable (Resolution l) (Abstract.StatementSequence l) NodeWrap Placed (Resolved l),
+                            Deep.DownTraversable (Resolution l) (Abstract.Type l) NodeWrap Placed (Resolved l),
+                            Deep.DownTraversable (Resolution l) (Abstract.FormalParameters l) NodeWrap Placed (Resolved l),
+                            Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
+                                                (Abstract.Type l NodeWrap NodeWrap),
+                            Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
+                                                (Abstract.Declaration l NodeWrap NodeWrap),
+                            Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
+                                                (Abstract.StatementSequence l NodeWrap NodeWrap),
+                            Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
+                                                (Abstract.FormalParameters l NodeWrap NodeWrap)) =>
+                 Scope l -> Map Ident (Validation (NonEmpty (Error l)) (Module l Placed Placed))
+              -> Module l NodeWrap NodeWrap -> Validation (NonEmpty (Error l)) (Module l Placed Placed)
 resolveModule predefined modules m@(Module moduleName imports declarations body) =
    evalStateT (Deep.traverseDown res m) (moduleGlobalScope, ModuleState)
    where res = Resolution moduleExports
@@ -269,7 +330,14 @@ resolveModule predefined modules m@(Module moduleName imports declarations body)
          moduleExports = foldMap exportsOfModule <$> importedModules
          moduleGlobalScope = localScope res moduleName declarations predefined
 
-localScope :: forall l. Resolution l -> Ident -> [NodeWrap (Declaration l NodeWrap NodeWrap)] -> Scope l -> Scope l
+localScope :: forall l. (BindableDeclaration l,
+                         Deep.DownTraversable (Resolution l) (Abstract.Type l) NodeWrap Placed (Resolved l),
+                         Deep.DownTraversable (Resolution l) (Abstract.FormalParameters l) NodeWrap Placed (Resolved l),
+                         Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
+                                             (Abstract.Type l NodeWrap NodeWrap),
+                         Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
+                                             (Abstract.FormalParameters l NodeWrap NodeWrap)) =>
+              Resolution l -> Ident -> [NodeWrap (Abstract.Declaration l NodeWrap NodeWrap)] -> Scope l -> Scope l
 localScope res qual declarations outerScope = innerScope
    where innerScope = Map.union (snd <$> scopeAdditions) outerScope
          scopeAdditions = (resolveBinding res innerScope <$>)
@@ -279,104 +347,132 @@ localScope res qual declarations outerScope = innerScope
                             -> Validation (NonEmpty (Error l)) (DeclarationRHS l Placed Placed)
          resolveBinding res scope dr = evalStateT (Deep.traverseDown res dr) (scope, DeclarationState)
 
-declarationBinding :: Foldable f => Ident -> Declaration l f f -> [(Ident, (AccessMode, DeclarationRHS l f f))]
-declarationBinding _ (ConstantDeclaration (IdentDef name export) expr) =
-   [(name, (export, DeclaredConstant expr))]
-declarationBinding _ (TypeDeclaration (IdentDef name export) typeDef) =
-   [(name, (export, DeclaredType typeDef))]
-declarationBinding _ (VariableDeclaration names typeDef) =
-   [(name, (export, DeclaredVariable typeDef)) | (IdentDef name export) <- NonEmpty.toList names]
-declarationBinding moduleName (ProcedureDeclaration heading _) = procedureHeadBinding (foldr1 const heading)
-   where procedureHeadBinding (ProcedureHeading _ (IdentDef name export) parameters) =
-            [(name, (export, DeclaredProcedure (moduleName == "SYSTEM") parameters))]
-         procedureHeadBinding (TypeBoundHeading _ _ _ _ (IdentDef name export) parameters) =
-            [(name, (export, DeclaredProcedure (moduleName == "SYSTEM") parameters))]
-declarationBinding _ (ForwardDeclaration (IdentDef name export) parameters) =
-   [(name, (export, DeclaredProcedure False parameters))]
+class BindableDeclaration l where
+   declarationBinding :: Foldable f => Ident -> Abstract.Declaration l f f -> [(Ident, (AccessMode, DeclarationRHS l f f))]
+   
+instance BindableDeclaration Language where
+   declarationBinding _ (ConstantDeclaration (IdentDef name export) expr) =
+      [(name, (export, DeclaredConstant expr))]
+   declarationBinding _ (TypeDeclaration (IdentDef name export) typeDef) =
+      [(name, (export, DeclaredType typeDef))]
+   declarationBinding _ (VariableDeclaration names typeDef) =
+      [(name, (export, DeclaredVariable typeDef)) | (IdentDef name export) <- NonEmpty.toList names]
+   declarationBinding moduleName (ProcedureDeclaration heading _) = procedureHeadBinding (foldr1 const heading)
+      where procedureHeadBinding (ProcedureHeading _ (IdentDef name export) parameters) =
+               [(name, (export, DeclaredProcedure (moduleName == "SYSTEM") parameters))]
+            procedureHeadBinding (TypeBoundHeading _ _ _ _ (IdentDef name export) parameters) =
+               [(name, (export, DeclaredProcedure (moduleName == "SYSTEM") parameters))]
+   declarationBinding _ (ForwardDeclaration (IdentDef name export) parameters) =
+      [(name, (export, DeclaredProcedure False parameters))]
 
-predefined, predefined2 :: Predefined l
+predefined, predefined2 :: Abstract.Oberon l => Predefined l
 -- | The set of 'Predefined' types and procedures defined in the Oberon Language Report.
 predefined = Success <$> Map.fromList
-   [("BOOLEAN", DeclaredType ((,) 0 $ TypeReference $ NonQualIdent "BOOLEAN")),
-    ("CHAR", DeclaredType ((,) 0 $ TypeReference $ NonQualIdent "CHAR")),
-    ("SHORTINT", DeclaredType ((,) 0 $ TypeReference $ NonQualIdent "SHORTINT")),
-    ("INTEGER", DeclaredType ((,) 0 $ TypeReference $ NonQualIdent "INTEGER")),
-    ("LONGINT", DeclaredType ((,) 0 $ TypeReference $ NonQualIdent "LONGINT")),
-    ("REAL", DeclaredType ((,) 0 $ TypeReference $ NonQualIdent "REAL")),
-    ("LONGREAL", DeclaredType ((,) 0 $ TypeReference $ NonQualIdent "LONGREAL")),
-    ("SET", DeclaredType ((,) 0 $ TypeReference $ NonQualIdent "SET")),
+   [("BOOLEAN", DeclaredType ((,) 0 $ Abstract.typeReference $ NonQualIdent "BOOLEAN")),
+    ("CHAR", DeclaredType ((,) 0 $ Abstract.typeReference $ NonQualIdent "CHAR")),
+    ("SHORTINT", DeclaredType ((,) 0 $ Abstract.typeReference $ NonQualIdent "SHORTINT")),
+    ("INTEGER", DeclaredType ((,) 0 $ Abstract.typeReference $ NonQualIdent "INTEGER")),
+    ("LONGINT", DeclaredType ((,) 0 $ Abstract.typeReference $ NonQualIdent "LONGINT")),
+    ("REAL", DeclaredType ((,) 0 $ Abstract.typeReference $ NonQualIdent "REAL")),
+    ("LONGREAL", DeclaredType ((,) 0 $ Abstract.typeReference $ NonQualIdent "LONGREAL")),
+    ("SET", DeclaredType ((,) 0 $ Abstract.typeReference $ NonQualIdent "SET")),
     ("TRUE", DeclaredConstant ((,) 0 $ Read $ (,) 0 $ Variable $ NonQualIdent "TRUE")),
     ("FALSE", DeclaredConstant ((,) 0 $ Read $ (,) 0 $ Variable $ NonQualIdent "FALSE")),
     ("ABS", DeclaredProcedure False $ Just $ (,) 0 $
-            FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "INTEGER"] $
+            Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
+                                       $ Abstract.typeReference $ NonQualIdent "INTEGER"] $
             Just $ NonQualIdent "INTEGER"),
     ("ASH", DeclaredProcedure False $ Just $ (,) 0 $
-            FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "INTEGER"] $
+            Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
+                                       $ Abstract.typeReference $ NonQualIdent "INTEGER"] $
             Just $ NonQualIdent "INTEGER"),
     ("CAP", DeclaredProcedure False $ Just $ (,) 0 $
-            FormalParameters [(,) 0 $ FPSection False (pure "c") $ (,) 0 $ TypeReference $ NonQualIdent "CHAR"] $
+            Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "c") $ (,) 0
+                                       $ Abstract.typeReference $ NonQualIdent "CHAR"] $
             Just $ NonQualIdent "CHAR"),
     ("LEN", DeclaredProcedure False $ Just $ (,) 0 $
-            FormalParameters [(,) 0 $ FPSection False (pure "c") $ (,) 0 $ TypeReference $ NonQualIdent "ARRAY"] $
+            Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "c") $ (,) 0
+                                       $ Abstract.typeReference $ NonQualIdent "ARRAY"] $
             Just $ NonQualIdent "LONGINT"),
     ("MAX", DeclaredProcedure True $ Just $ (,) 0 $
-            FormalParameters [(,) 0 $ FPSection False (pure "c") $ (,) 0 $ TypeReference $ NonQualIdent "SET"] $
+            Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "c") $ (,) 0
+                                       $ Abstract.typeReference $ NonQualIdent "SET"] $
             Just $ NonQualIdent "INTEGER"),
     ("MIN", DeclaredProcedure True $ Just $ (,) 0 $
-            FormalParameters [(,) 0 $ FPSection False (pure "c") $ (,) 0 $ TypeReference $ NonQualIdent "SET"] $
+            Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "c") $ (,) 0
+                                       $ Abstract.typeReference $ NonQualIdent "SET"] $
             Just $ NonQualIdent "INTEGER"),
     ("ODD", DeclaredProcedure False $ Just $ (,) 0 $
-            FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "CHAR"] $
+            Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
+                                       $ Abstract.typeReference $ NonQualIdent "CHAR"] $
             Just $ NonQualIdent "BOOLEAN"),
     ("SIZE", DeclaredProcedure True $ Just $ (,) 0 $
-             FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "CHAR"] $
+             Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
+                                        $ Abstract.typeReference $ NonQualIdent "CHAR"] $
              Just $ NonQualIdent "INTEGER"),
     ("ORD", DeclaredProcedure False $ Just $ (,) 0 $
-            FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "CHAR"] $
+            Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
+                                       $ Abstract.typeReference $ NonQualIdent "CHAR"] $
             Just $ NonQualIdent "INTEGER"),
     ("CHR", DeclaredProcedure False $ Just $ (,) 0 $
-            FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "INTEGER"] $
+            Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
+                                       $ Abstract.typeReference $ NonQualIdent "INTEGER"] $
             Just $ NonQualIdent "CHAR"),
     ("SHORT", DeclaredProcedure False $ Just $ (,) 0 $
-              FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "INTEGER"] $
+              Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
+                                         $ Abstract.typeReference $ NonQualIdent "INTEGER"] $
               Just $ NonQualIdent "INTEGER"),
     ("LONG", DeclaredProcedure False $ Just $ (,) 0 $
-             FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "INTEGER"] $
+             Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
+                                        $ Abstract.typeReference $ NonQualIdent "INTEGER"] $
              Just $ NonQualIdent "INTEGER"),
     ("ENTIER", DeclaredProcedure False $ Just $ (,) 0 $
-               FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "REAL"] $
+               Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
+                                          $ Abstract.typeReference $ NonQualIdent "REAL"] $
                Just $ NonQualIdent "INTEGER"),
     ("INC", DeclaredProcedure False $ Just $ (,) 0 $
-            FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "INTEGER"] Nothing),
+            Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
+                                       $ Abstract.typeReference $ NonQualIdent "INTEGER"] Nothing),
     ("DEC", DeclaredProcedure False $ Just $ (,) 0 $
-            FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "INTEGER"] Nothing),
+            Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
+                                       $ Abstract.typeReference $ NonQualIdent "INTEGER"] Nothing),
     ("INCL", DeclaredProcedure False $ Just $ (,) 0 $
-             FormalParameters [(,) 0 $ FPSection False (pure "s") $ (,) 0 $ TypeReference $ NonQualIdent "SET",
-                               (,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "INTEGER"] Nothing),
+             Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "s") $ (,) 0
+                                        $ Abstract.typeReference $ NonQualIdent "SET",
+                               (,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
+                               $ Abstract.typeReference $ NonQualIdent "INTEGER"] Nothing),
     ("EXCL", DeclaredProcedure False $ Just $ (,) 0 $
-             FormalParameters [(,) 0 $ FPSection False (pure "s") $ (,) 0 $ TypeReference $ NonQualIdent "SET",
-                               (,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "INTEGER"] Nothing),
+             Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "s") $ (,) 0
+                                        $ Abstract.typeReference $ NonQualIdent "SET",
+                               (,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
+                               $ Abstract.typeReference $ NonQualIdent "INTEGER"] Nothing),
     ("COPY", DeclaredProcedure False $ Just $ (,) 0 $
-             FormalParameters [(,) 0 $ FPSection False (pure "s") $ (,) 0 $ TypeReference $ NonQualIdent "ARRAY",
-                               (,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "ARRAY"] Nothing),
+             Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "s") $ (,) 0
+                                        $ Abstract.typeReference $ NonQualIdent "ARRAY",
+                               (,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
+                               $ Abstract.typeReference $ NonQualIdent "ARRAY"] Nothing),
     ("NEW", DeclaredProcedure False $ Just $ (,) 0 $
-            FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "POINTER"] Nothing),
+            Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
+                                       $ Abstract.typeReference $ NonQualIdent "POINTER"] Nothing),
     ("HALT", DeclaredProcedure False $ Just $ (,) 0 $
-             FormalParameters [(,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "INTEGER"] Nothing)]
+             Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
+                                        $ Abstract.typeReference $ NonQualIdent "INTEGER"] Nothing)]
 
 -- | The set of 'Predefined' types and procedures defined in the Oberon-2 Language Report.
 predefined2 = predefined <>
    (Success <$> Map.fromList
-    [("ASSERT", DeclaredProcedure False $ Just $ (,) 0 $
-             FormalParameters [(,) 0 $ FPSection False (pure "s") $ (,) 0 $ TypeReference $ NonQualIdent "ARRAY",
-                               (,) 0 $ FPSection False (pure "n") $ (,) 0 $ TypeReference $ NonQualIdent "ARRAY"] Nothing)])
+    [("ASSERT",
+      DeclaredProcedure False $ Just $ (,) 0 $ Abstract.formalParameters
+       [(,) 0 $ Abstract.fpSection False (pure "s") $ (,) 0 $ Abstract.typeReference $ NonQualIdent "ARRAY",
+        (,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0 $ Abstract.typeReference $ NonQualIdent "ARRAY"]
+      Nothing)])
 
-exportsOfModule :: Module l Placed Placed -> Scope l
+exportsOfModule :: BindableDeclaration l => Module l Placed Placed -> Scope l
 exportsOfModule = fmap Success . Map.mapMaybe isExported . globalsOfModule
    where isExported (PrivateOnly, _) = Nothing
          isExported (_, binding) = Just binding
 
-globalsOfModule :: Module l Placed Placed -> Map Ident (AccessMode, DeclarationRHS l Placed Placed)
+globalsOfModule :: BindableDeclaration l => Module l Placed Placed -> Map Ident (AccessMode, DeclarationRHS l Placed Placed)
 globalsOfModule (Module name imports declarations _) =
    Map.fromList (concatMap (declarationBinding name . snd) declarations)
 
