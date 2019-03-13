@@ -208,6 +208,8 @@ type instance Atts (Inherited TypeCheck) (AST.Declaration l f' f) = (InhTC, Map 
 type instance Atts (Synthesized TypeCheck) (AST.Declaration l f' f) = SynTCMod
 type instance Atts (Inherited TypeCheck) (AST.ProcedureHeading l f' f) = (InhTC, Map AST.Ident AST.Ident)
 type instance Atts (Synthesized TypeCheck) (AST.ProcedureHeading l f' f) = SynTCHead
+type instance Atts (Inherited TypeCheck) (AST.ProcedureBody l f' f) = InhTC
+type instance Atts (Synthesized TypeCheck) (AST.ProcedureBody l f' f) = SynTC
 type instance Atts (Inherited TypeCheck) (AST.FormalParameters l f' f) = InhTC
 type instance Atts (Synthesized TypeCheck) (AST.FormalParameters l f' f) = SynTCSig
 type instance Atts (Inherited TypeCheck) (AST.FPSection l f' f) = InhTC
@@ -296,6 +298,7 @@ instance (Abstract.Nameable l,
           Atts (Inherited TypeCheck) (Abstract.Type l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC,
           Atts (Inherited TypeCheck) (Abstract.ProcedureHeading l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ (InhTC, Map AST.Ident AST.Ident),
+          Atts (Inherited TypeCheck) (Abstract.ProcedureBody l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC,
           Atts (Inherited TypeCheck) (Abstract.FormalParameters l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC,
           Atts (Synthesized TypeCheck) (Abstract.Declaration l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ SynTCMod,
@@ -303,7 +306,8 @@ instance (Abstract.Nameable l,
           Atts (Synthesized TypeCheck) (Abstract.FormalParameters l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ SynTCSig,
           Atts (Synthesized TypeCheck) (Abstract.ProcedureHeading l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTCHead) =>
+          ~ SynTCHead,
+          Atts (Synthesized TypeCheck) (Abstract.ProcedureBody l (Semantics TypeCheck) (Semantics TypeCheck)) ~ SynTC) =>
          Attribution TypeCheck (AST.Declaration l)
                      (Int, AST.Declaration l (Semantics TypeCheck) (Semantics TypeCheck)) where
    attribution TypeCheck (pos, AST.ConstantDeclaration namedef _)
@@ -339,18 +343,12 @@ instance (Abstract.Nameable l,
        AST.VariableDeclaration names (Inherited $ fst inheritance))
    attribution TypeCheck (pos, AST.ProcedureDeclaration _heading _body)
                (Inherited inheritance,
-                AST.ProcedureDeclaration heading body@(AST.ProcedureBody declarations statements)) =
-      (Synthesized SynTCMod{moduleErrors= headingErrors (syn heading)
-                                          <> foldMap (moduleErrors . syn) declarations
-                                          <> foldMap (errors . syn) statements,
+                AST.ProcedureDeclaration heading body) =
+      (Synthesized SynTCMod{moduleErrors= headingErrors (syn heading) <> errors (syn body),
                             moduleEnv= outsideEnv (syn heading),
                             pointerTargets= mempty},
-       AST.ProcedureDeclaration
-          (Inherited inheritance)
-          (AST.ProcedureBody [Inherited (localInherited, mempty)] (Just $ Inherited localInherited)))
-      where localInherited = InhTC (foldMap (moduleEnv . syn) declarations <> env bodyInherited)
-                                   (currentModule $ fst inheritance)
-            bodyInherited = InhTC (insideEnv (syn heading) `Map.union` env (fst inheritance))
+       AST.ProcedureDeclaration (Inherited inheritance) (Inherited bodyInherited))
+      where bodyInherited = InhTC (insideEnv (syn heading) `Map.union` env (fst inheritance))
                                   (currentModule $ fst inheritance)
    attribution TypeCheck (pos, AST.ForwardDeclaration namedef _signature)
                (Inherited inheritance, AST.ForwardDeclaration _namedef signature) =
@@ -397,6 +395,17 @@ instance (Abstract.Nameable l,
                      | PointerType t' <- ultimate t, RecordType{} <- ultimate t' -> []
                      | otherwise -> [(currentModule $ fst inheritance, pos, NonRecordType t)]
 
+instance (Atts (Inherited TypeCheck) (Abstract.Declaration l (Semantics TypeCheck) (Semantics TypeCheck))
+          ~ (InhTC, Map AST.Ident AST.Ident),
+          Atts (Synthesized TypeCheck) (Abstract.Declaration l (Semantics TypeCheck) (Semantics TypeCheck))
+          ~ SynTCMod) =>
+         Attribution TypeCheck (AST.ProcedureBody l) (Int, AST.ProcedureBody l (Semantics TypeCheck) (Semantics TypeCheck)) where
+   attribution TypeCheck (pos, AST.ProcedureBody{}) (Inherited inheritance, AST.ProcedureBody declarations statements) =
+      (Synthesized SynTC{errors= foldMap (moduleErrors . syn) declarations <> foldMap (errors . syn) statements},
+       AST.ProcedureBody (pure $ Inherited (localInherited, mempty)) (pure $ Inherited localInherited))
+      where localInherited = InhTC (foldMap (moduleEnv . syn) declarations <> env inheritance)
+                                   (currentModule inheritance)
+            
 instance Attribution TypeCheck (AST.FormalParameters l)
          (Int, AST.FormalParameters l (Semantics TypeCheck) (Semantics TypeCheck)) where
    attribution TypeCheck (pos, AST.FormalParameters sections returnType)
@@ -1009,16 +1018,19 @@ instance (Atts (Synthesized TypeCheck) (Abstract.Declaration l (Semantics TypeCh
          (AST.Module l (Semantics TypeCheck) (Semantics TypeCheck)) where
    (<$>) = AG.mapDefault id snd
 instance (Abstract.Nameable l,
+          Rank2.Apply (Abstract.ProcedureBody l (Semantics TypeCheck)),
           Atts (Inherited TypeCheck) (Abstract.Declaration l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ (InhTC, Map AST.Ident AST.Ident),
           Atts (Inherited TypeCheck) (Abstract.Type l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC,
           Atts (Inherited TypeCheck) (Abstract.ProcedureHeading l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ (InhTC, Map AST.Ident AST.Ident),
+          Atts (Inherited TypeCheck) (Abstract.ProcedureBody l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC,
           Atts (Inherited TypeCheck) (Abstract.FormalParameters l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC,
           Atts (Synthesized TypeCheck) (Abstract.Declaration l (Semantics TypeCheck) (Semantics TypeCheck)) ~ SynTCMod,
           Atts (Synthesized TypeCheck) (Abstract.Type l (Semantics TypeCheck) (Semantics TypeCheck)) ~ SynTCType,
           Atts (Synthesized TypeCheck) (Abstract.ProcedureHeading l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ SynTCHead,
+          Atts (Synthesized TypeCheck) (Abstract.ProcedureBody l (Semantics TypeCheck) (Semantics TypeCheck)) ~ SynTC,
           Atts (Synthesized TypeCheck) (Abstract.FormalParameters l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ SynTCSig)
          => Shallow.Functor TypeCheck Placed (Semantics TypeCheck)
@@ -1031,6 +1043,12 @@ instance (Abstract.Nameable l,
           ~ SynTCSig) =>
          Shallow.Functor TypeCheck Placed (Semantics TypeCheck)
                          (AST.ProcedureHeading l (Semantics TypeCheck) (Semantics TypeCheck)) where
+   (<$>) = AG.mapDefault id snd
+instance (Atts (Inherited TypeCheck) (Abstract.Declaration l (Semantics TypeCheck) (Semantics TypeCheck))
+          ~ (InhTC, Map AST.Ident AST.Ident),
+          Atts (Synthesized TypeCheck) (Abstract.Declaration l (Semantics TypeCheck) (Semantics TypeCheck)) ~ SynTCMod) =>
+         Shallow.Functor TypeCheck Placed (Semantics TypeCheck)
+                         (AST.ProcedureBody l (Semantics TypeCheck) (Semantics TypeCheck)) where
    (<$>) = AG.mapDefault id snd
 instance Shallow.Functor TypeCheck Placed (Semantics TypeCheck)
          (AST.FormalParameters l (Semantics TypeCheck) (Semantics TypeCheck)) where

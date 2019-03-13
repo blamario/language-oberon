@@ -149,16 +149,16 @@ type Import = (Maybe Ident, Ident)
 data Declaration l f' f = ConstantDeclaration (Abstract.IdentDef l) (f (ConstExpression l f' f'))
                         | TypeDeclaration (Abstract.IdentDef l) (f (Abstract.Type l f' f'))
                         | VariableDeclaration (IdentList l) (f (Abstract.Type l f' f'))
-                        | ProcedureDeclaration (f (Abstract.ProcedureHeading l f' f')) (ProcedureBody l f' f)
+                        | ProcedureDeclaration (f (Abstract.ProcedureHeading l f' f')) (f (Abstract.ProcedureBody l f' f'))
                         | ForwardDeclaration (Abstract.IdentDef l) (Maybe (f (Abstract.FormalParameters l f' f')))
 
 deriving instance (Data l, Typeable f, Typeable f',
                    Data (f (Abstract.Type l f' f')), Data (f (ConstExpression l f' f')),
                    Data (f (Abstract.FormalParameters l f' f')), Data (f (Abstract.ProcedureHeading l f' f')),
-                   Data (ProcedureBody l f' f), Data (Abstract.IdentDef l)) => Data (Declaration l f' f)
+                   Data (f (Abstract.ProcedureBody l f' f')), Data (Abstract.IdentDef l)) => Data (Declaration l f' f)
 deriving instance (Show (f (Abstract.Type l f' f')), Show (f (ConstExpression l f' f')),
                    Show (f (Abstract.FormalParameters l f' f')), Show (f (Abstract.ProcedureHeading l f' f')),
-                   Show (ProcedureBody l f' f), Show (Abstract.IdentDef l)) => Show (Declaration l f' f)
+                   Show (f (Abstract.ProcedureBody l f' f')), Show (Abstract.IdentDef l)) => Show (Declaration l f' f)
 
 data IdentDef l = IdentDef Ident AccessMode
    deriving (Data, Eq, Ord, Show)

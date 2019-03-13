@@ -153,7 +153,7 @@ definitionMixin g@OberonGrammar{..} = g{
                     return (Abstract.moduleUnit name imports declarations Nothing),
    procedureDeclaration = Abstract.procedureDeclaration . snd . sequenceA 
                           <$> wrap procedureHeading 
-                          <*> (pure $ Abstract.procedureBody [] Nothing),
+                          <*> wrap (pure $ Abstract.procedureBody [] Nothing),
    identdef = Abstract.exported <$> ident <* optional (delimiter "*")}
 
 grammar2 g@OberonGrammar{..} = g1{
@@ -287,7 +287,7 @@ grammar OberonGrammar{..} = OberonGrammar{
    variableDeclaration = Abstract.variableDeclaration <$> identList <* delimiter ":" <*> wrap type_prod,
    procedureDeclaration = do (procedureName, heading) <- sequenceA <$> wrap procedureHeading
                              delimiter ";"
-                             body <- procedureBody
+                             body <- wrap procedureBody
                              lexicalToken (string procedureName)
                              return (Abstract.procedureDeclaration heading body),
    procedureHeading = Abstract.procedureHeading <$ keyword "PROCEDURE" <*> (True <$ delimiter "*" <|> pure False)

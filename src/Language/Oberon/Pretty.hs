@@ -42,11 +42,6 @@ instance (Abstract.Nameable l, Pretty (Abstract.IdentDef l), Pretty (Abstract.Ty
    pretty (ProcedureDeclaration heading body) = vsep [pretty heading <> semi,
                                                       pretty body,
                                                       "END" <+> pretty (Abstract.getProcedureName $ runIdentity heading)
-                                                      {-
-                                                      "END" <+> pretty (Abstract.getIdentDefIdent
-                                                                        $ Abstract.getProcedureHeadingIdentDef
-                                                                        $ runIdentity heading)
-                                                      -}
                                                       <> semi]
    pretty (ForwardDeclaration ident parameters) = "PROCEDURE" <+> "^" <+> pretty ident <+> pretty parameters <> semi
 

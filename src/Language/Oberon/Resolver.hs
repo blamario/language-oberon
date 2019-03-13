@@ -144,13 +144,15 @@ instance {-# overlaps #-}
     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
                         (Abstract.ProcedureHeading l NodeWrap NodeWrap),
     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
+                        (Abstract.ProcedureBody l NodeWrap NodeWrap),
+    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
                         (Abstract.FormalParameters l NodeWrap NodeWrap)) =>
    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Declaration l NodeWrap NodeWrap) where
    traverse res (Compose (pos, Ambiguous (proc@(ProcedureDeclaration heading body) :| []))) =
       do s@(scope, state) <- get
-         let ProcedureBody declarations statements = body
-             Success (headingScope, _) = execStateT (Shallow.traverse res heading) s
-             innerScope = localScope res "" declarations (headingScope `Map.union` scope)
+         let Success (headingScope, _) = execStateT (Shallow.traverse res heading) s
+             Success (_, body') = evalStateT (Shallow.traverse res body) s
+             innerScope = localScope res "" (getLocalDeclarations body') (headingScope `Map.union` scope)
          put (innerScope, state)
          return (pos, proc)
    traverse res (Compose (pos, Ambiguous (dec :| []))) = pure (pos, dec)
@@ -159,10 +161,12 @@ instance {-# overlaps #-}
 class CoFormalParameters l where
    getFPSections :: Abstract.FormalParameters l f' f -> [f (Abstract.FPSection l f' f')]
    evalFPSection :: Abstract.FPSection l f' f -> (Bool -> NonEmpty Ident -> f (Abstract.Type l f' f') -> r) -> r
+   getLocalDeclarations :: Abstract.ProcedureBody l f' f -> [f (Abstract.Declaration l f' f')]
 
 instance CoFormalParameters Language where
    getFPSections (FormalParameters sections _) = sections
    evalFPSection (FPSection var names types) f = f var names types
+   getLocalDeclarations (ProcedureBody declarations _statements) = declarations
 
 instance {-# overlaps #-}
    (Abstract.Wirthy l, CoFormalParameters l,
@@ -282,6 +286,7 @@ resolveModules :: forall l. (BindableDeclaration l, CoFormalParameters l, Abstra
                              Deep.DownTraversable (Resolution l) (Abstract.StatementSequence l) NodeWrap Placed (Resolved l),
                              Deep.DownTraversable (Resolution l) (Abstract.Type l) NodeWrap Placed (Resolved l),
                              Deep.DownTraversable (Resolution l) (Abstract.ProcedureHeading l) NodeWrap Placed (Resolved l),
+                             Deep.DownTraversable (Resolution l) (Abstract.ProcedureBody l) NodeWrap Placed (Resolved l),
                              Deep.DownTraversable (Resolution l) (Abstract.FormalParameters l) NodeWrap Placed (Resolved l),
                              Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
                                                  (Abstract.Type l NodeWrap NodeWrap),
@@ -289,10 +294,12 @@ resolveModules :: forall l. (BindableDeclaration l, CoFormalParameters l, Abstra
                                                  (Abstract.Declaration l NodeWrap NodeWrap),
                              Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
                                                  (Abstract.StatementSequence l NodeWrap NodeWrap),
-                            Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                                                (Abstract.ProcedureHeading l NodeWrap NodeWrap),
-                            Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                                                (Abstract.FormalParameters l NodeWrap NodeWrap)) =>
+                             Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
+                                                 (Abstract.ProcedureHeading l NodeWrap NodeWrap),
+                             Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
+                                                 (Abstract.ProcedureBody l NodeWrap NodeWrap),
+                             Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
+                                                 (Abstract.FormalParameters l NodeWrap NodeWrap)) =>
                   Predefined l -> Map Ident (Module l NodeWrap NodeWrap)
                 -> Validation (NonEmpty (Ident, NonEmpty (Error l))) (Map Ident (Module l Placed Placed))
 resolveModules predefinedScope modules = traverseWithKey extractErrors modules'

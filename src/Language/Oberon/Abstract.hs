@@ -52,7 +52,7 @@ class Wirthy l where
    constantDeclaration :: IdentDef l -> f (ConstExpression l f' f') -> Declaration l f' f
    typeDeclaration :: IdentDef l -> f (Type l f' f') -> Declaration l f' f
    variableDeclaration :: IdentList l -> f (Type l f' f') -> Declaration l f' f
-   procedureDeclaration :: f (ProcedureHeading l f' f') -> ProcedureBody l f' f -> Declaration l f' f
+   procedureDeclaration :: f (ProcedureHeading l f' f') -> f (ProcedureBody l f' f') -> Declaration l f' f
    forwardDeclaration :: IdentDef l -> Maybe (f (FormalParameters l f' f')) -> Declaration l f' f
 
    procedureHeading :: Bool -> IdentDef l -> Maybe (f (FormalParameters l f' f')) -> ProcedureHeading l f' f
