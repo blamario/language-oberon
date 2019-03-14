@@ -136,27 +136,31 @@ instance Abstract.Oberon2 Language where
    forStatement = For
    variantWithStatement = With
 
-data Module l f' f = Module Ident [Import] [f (Abstract.Declaration l f' f')] (Maybe (f (StatementSequence l f' f')))
+data Module l f' f =
+   Module Ident [Import] [f (Abstract.Declaration l f' f')] (Maybe (f (Abstract.StatementSequence l f' f')))
 
 deriving instance (Typeable l, Typeable f, Typeable f',
-                   Data (f (Abstract.Declaration l f' f')), Data (f (StatementSequence l f' f'))) => Data (Module l f' f)
-deriving instance (Show (f (Abstract.Declaration l f' f')), Show (f (StatementSequence l f' f'))) => Show (Module l f' f)
+                   Data (f (Abstract.Declaration l f' f')), Data (f (Abstract.StatementSequence l f' f'))) =>
+                  Data (Module l f' f)
+deriving instance (Show (f (Abstract.Declaration l f' f')), Show (f (Abstract.StatementSequence l f' f'))) =>
+                  Show (Module l f' f)
 
 type Ident = Text
 
 type Import = (Maybe Ident, Ident)
 
-data Declaration l f' f = ConstantDeclaration (Abstract.IdentDef l) (f (ConstExpression l f' f'))
+data Declaration l f' f = ConstantDeclaration (Abstract.IdentDef l) (f (Abstract.ConstExpression l f' f'))
                         | TypeDeclaration (Abstract.IdentDef l) (f (Abstract.Type l f' f'))
-                        | VariableDeclaration (IdentList l) (f (Abstract.Type l f' f'))
-                        | ProcedureDeclaration (f (Abstract.ProcedureHeading l f' f')) (f (Abstract.ProcedureBody l f' f'))
+                        | VariableDeclaration (Abstract.IdentList l) (f (Abstract.Type l f' f'))
+                        | ProcedureDeclaration (f (Abstract.ProcedureHeading l f' f'))
+                                               (f (Abstract.ProcedureBody l f' f'))
                         | ForwardDeclaration (Abstract.IdentDef l) (Maybe (f (Abstract.FormalParameters l f' f')))
 
 deriving instance (Data l, Typeable f, Typeable f',
-                   Data (f (Abstract.Type l f' f')), Data (f (ConstExpression l f' f')),
+                   Data (f (Abstract.Type l f' f')), Data (f (Abstract.ConstExpression l f' f')),
                    Data (f (Abstract.FormalParameters l f' f')), Data (f (Abstract.ProcedureHeading l f' f')),
                    Data (f (Abstract.ProcedureBody l f' f')), Data (Abstract.IdentDef l)) => Data (Declaration l f' f)
-deriving instance (Show (f (Abstract.Type l f' f')), Show (f (ConstExpression l f' f')),
+deriving instance (Show (f (Abstract.Type l f' f')), Show (f (Abstract.ConstExpression l f' f')),
                    Show (f (Abstract.FormalParameters l f' f')), Show (f (Abstract.ProcedureHeading l f' f')),
                    Show (f (Abstract.ProcedureBody l f' f')), Show (Abstract.IdentDef l)) => Show (Declaration l f' f)
 
@@ -166,81 +170,85 @@ data IdentDef l = IdentDef Ident AccessMode
 data AccessMode = Exported | ReadOnly | PrivateOnly
    deriving (Data, Eq, Ord, Show)
 
-type ConstExpression = Expression
-
-data Expression l f' f = Relation RelOp (f (Expression l f' f')) (f (Expression l f' f'))
-                       | IsA (f (Expression l f' f')) QualIdent
-                       | Positive (f (Expression l f' f'))
-                       | Negative (f (Expression l f' f'))
-                       | Add (f (Expression l f' f')) (f (Expression l f' f'))
-                       | Subtract (f (Expression l f' f')) (f (Expression l f' f'))
-                       | Or (f (Expression l f' f')) (f (Expression l f' f'))
-                       | Multiply (f (Expression l f' f')) (f (Expression l f' f'))
-                       | Divide (f (Expression l f' f')) (f (Expression l f' f'))
-                       | IntegerDivide (f (Expression l f' f')) (f (Expression l f' f'))
-                       | Modulo (f (Expression l f' f')) (f (Expression l f' f'))
-                       | And (f (Expression l f' f')) (f (Expression l f' f'))
+data Expression l f' f = Relation RelOp (f (Abstract.Expression l f' f')) (f (Abstract.Expression l f' f'))
+                       | IsA (f (Abstract.Expression l f' f')) QualIdent
+                       | Positive (f (Abstract.Expression l f' f'))
+                       | Negative (f (Abstract.Expression l f' f'))
+                       | Add (f (Abstract.Expression l f' f')) (f (Abstract.Expression l f' f'))
+                       | Subtract (f (Abstract.Expression l f' f')) (f (Abstract.Expression l f' f'))
+                       | Or (f (Abstract.Expression l f' f')) (f (Abstract.Expression l f' f'))
+                       | Multiply (f (Abstract.Expression l f' f')) (f (Abstract.Expression l f' f'))
+                       | Divide (f (Abstract.Expression l f' f')) (f (Abstract.Expression l f' f'))
+                       | IntegerDivide (f (Abstract.Expression l f' f')) (f (Abstract.Expression l f' f'))
+                       | Modulo (f (Abstract.Expression l f' f')) (f (Abstract.Expression l f' f'))
+                       | And (f (Abstract.Expression l f' f')) (f (Abstract.Expression l f' f'))
                        | Integer Text
                        | Real Text
                        | CharConstant Char
                        | CharCode Int
                        | String Text
                        | Nil 
-                       | Set [f (Element l f' f')]
-                       | Read (f (Designator l f' f'))
-                       | FunctionCall (f (Designator l f' f')) [f (Expression l f' f')]
-                       | Not (f (Expression l f' f'))
+                       | Set [f (Abstract.Element l f' f')]
+                       | Read (f (Abstract.Designator l f' f'))
+                       | FunctionCall (f (Abstract.Designator l f' f')) [f (Abstract.Expression l f' f')]
+                       | Not (f (Abstract.Expression l f' f'))
 
-deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Designator l f' f')),
-                   Data (f (Element l f' f')), Data (f (Expression l f' f'))) => Data (Expression l f' f)
-deriving instance (Show (f (Designator l f' f')),
-                   Show (f (Element l f' f')), Show (f (Expression l f' f'))) => Show (Expression l f' f)
-deriving instance (Eq (f (Designator l f' f')), Eq (f (Element l f' f')), Eq (f (Expression l f' f'))) => Eq (Expression l f' f)
+deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Abstract.Designator l f' f')),
+                   Data (f (Abstract.Element l f' f')), Data (f (Abstract.Expression l f' f'))) =>
+                  Data (Expression l f' f)
+deriving instance (Show (f (Abstract.Designator l f' f')), Show (f (Abstract.Element l f' f')),
+                   Show (f (Abstract.Expression l f' f'))) => Show (Expression l f' f)
+deriving instance (Eq (f (Abstract.Designator l f' f')), Eq (f (Abstract.Element l f' f')),
+                  Eq (f (Abstract.Expression l f' f'))) => Eq (Expression l f' f)
 
-data Element l f' f = Element (f (Expression l f' f'))
-                    | Range (f (Expression l f' f')) (f (Expression l f' f'))
+data Element l f' f = Element (f (Abstract.Expression l f' f'))
+                    | Range (f (Abstract.Expression l f' f')) (f (Abstract.Expression l f' f'))
 
-deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Expression l f' f'))) => Data (Element l f' f)
-deriving instance Show (f (Expression l f' f')) => Show (Element l f' f)
-deriving instance Eq (f (Expression l f' f')) => Eq (Element l f' f)
+deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Abstract.Expression l f' f'))) => Data (Element l f' f)
+deriving instance Show (f (Abstract.Expression l f' f')) => Show (Element l f' f)
+deriving instance Eq (f (Abstract.Expression l f' f')) => Eq (Element l f' f)
 
 data Designator l f' f = Variable QualIdent
-                       | Field (f (Designator l f' f')) Ident 
-                       | Index (f (Designator l f' f')) (NonEmpty (f (Expression l f' f')))
-                       | TypeGuard (f (Designator l f' f')) QualIdent 
-                       | Dereference (f (Designator l f' f'))
+                       | Field (f (Abstract.Designator l f' f')) Ident 
+                       | Index (f (Abstract.Designator l f' f')) (NonEmpty (f (Abstract.Expression l f' f')))
+                       | TypeGuard (f (Abstract.Designator l f' f')) QualIdent 
+                       | Dereference (f (Abstract.Designator l f' f'))
 
-deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Designator l f' f')), Data (f (Expression l f' f'))) =>
+deriving instance (Typeable l, Typeable f, Typeable f',
+                   Data (f (Abstract.Designator l f' f')), Data (f (Abstract.Expression l f' f'))) =>
                   Data (Designator l f' f)
-deriving instance (Show (f (Designator l f' f')), Show (f (Expression l f' f'))) => Show (Designator l f' f)
-deriving instance (Eq (f (Designator l f' f')), Eq (f (Expression l f' f'))) => Eq (Designator l f' f)
+deriving instance (Show (f (Abstract.Designator l f' f')), Show (f (Abstract.Expression l f' f'))) =>
+                  Show (Designator l f' f)
+deriving instance (Eq (f (Abstract.Designator l f' f')), Eq (f (Abstract.Expression l f' f'))) =>
+                  Eq (Designator l f' f)
 
 data Type l f' f = TypeReference QualIdent 
-                 | ArrayType [f (ConstExpression l f' f')] (f (Abstract.Type l f' f'))
+                 | ArrayType [f (Abstract.ConstExpression l f' f')] (f (Abstract.Type l f' f'))
                  | RecordType (Maybe BaseType) (NonEmpty (f (Abstract.FieldList l f' f')))
                  | PointerType (f (Abstract.Type l f' f'))
                  | ProcedureType (Maybe (f (Abstract.FormalParameters l f' f')))
 
-deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Abstract.Type l f' f')), Data (f (ConstExpression l f' f')),
-                   Data (f (Abstract.FormalParameters l f' f')), Data (f (Abstract.FieldList l f' f'))) => Data (Type l f' f)
-deriving instance (Show (f (Abstract.Type l f' f')), Show (f (ConstExpression l f' f')),
-                   Show (f (Abstract.FormalParameters l f' f')), Show (f (Abstract.FieldList l f' f'))) => Show (Type l f' f)
+deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Abstract.Type l f' f')),
+                   Data (f (Abstract.ConstExpression l f' f')), Data (f (Abstract.FormalParameters l f' f')),
+                   Data (f (Abstract.FieldList l f' f'))) =>
+                  Data (Type l f' f)
+deriving instance (Show (f (Abstract.Type l f' f')), Show (f (Abstract.ConstExpression l f' f')),
+                   Show (f (Abstract.FormalParameters l f' f')), Show (f (Abstract.FieldList l f' f'))) =>
+                  Show (Type l f' f)
 
-data FieldList l f' f = FieldList (IdentList l) (f (Abstract.Type l f' f'))
+data FieldList l f' f = FieldList (Abstract.IdentList l) (f (Abstract.Type l f' f'))
                       | EmptyFieldList
 
 deriving instance (Data l, Typeable f, Typeable f', Data (Abstract.IdentDef l), Data (f (Abstract.Type l f' f')),
-                   Data (f (Expression l f' f'))) => Data (FieldList l f' f)
-deriving instance (Show (Abstract.IdentDef l), Show (f (Abstract.Type l f' f')), Show (f (Expression l f' f'))) =>
+                   Data (f (Abstract.Expression l f' f'))) => Data (FieldList l f' f)
+deriving instance (Show (Abstract.IdentDef l), Show (f (Abstract.Type l f' f')), Show (f (Abstract.Expression l f' f'))) =>
                   Show (FieldList l f' f)
-
-type IdentList l = NonEmpty (Abstract.IdentDef l)
 
 data ProcedureHeading l f' f =
    ProcedureHeading                    Bool (Abstract.IdentDef l) (Maybe (f (Abstract.FormalParameters l f' f')))
    | TypeBoundHeading Bool Ident Ident Bool (Abstract.IdentDef l) (Maybe (f (Abstract.FormalParameters l f' f')))
 
-data FormalParameters l f' f = FormalParameters [f (FPSection l f' f')] (Maybe QualIdent)
+data FormalParameters l f' f = FormalParameters [f (Abstract.FPSection l f' f')] (Maybe QualIdent)
 
 data FPSection l f' f = FPSection Bool (NonEmpty Ident) (f (Abstract.Type l f' f'))
 
@@ -249,71 +257,80 @@ deriving instance (Data l, Typeable f, Typeable f', Data (Abstract.IdentDef l),
 deriving instance (Show (Abstract.IdentDef l), Show (f (Abstract.FormalParameters l f' f'))) =>
                   Show (ProcedureHeading l f' f)
 
-deriving instance (Typeable l, Typeable f, Typeable f', Data (f (FPSection l f' f')),  Data (f (Expression l f' f'))) =>
+deriving instance (Typeable l, Typeable f, Typeable f',
+                   Data (f (Abstract.FPSection l f' f')),  Data (f (Abstract.Expression l f' f'))) =>
                   Data (FormalParameters l f' f)
-deriving instance (Show (f (FPSection l f' f')), Show (f (Expression l f' f'))) => Show (FormalParameters l f' f)
+deriving instance (Show (f (Abstract.FPSection l f' f')), Show (f (Abstract.Expression l f' f'))) =>
+                  Show (FormalParameters l f' f)
 
 deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Abstract.Type l f' f')),
-                   Data (f (Expression l f' f'))) => Data (FPSection l f' f)
-deriving instance (Show (f (Abstract.Type l f' f')), Show (f (Expression l f' f'))) => Show (FPSection l f' f)
+                   Data (f (Abstract.Expression l f' f'))) => Data (FPSection l f' f)
+deriving instance (Show (f (Abstract.Type l f' f')), Show (f (Abstract.Expression l f' f'))) => Show (FPSection l f' f)
 
-data ProcedureBody l f' f =  ProcedureBody [f (Abstract.Declaration l f' f')] (Maybe (f (StatementSequence l f' f')))
+data ProcedureBody l f' f =
+   ProcedureBody [f (Abstract.Declaration l f' f')] (Maybe (f (Abstract.StatementSequence l f' f')))
 
-deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Abstract.Declaration l f' f')), Data (f (Designator l f' f')),
-                   Data (f (Expression l f' f')), Data (f (StatementSequence l f' f'))) =>
+deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Abstract.Declaration l f' f')),
+                   Data (f (Abstract.Designator l f' f')), Data (f (Abstract.Expression l f' f')),
+                   Data (f (Abstract.StatementSequence l f' f'))) =>
                   Data (ProcedureBody l f' f)
-deriving instance (Show (f (Abstract.Declaration l f' f')), Show (f (Designator l f' f')),
-                   Show (f (Expression l f' f')), Show (f (StatementSequence l f' f'))) => Show (ProcedureBody l f' f)
+deriving instance (Show (f (Abstract.Declaration l f' f')), Show (f (Abstract.Designator l f' f')),
+                   Show (f (Abstract.Expression l f' f')), Show (f (Abstract.StatementSequence l f' f'))) =>
+                  Show (ProcedureBody l f' f)
 
-newtype StatementSequence l f' f = StatementSequence (NonEmpty (f (Statement l f' f')))
+newtype StatementSequence l f' f = StatementSequence (NonEmpty (f (Abstract.Statement l f' f')))
 
-deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Statement l f' f'))) => Data (StatementSequence l f' f)
-deriving instance Show (f (Statement l f' f')) => Show (StatementSequence l f' f)
+deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Abstract.Statement l f' f'))) =>
+                  Data (StatementSequence l f' f)
+deriving instance Show (f (Abstract.Statement l f' f')) => Show (StatementSequence l f' f)
 
 data Statement l f' f = EmptyStatement
-                      | Assignment (f (Designator l f' f')) (f (Expression l f' f'))
-                      | ProcedureCall (f (Designator l f' f')) (Maybe [f (Expression l f' f')])
-                      | If (NonEmpty (f (Product (Expression l) (StatementSequence l) f' f')))
-                           (Maybe (f (StatementSequence l f' f')))
-                      | CaseStatement (f (Expression l f' f')) 
-                                      (NonEmpty (f (Case l f' f'))) 
-                                      (Maybe (f (StatementSequence l f' f')))
-                      | While (f (Expression l f' f')) (f (StatementSequence l f' f'))
-                      | Repeat (f (StatementSequence l f' f')) (f (Expression l f' f'))
-                      | For Ident (f (Expression l f' f')) (f (Expression l f' f')) 
-                            (Maybe (f (Expression l f' f'))) (f (StatementSequence l f' f'))  -- Oberon2
-                      | Loop (f (StatementSequence l f' f'))
-                      | With (NonEmpty (f (WithAlternative l f' f'))) (Maybe (f (StatementSequence l f' f')))
+                      | Assignment (f (Abstract.Designator l f' f')) (f (Abstract.Expression l f' f'))
+                      | ProcedureCall (f (Abstract.Designator l f' f')) (Maybe [f (Abstract.Expression l f' f')])
+                      | If (NonEmpty (f (Product (Abstract.Expression l) (Abstract.StatementSequence l) f' f')))
+                           (Maybe (f (Abstract.StatementSequence l f' f')))
+                      | CaseStatement (f (Abstract.Expression l f' f')) 
+                                      (NonEmpty (f (Abstract.Case l f' f'))) 
+                                      (Maybe (f (Abstract.StatementSequence l f' f')))
+                      | While (f (Abstract.Expression l f' f')) (f (Abstract.StatementSequence l f' f'))
+                      | Repeat (f (Abstract.StatementSequence l f' f')) (f (Abstract.Expression l f' f'))
+                      | For Ident (f (Abstract.Expression l f' f')) (f (Abstract.Expression l f' f')) 
+                            (Maybe (f (Abstract.Expression l f' f'))) (f (Abstract.StatementSequence l f' f'))  -- Oberon2
+                      | Loop (f (Abstract.StatementSequence l f' f'))
+                      | With (NonEmpty (f (Abstract.WithAlternative l f' f')))
+                             (Maybe (f (Abstract.StatementSequence l f' f')))
                       | Exit
-                      | Return (Maybe (f (Expression l f' f')))
+                      | Return (Maybe (f (Abstract.Expression l f' f')))
 
-deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Designator l f' f')), Data (f (Expression l f' f')),
-                   Data (f (Product (Expression l) (StatementSequence l) f' f')),
-                   Data (f (Case l f' f')), Data (f (WithAlternative l f' f')),
-                   Data (f (Statement l f' f')), Data (f (StatementSequence l f' f'))) => Data (Statement l f' f)
-deriving instance (Show (f (Designator l f' f')), Show (f (Expression l f' f')),
-                   Show (f (Product (Expression l) (StatementSequence l) f' f')),
-                   Show (f (Case l f' f')), Show (f (WithAlternative l f' f')),
-                   Show (f (Statement l f' f')), Show (f (StatementSequence l f' f'))) => Show (Statement l f' f)
+deriving instance (Typeable l, Typeable f, Typeable f',
+                   Data (f (Abstract.Designator l f' f')), Data (f (Abstract.Expression l f' f')),
+                   Data (f (Product (Abstract.Expression l) (Abstract.StatementSequence l) f' f')),
+                   Data (f (Abstract.Case l f' f')), Data (f (Abstract.WithAlternative l f' f')),
+                   Data (f (Abstract.StatementSequence l f' f'))) => Data (Statement l f' f)
+deriving instance (Show (f (Abstract.Designator l f' f')), Show (f (Abstract.Expression l f' f')),
+                   Show (f (Product (Abstract.Expression l) (Abstract.StatementSequence l) f' f')),
+                   Show (f (Abstract.Case l f' f')), Show (f (Abstract.WithAlternative l f' f')),
+                   Show (f (Abstract.StatementSequence l f' f'))) => Show (Statement l f' f)
 
-data WithAlternative l f' f = WithAlternative QualIdent QualIdent (f (StatementSequence l f' f'))
+data WithAlternative l f' f = WithAlternative QualIdent QualIdent (f (Abstract.StatementSequence l f' f'))
 
-data Case l f' f = Case (NonEmpty (f (CaseLabels l f' f'))) (f (StatementSequence l f' f'))
+data Case l f' f = Case (NonEmpty (f (Abstract.CaseLabels l f' f'))) (f (Abstract.StatementSequence l f' f'))
                  | EmptyCase
 
-data CaseLabels l f' f = SingleLabel (f (ConstExpression l f' f'))
-                       | LabelRange (f (ConstExpression l f' f')) (f (ConstExpression l f' f'))
+data CaseLabels l f' f = SingleLabel (f (Abstract.ConstExpression l f' f'))
+                       | LabelRange (f (Abstract.ConstExpression l f' f')) (f (Abstract.ConstExpression l f' f'))
 
-deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Designator l f' f')), Data (f (StatementSequence l f' f'))) =>
-                  Data (WithAlternative l f' f)
-deriving instance (Show (f (StatementSequence l f' f'))) => Show (WithAlternative l f' f)
+deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Abstract.Designator l f' f')),
+                   Data (f (Abstract.StatementSequence l f' f'))) => Data (WithAlternative l f' f)
+deriving instance (Show (f (Abstract.StatementSequence l f' f'))) => Show (WithAlternative l f' f)
 
-deriving instance (Typeable l, Typeable f, Typeable f', Data (f (CaseLabels l f' f')), Data (f (StatementSequence l f' f'))) =>
-                  Data (Case l f' f)
-deriving instance (Show (f (CaseLabels l f' f')), Show (f (StatementSequence l f' f'))) => Show (Case l f' f)
+deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Abstract.CaseLabels l f' f')),
+                   Data (f (Abstract.StatementSequence l f' f'))) => Data (Case l f' f)
+deriving instance (Show (f (Abstract.CaseLabels l f' f')), Show (f (Abstract.StatementSequence l f' f'))) => Show (Case l f' f)
 
-deriving instance (Typeable l, Typeable f, Typeable f', Data (f (ConstExpression l f' f'))) => Data (CaseLabels l f' f)
-deriving instance Show (f (ConstExpression l f' f')) => Show (CaseLabels l f' f)
+deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Abstract.ConstExpression l f' f'))) =>
+                  Data (CaseLabels l f' f)
+deriving instance Show (f (Abstract.ConstExpression l f' f')) => Show (CaseLabels l f' f)
 
 $(mconcat <$> mapM Transformation.Deep.TH.deriveAll
   [''Module, ''Declaration, ''Type, ''Expression,
