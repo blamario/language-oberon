@@ -15,12 +15,6 @@ type Ident = Text
 
 type Import = (Maybe Ident, Ident)
 
-data QualIdent = QualIdent Ident Ident 
-               | NonQualIdent Ident
-   deriving (Data, Eq, Ord, Show)
-
-type BaseType  = QualIdent
-
 data RelOp = Equal | Unequal | Less | LessOrEqual | Greater | GreaterOrEqual | In
    deriving (Data, Eq, Show)
 
@@ -43,7 +37,8 @@ class Wirthy l where
    type CaseLabels l        = (x :: (* -> *) -> (* -> *) -> *) | x -> l
    type Element l           = (x :: (* -> *) -> (* -> *) -> *) | x -> l
    
-   type IdentDef l   = x | x -> l
+   type IdentDef l  = x | x -> l
+   type QualIdent l = x | x -> l
 
    -- Module
    moduleUnit :: Ident -> [Import] -> [f (Declaration l f' f')] -> Maybe (f (StatementSequence l f' f')) -> Module l f' f
@@ -56,11 +51,9 @@ class Wirthy l where
    forwardDeclaration :: IdentDef l -> Maybe (f (FormalParameters l f' f')) -> Declaration l f' f
 
    procedureHeading :: Bool -> IdentDef l -> Maybe (f (FormalParameters l f' f')) -> ProcedureHeading l f' f
-   formalParameters :: [f (FPSection l f' f')] -> Maybe QualIdent -> FormalParameters l f' f
+   formalParameters :: [f (FPSection l f' f')] -> Maybe (ReturnType l) -> FormalParameters l f' f
    fpSection :: Bool -> NonEmpty Ident -> f (Type l f' f') -> FPSection l f' f
    procedureBody :: [f (Declaration l f' f')] -> Maybe (f (StatementSequence l f' f')) -> ProcedureBody l f' f
-   
-   identDef :: Ident -> IdentDef l
 
    fieldList :: NonEmpty (IdentDef l) -> f (Type l f' f') -> FieldList l f' f
    emptyFieldList :: FieldList l f' f
@@ -69,8 +62,8 @@ class Wirthy l where
    arrayType :: [f (ConstExpression l f' f')] -> f (Type l f' f') -> Type l f' f
    pointerType :: f (Type l f' f') -> Type l f' f
    procedureType :: Maybe (f (FormalParameters l f' f')) -> Type l f' f
-   recordType :: Maybe BaseType -> NonEmpty (f (FieldList l f' f')) -> Type l f' f
-   typeReference :: QualIdent -> Type l f' f
+   recordType :: Maybe (BaseType l) -> NonEmpty (f (FieldList l f' f')) -> Type l f' f
+   typeReference :: QualIdent l -> Type l f' f
 
    -- Statement
    assignment :: f (Designator l f' f') -> f (Expression l f' f') -> Statement l f' f
@@ -88,7 +81,7 @@ class Wirthy l where
    whileStatement :: f (Expression l f' f') -> f (StatementSequence l f' f') -> Statement l f' f
    withStatement :: f (WithAlternative l f' f') -> Statement l f' f
 
-   withAlternative :: QualIdent -> QualIdent -> f (StatementSequence l f' f') -> WithAlternative l f' f
+   withAlternative :: QualIdent l -> QualIdent l -> f (StatementSequence l f' f') -> WithAlternative l f' f
    caseAlternative :: NonEmpty (f (CaseLabels l f' f')) -> f (StatementSequence l f' f') -> Case l f' f
    emptyCase :: Case l f' f
 
@@ -118,18 +111,25 @@ class Wirthy l where
    range :: f (Expression l f' f') -> f (Expression l f' f') -> Element l f' f
 
    -- Designator
-   variable :: QualIdent -> Designator l f' f
+   variable :: QualIdent l -> Designator l f' f
    field :: f (Designator l f' f') -> Ident -> Designator l f' f
    index :: f (Designator l f' f') -> NonEmpty (f (Expression l f' f')) -> Designator l f' f
-   typeGuard :: f (Designator l f' f') -> QualIdent -> Designator l f' f
+   typeGuard :: f (Designator l f' f') -> QualIdent l -> Designator l f' f
    dereference :: f (Designator l f' f') -> Designator l f' f
+
+   -- Identifier
+   identDef :: Ident -> IdentDef l
+   nonQualIdent :: Ident -> QualIdent l
 
 class Wirthy l => Nameable l where
    getProcedureName :: ProcedureHeading l f' f -> Ident
    getIdentDefName :: IdentDef l -> Ident
+   getNonQualIdentName :: QualIdent l -> Maybe Ident
 
 class Wirthy l => Oberon l where
-   is :: f (Expression l f' f') -> QualIdent -> Expression l f' f
+   qualIdent :: Ident -> Ident -> QualIdent l
+   getQualIdentNames :: QualIdent l -> Maybe (Ident, Ident)
+   is :: f (Expression l f' f') -> QualIdent l -> Expression l f' f
    exported :: Ident -> IdentDef l
 
 class Oberon l => Oberon2 l where
@@ -141,5 +141,7 @@ class Oberon l => Oberon2 l where
                 -> Statement l f' f
    variantWithStatement :: NonEmpty (f (WithAlternative l f' f')) -> Maybe (f (StatementSequence l f' f')) -> Statement l f' f
 
+type BaseType l = QualIdent l
+type ReturnType l = QualIdent l
 type ConstExpression l = Expression l
 type IdentList l = NonEmpty (IdentDef l)

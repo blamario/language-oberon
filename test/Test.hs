@@ -20,6 +20,7 @@ import Language.Oberon (parseAndResolveModule, LanguageVersion(Oberon2), Placed)
 import Language.Oberon.AST (Language, Module)
 import Language.Oberon.Pretty ()
 import qualified Language.Oberon.Resolver as Resolver
+import qualified Language.Oberon.TypeChecker as TypeChecker
 
 import Prelude hiding (readFile)
 
@@ -47,8 +48,10 @@ prettyFile dirPath source = do
    resolvedModule <- parseAndResolveModule True Oberon2 dirPath source
    case resolvedModule
       of Failure (Left (Resolver.UnparseableModule err :| [])) -> assertFailure (unpack err)
-         Failure errs -> assertFailure (show errs)
+         Failure errs -> assertFailure (show $ (onLastOfThree TypeChecker.errorMessage <$>) <$> errs)
          Success mod -> return (renderStrict $ layoutPretty defaultLayoutOptions $ pretty mod)
+
+onLastOfThree f (a, b, c) = (a, b, f c)
 
 instance Pretty (Module Language Placed Placed) where
    pretty m = pretty ((Identity . snd) Rank2.<$> m)

@@ -61,11 +61,11 @@ data OberonGrammar l f p = OberonGrammar {
    relation :: p Abstract.RelOp,
    typeDeclaration :: p (Abstract.Declaration l f f),
    type_prod :: p (Abstract.Type l f f),
-   qualident :: p Abstract.QualIdent,
+   qualident :: p (Abstract.QualIdent l),
    arrayType :: p (Abstract.Type l f f),
    length :: p (f (Abstract.Expression l f f)),
    recordType :: p (Abstract.Type l f f),
-   baseType :: p Abstract.QualIdent,
+   baseType :: p (Abstract.BaseType l),
    fieldListSequence :: p (NonEmpty (f (Abstract.FieldList l f f))),
    fieldList :: p (Abstract.FieldList l f f),
    identList :: p (Abstract.IdentList l),
@@ -271,8 +271,8 @@ grammar OberonGrammar{..} = OberonGrammar{
                <|> recordType 
                <|> pointerType 
                <|> procedureType,
-   qualident = Abstract.QualIdent <$> ident <* delimiter "." <*> ident
-               <|> Abstract.NonQualIdent <$> ident,
+   qualident = Abstract.qualIdent <$> ident <* delimiter "." <*> ident
+               <|> Abstract.nonQualIdent <$> ident,
    arrayType = Abstract.arrayType <$ keyword "ARRAY" <*> sepBy1 length (delimiter ",") <* keyword "OF" <*> wrap type_prod,
    length = constExpression,
    recordType = Abstract.recordType <$ keyword "RECORD" <*> optional (parens baseType)

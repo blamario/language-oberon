@@ -151,9 +151,9 @@ main' Opts{..} =
 
 type NodeWrap = Compose ((,) Int) Ambiguous
 
-succeed :: (Data a, Pretty a, Show a) 
-        => Output -> (TypeChecker.Error -> IO ())
-        -> (err -> Either (NonEmpty (Resolver.Error Language)) (NonEmpty TypeChecker.Error)) 
+succeed :: (Data a, Pretty a, Show a)
+        => Output -> (TypeChecker.Error Language -> IO ())
+        -> (err -> Either (NonEmpty (Resolver.Error Language)) (NonEmpty (TypeChecker.Error Language)))
         -> Validation err a -> IO ()
 succeed out reportTypeError prepare x = either (reportFailure . prepare) showSuccess (validationToEither x)
    where reportFailure (Left (Resolver.UnparseableModule err :| [])) = Text.putStrLn err

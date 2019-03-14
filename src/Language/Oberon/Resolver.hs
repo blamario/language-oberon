@@ -47,9 +47,9 @@ deriving instance (Show (Abstract.FormalParameters l NodeWrap NodeWrap), Show (A
                   Show (DeclarationRHS l NodeWrap NodeWrap)
 
 -- | All possible resolution errors
-data Error l = UnknownModule QualIdent
+data Error l = UnknownModule (Abstract.QualIdent l)
              | UnknownLocal Ident
-             | UnknownImport QualIdent
+             | UnknownImport (Abstract.QualIdent l)
              | AmbiguousParses
              | AmbiguousDeclaration [Declaration l NodeWrap NodeWrap]
              | AmbiguousDesignator [Designator l NodeWrap NodeWrap]
@@ -60,12 +60,13 @@ data Error l = UnknownModule QualIdent
              | InvalidFunctionParameters [NodeWrap (Abstract.Expression l NodeWrap NodeWrap)]
              | InvalidRecord (NonEmpty (Error l))
              | InvalidStatement (NonEmpty (Error l))
-             | NotARecord QualIdent
-             | NotAType QualIdent
-             | NotAValue QualIdent
+             | NotARecord (Abstract.QualIdent l)
+             | NotAType (Abstract.QualIdent l)
+             | NotAValue (Abstract.QualIdent l)
              | ClashingImports
              | UnparseableModule Text
-deriving instance (Show (Declaration l NodeWrap NodeWrap), Show (Statement l NodeWrap NodeWrap),
+deriving instance (Show (Abstract.QualIdent l),
+                   Show (Declaration l NodeWrap NodeWrap), Show (Statement l NodeWrap NodeWrap),
                    Show (Expression l NodeWrap NodeWrap), Show (Abstract.Expression l NodeWrap NodeWrap),
                    Show (Designator l NodeWrap NodeWrap)) => Show (Error l)
 
@@ -113,14 +114,15 @@ instance {-# overlaps #-}
          (_, multi) -> Failure (AmbiguousDesignator multi :| [])
 
 class Readable l where
-   getVariableName :: Abstract.Designator l f' f -> Maybe QualIdent
+   getVariableName :: Abstract.Designator l f' f -> Maybe (Abstract.QualIdent l)
 
 instance Readable Language where
    getVariableName (Variable q) = Just q
    getVariableName _ = Nothing
 
 instance {-# overlaps #-}
-   (Readable l, Deep.DownTraversable (Resolution l) (Abstract.Expression l) NodeWrap Placed (Resolved l),
+   (Readable l, Abstract.Nameable l, Abstract.Oberon l,
+    Deep.DownTraversable (Resolution l) (Abstract.Expression l) NodeWrap Placed (Resolved l),
     Deep.DownTraversable (Resolution l) (Abstract.Designator l) NodeWrap Placed (Resolved l),
     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.Expression l NodeWrap NodeWrap),
     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.Designator l NodeWrap NodeWrap)) =>
@@ -211,7 +213,7 @@ instance {-# overlaps #-}
          let innerScope = parameterScope `Map.union` receiverBinding `Map.union` scope
              receiverBinding :: Map Ident (Validation e (DeclarationRHS l f' Placed))
              receiverBinding = Map.singleton receiverName (Success $ DeclaredVariable $ (,) pos
-                                                           $ Abstract.typeReference $ NonQualIdent receiverType)
+                                                           $ Abstract.typeReference $ Abstract.nonQualIdent receiverType)
              parameterScope = case parameters
                               of Nothing -> mempty
                                  Just (Compose (_, Ambiguous (fp :| []))) | sections <- getFPSections fp
@@ -296,17 +298,20 @@ resolveTypeName res scope q =
       Success DeclaredType{} -> Success q
       Success _ -> Failure (NotAType q :| [])
 
-resolveName :: Resolution l -> Scope l -> QualIdent -> Validation (NonEmpty (Error l)) (DeclarationRHS l Placed Placed)
-resolveName res scope q@(QualIdent moduleName name) =
-   case Map.lookup moduleName (_modules res)
-   of Nothing -> Failure (UnknownModule q :| [])
-      Just exports -> case Map.lookup name exports
-                      of Just rhs -> rhs
-                         Nothing -> Failure (UnknownImport q :| [])
-resolveName res scope (NonQualIdent name) =
-   case Map.lookup name scope
-   of Just (Success rhs) -> Success rhs
-      _ -> Failure (UnknownLocal name :| [])
+resolveName :: (Abstract.Nameable l, Abstract.Oberon l)
+            => Resolution l -> Scope l -> Abstract.QualIdent l
+            -> Validation (NonEmpty (Error l)) (DeclarationRHS l Placed Placed)
+resolveName res scope q
+   | Just (moduleName, name) <- Abstract.getQualIdentNames q =
+     case Map.lookup moduleName (_modules res)
+     of Nothing -> Failure (UnknownModule q :| [])
+        Just exports -> case Map.lookup name exports
+                        of Just rhs -> rhs
+                           Nothing -> Failure (UnknownImport q :| [])
+   | Just name <- Abstract.getNonQualIdentName q =
+     case Map.lookup name scope
+     of Just (Success rhs) -> Success rhs
+        _ -> Failure (UnknownLocal name :| [])
 
 resolveModules :: forall l. (BindableDeclaration l, CoFormalParameters l, Abstract.Wirthy l,
                              Deep.DownTraversable (Resolution l) (Abstract.Declaration l) NodeWrap Placed (Resolved l),
@@ -411,103 +416,103 @@ instance BindableDeclaration Language where
 predefined, predefined2 :: Abstract.Oberon l => Predefined l
 -- | The set of 'Predefined' types and procedures defined in the Oberon Language Report.
 predefined = Success <$> Map.fromList
-   [("BOOLEAN", DeclaredType ((,) 0 $ Abstract.typeReference $ NonQualIdent "BOOLEAN")),
-    ("CHAR", DeclaredType ((,) 0 $ Abstract.typeReference $ NonQualIdent "CHAR")),
-    ("SHORTINT", DeclaredType ((,) 0 $ Abstract.typeReference $ NonQualIdent "SHORTINT")),
-    ("INTEGER", DeclaredType ((,) 0 $ Abstract.typeReference $ NonQualIdent "INTEGER")),
-    ("LONGINT", DeclaredType ((,) 0 $ Abstract.typeReference $ NonQualIdent "LONGINT")),
-    ("REAL", DeclaredType ((,) 0 $ Abstract.typeReference $ NonQualIdent "REAL")),
-    ("LONGREAL", DeclaredType ((,) 0 $ Abstract.typeReference $ NonQualIdent "LONGREAL")),
-    ("SET", DeclaredType ((,) 0 $ Abstract.typeReference $ NonQualIdent "SET")),
-    ("TRUE", DeclaredConstant ((,) 0 $ Abstract.read $ (,) 0 $ Abstract.variable $ NonQualIdent "TRUE")),
-    ("FALSE", DeclaredConstant ((,) 0 $ Abstract.read $ (,) 0 $ Abstract.variable $ NonQualIdent "FALSE")),
+   [("BOOLEAN", DeclaredType ((,) 0 $ Abstract.typeReference $ Abstract.nonQualIdent "BOOLEAN")),
+    ("CHAR", DeclaredType ((,) 0 $ Abstract.typeReference $ Abstract.nonQualIdent "CHAR")),
+    ("SHORTINT", DeclaredType ((,) 0 $ Abstract.typeReference $ Abstract.nonQualIdent "SHORTINT")),
+    ("INTEGER", DeclaredType ((,) 0 $ Abstract.typeReference $ Abstract.nonQualIdent "INTEGER")),
+    ("LONGINT", DeclaredType ((,) 0 $ Abstract.typeReference $ Abstract.nonQualIdent "LONGINT")),
+    ("REAL", DeclaredType ((,) 0 $ Abstract.typeReference $ Abstract.nonQualIdent "REAL")),
+    ("LONGREAL", DeclaredType ((,) 0 $ Abstract.typeReference $ Abstract.nonQualIdent "LONGREAL")),
+    ("SET", DeclaredType ((,) 0 $ Abstract.typeReference $ Abstract.nonQualIdent "SET")),
+    ("TRUE", DeclaredConstant ((,) 0 $ Abstract.read $ (,) 0 $ Abstract.variable $ Abstract.nonQualIdent "TRUE")),
+    ("FALSE", DeclaredConstant ((,) 0 $ Abstract.read $ (,) 0 $ Abstract.variable $ Abstract.nonQualIdent "FALSE")),
     ("ABS", DeclaredProcedure False $ Just $ (,) 0 $
             Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
-                                       $ Abstract.typeReference $ NonQualIdent "INTEGER"] $
-            Just $ NonQualIdent "INTEGER"),
+                                       $ Abstract.typeReference $ Abstract.nonQualIdent "INTEGER"] $
+            Just $ Abstract.nonQualIdent "INTEGER"),
     ("ASH", DeclaredProcedure False $ Just $ (,) 0 $
             Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
-                                       $ Abstract.typeReference $ NonQualIdent "INTEGER"] $
-            Just $ NonQualIdent "INTEGER"),
+                                       $ Abstract.typeReference $ Abstract.nonQualIdent "INTEGER"] $
+            Just $ Abstract.nonQualIdent "INTEGER"),
     ("CAP", DeclaredProcedure False $ Just $ (,) 0 $
             Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "c") $ (,) 0
-                                       $ Abstract.typeReference $ NonQualIdent "CHAR"] $
-            Just $ NonQualIdent "CHAR"),
+                                       $ Abstract.typeReference $ Abstract.nonQualIdent "CHAR"] $
+            Just $ Abstract.nonQualIdent "CHAR"),
     ("LEN", DeclaredProcedure False $ Just $ (,) 0 $
             Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "c") $ (,) 0
-                                       $ Abstract.typeReference $ NonQualIdent "ARRAY"] $
-            Just $ NonQualIdent "LONGINT"),
+                                       $ Abstract.typeReference $ Abstract.nonQualIdent "ARRAY"] $
+            Just $ Abstract.nonQualIdent "LONGINT"),
     ("MAX", DeclaredProcedure True $ Just $ (,) 0 $
             Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "c") $ (,) 0
-                                       $ Abstract.typeReference $ NonQualIdent "SET"] $
-            Just $ NonQualIdent "INTEGER"),
+                                       $ Abstract.typeReference $ Abstract.nonQualIdent "SET"] $
+            Just $ Abstract.nonQualIdent "INTEGER"),
     ("MIN", DeclaredProcedure True $ Just $ (,) 0 $
             Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "c") $ (,) 0
-                                       $ Abstract.typeReference $ NonQualIdent "SET"] $
-            Just $ NonQualIdent "INTEGER"),
+                                       $ Abstract.typeReference $ Abstract.nonQualIdent "SET"] $
+            Just $ Abstract.nonQualIdent "INTEGER"),
     ("ODD", DeclaredProcedure False $ Just $ (,) 0 $
             Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
-                                       $ Abstract.typeReference $ NonQualIdent "CHAR"] $
-            Just $ NonQualIdent "BOOLEAN"),
+                                       $ Abstract.typeReference $ Abstract.nonQualIdent "CHAR"] $
+            Just $ Abstract.nonQualIdent "BOOLEAN"),
     ("SIZE", DeclaredProcedure True $ Just $ (,) 0 $
              Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
-                                        $ Abstract.typeReference $ NonQualIdent "CHAR"] $
-             Just $ NonQualIdent "INTEGER"),
+                                        $ Abstract.typeReference $ Abstract.nonQualIdent "CHAR"] $
+             Just $ Abstract.nonQualIdent "INTEGER"),
     ("ORD", DeclaredProcedure False $ Just $ (,) 0 $
             Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
-                                       $ Abstract.typeReference $ NonQualIdent "CHAR"] $
-            Just $ NonQualIdent "INTEGER"),
+                                       $ Abstract.typeReference $ Abstract.nonQualIdent "CHAR"] $
+            Just $ Abstract.nonQualIdent "INTEGER"),
     ("CHR", DeclaredProcedure False $ Just $ (,) 0 $
             Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
-                                       $ Abstract.typeReference $ NonQualIdent "INTEGER"] $
-            Just $ NonQualIdent "CHAR"),
+                                       $ Abstract.typeReference $ Abstract.nonQualIdent "INTEGER"] $
+            Just $ Abstract.nonQualIdent "CHAR"),
     ("SHORT", DeclaredProcedure False $ Just $ (,) 0 $
               Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
-                                         $ Abstract.typeReference $ NonQualIdent "INTEGER"] $
-              Just $ NonQualIdent "INTEGER"),
+                                         $ Abstract.typeReference $ Abstract.nonQualIdent "INTEGER"] $
+              Just $ Abstract.nonQualIdent "INTEGER"),
     ("LONG", DeclaredProcedure False $ Just $ (,) 0 $
              Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
-                                        $ Abstract.typeReference $ NonQualIdent "INTEGER"] $
-             Just $ NonQualIdent "INTEGER"),
+                                        $ Abstract.typeReference $ Abstract.nonQualIdent "INTEGER"] $
+             Just $ Abstract.nonQualIdent "INTEGER"),
     ("ENTIER", DeclaredProcedure False $ Just $ (,) 0 $
                Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
-                                          $ Abstract.typeReference $ NonQualIdent "REAL"] $
-               Just $ NonQualIdent "INTEGER"),
+                                          $ Abstract.typeReference $ Abstract.nonQualIdent "REAL"] $
+               Just $ Abstract.nonQualIdent "INTEGER"),
     ("INC", DeclaredProcedure False $ Just $ (,) 0 $
             Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
-                                       $ Abstract.typeReference $ NonQualIdent "INTEGER"] Nothing),
+                                       $ Abstract.typeReference $ Abstract.nonQualIdent "INTEGER"] Nothing),
     ("DEC", DeclaredProcedure False $ Just $ (,) 0 $
             Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
-                                       $ Abstract.typeReference $ NonQualIdent "INTEGER"] Nothing),
+                                       $ Abstract.typeReference $ Abstract.nonQualIdent "INTEGER"] Nothing),
     ("INCL", DeclaredProcedure False $ Just $ (,) 0 $
              Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "s") $ (,) 0
-                                        $ Abstract.typeReference $ NonQualIdent "SET",
+                                        $ Abstract.typeReference $ Abstract.nonQualIdent "SET",
                                (,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
-                               $ Abstract.typeReference $ NonQualIdent "INTEGER"] Nothing),
+                               $ Abstract.typeReference $ Abstract.nonQualIdent "INTEGER"] Nothing),
     ("EXCL", DeclaredProcedure False $ Just $ (,) 0 $
              Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "s") $ (,) 0
-                                        $ Abstract.typeReference $ NonQualIdent "SET",
+                                        $ Abstract.typeReference $ Abstract.nonQualIdent "SET",
                                (,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
-                               $ Abstract.typeReference $ NonQualIdent "INTEGER"] Nothing),
+                               $ Abstract.typeReference $ Abstract.nonQualIdent "INTEGER"] Nothing),
     ("COPY", DeclaredProcedure False $ Just $ (,) 0 $
              Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "s") $ (,) 0
-                                        $ Abstract.typeReference $ NonQualIdent "ARRAY",
+                                        $ Abstract.typeReference $ Abstract.nonQualIdent "ARRAY",
                                (,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
-                               $ Abstract.typeReference $ NonQualIdent "ARRAY"] Nothing),
+                               $ Abstract.typeReference $ Abstract.nonQualIdent "ARRAY"] Nothing),
     ("NEW", DeclaredProcedure False $ Just $ (,) 0 $
             Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
-                                       $ Abstract.typeReference $ NonQualIdent "POINTER"] Nothing),
+                                       $ Abstract.typeReference $ Abstract.nonQualIdent "POINTER"] Nothing),
     ("HALT", DeclaredProcedure False $ Just $ (,) 0 $
              Abstract.formalParameters [(,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0
-                                        $ Abstract.typeReference $ NonQualIdent "INTEGER"] Nothing)]
+                                        $ Abstract.typeReference $ Abstract.nonQualIdent "INTEGER"] Nothing)]
 
 -- | The set of 'Predefined' types and procedures defined in the Oberon-2 Language Report.
 predefined2 = predefined <>
    (Success <$> Map.fromList
     [("ASSERT",
       DeclaredProcedure False $ Just $ (,) 0 $ Abstract.formalParameters
-       [(,) 0 $ Abstract.fpSection False (pure "s") $ (,) 0 $ Abstract.typeReference $ NonQualIdent "ARRAY",
-        (,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0 $ Abstract.typeReference $ NonQualIdent "ARRAY"]
+       [(,) 0 $ Abstract.fpSection False (pure "s") $ (,) 0 $ Abstract.typeReference $ Abstract.nonQualIdent "ARRAY",
+        (,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0 $ Abstract.typeReference $ Abstract.nonQualIdent "ARRAY"]
       Nothing)])
 
 exportsOfModule :: BindableDeclaration l => Module l Placed Placed -> Scope l

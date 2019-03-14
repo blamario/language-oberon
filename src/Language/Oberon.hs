@@ -82,7 +82,7 @@ parseImportsOf version path modules =
 -- | Given a directory path for module imports, parse the given module text and all the module files it imports, then
 -- use all the information to resolve the syntactic ambiguities.
 parseAndResolveModule :: Bool -> LanguageVersion -> FilePath -> Text
-                      -> IO (Validation (Either (NonEmpty (Resolver.Error Language)) (NonEmpty TypeChecker.Error))
+                      -> IO (Validation (Either (NonEmpty (Resolver.Error Language)) (NonEmpty (TypeChecker.Error Language)))
                                         (Module Language Placed Placed))
 parseAndResolveModule checkTypes version path source =
    case parseModule version source
@@ -109,7 +109,7 @@ parseAndResolveModule checkTypes version path source =
 
 -- | Parse the module file at the given path, assuming all its imports are in the same directory.
 parseAndResolveModuleFile :: Bool -> LanguageVersion -> FilePath
-                          -> IO (Validation (Either (NonEmpty (Resolver.Error Language)) (NonEmpty TypeChecker.Error))
+                          -> IO (Validation (Either (NonEmpty (Resolver.Error Language)) (NonEmpty (TypeChecker.Error Language)))
                                             (Module Language Placed Placed))
 parseAndResolveModuleFile checkTypes version path =
   readFile path >>= parseAndResolveModule checkTypes version (takeDirectory path)
