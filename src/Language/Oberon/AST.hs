@@ -17,7 +17,7 @@ import qualified Rank2.TH
 import qualified Language.Oberon.Abstract as Abstract
 import Language.Oberon.Abstract (RelOp(..))
 
-data Language deriving (Data, Typeable)
+data Language = Language deriving (Data, Typeable)
 
 instance Abstract.Wirthy Language where
    type Module Language = Module Language
