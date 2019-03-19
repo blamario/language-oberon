@@ -33,7 +33,6 @@ instance Abstract.Wirthy Language where
    type FPSection Language = FPSection Language
    type ProcedureBody Language = ProcedureBody Language
    type StatementSequence Language = StatementSequence Language
-   type WithAlternative Language = WithAlternative Language
    type Case Language = Case Language
    type CaseLabels Language = CaseLabels Language
    type Element Language = Element Language
@@ -76,9 +75,7 @@ instance Abstract.Wirthy Language where
    repeatStatement = Repeat
    returnStatement = Return
    whileStatement = While
-   withStatement alt = With (alt :| []) Nothing
 
-   withAlternative = WithAlternative
    caseAlternative = Case
    emptyCase = EmptyCase
    labelRange = LabelRange
@@ -131,11 +128,14 @@ instance Abstract.Nameable Language where
    getNonQualIdentName _ = Nothing
 
 instance Abstract.Oberon Language where
+   type WithAlternative Language = WithAlternative Language
    exported = flip IdentDef Exported
    is = IsA
    qualIdent = QualIdent
    getQualIdentNames (QualIdent moduleName name) = Just (moduleName, name)
    getQualIdentNames _ = Nothing
+   withStatement alt = With (alt :| []) Nothing
+   withAlternative = WithAlternative
 
 instance Abstract.Oberon2 Language where
    readOnly = flip IdentDef ReadOnly

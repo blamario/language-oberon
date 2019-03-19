@@ -32,7 +32,6 @@ class Wirthy l where
    type FPSection l         = (x :: (* -> *) -> (* -> *) -> *) | x -> l
    type ProcedureBody l     = (x :: (* -> *) -> (* -> *) -> *) | x -> l
    type StatementSequence l = (x :: (* -> *) -> (* -> *) -> *) | x -> l
-   type WithAlternative l   = (x :: (* -> *) -> (* -> *) -> *) | x -> l
    type Case l              = (x :: (* -> *) -> (* -> *) -> *) | x -> l
    type CaseLabels l        = (x :: (* -> *) -> (* -> *) -> *) | x -> l
    type Element l           = (x :: (* -> *) -> (* -> *) -> *) | x -> l
@@ -79,9 +78,7 @@ class Wirthy l where
    repeatStatement :: f (StatementSequence l f' f') -> f (Expression l f' f') -> Statement l f' f
    returnStatement :: Maybe (f (Expression l f' f')) -> Statement l f' f
    whileStatement :: f (Expression l f' f') -> f (StatementSequence l f' f') -> Statement l f' f
-   withStatement :: f (WithAlternative l f' f') -> Statement l f' f
 
-   withAlternative :: QualIdent l -> QualIdent l -> f (StatementSequence l f' f') -> WithAlternative l f' f
    caseAlternative :: NonEmpty (f (CaseLabels l f' f')) -> f (StatementSequence l f' f') -> Case l f' f
    emptyCase :: Case l f' f
 
@@ -127,10 +124,15 @@ class Wirthy l => Nameable l where
    getNonQualIdentName :: QualIdent l -> Maybe Ident
 
 class Wirthy l => Oberon l where
+   type WithAlternative l   = (x :: (* -> *) -> (* -> *) -> *) | x -> l
+
    qualIdent :: Ident -> Ident -> QualIdent l
    getQualIdentNames :: QualIdent l -> Maybe (Ident, Ident)
    is :: f (Expression l f' f') -> QualIdent l -> Expression l f' f
    exported :: Ident -> IdentDef l
+
+   withStatement :: f (WithAlternative l f' f') -> Statement l f' f
+   withAlternative :: QualIdent l -> QualIdent l -> f (StatementSequence l f' f') -> WithAlternative l f' f
 
 class Oberon l => Oberon2 l where
    readOnly :: Ident -> IdentDef l
