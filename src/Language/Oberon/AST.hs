@@ -27,6 +27,7 @@ instance Abstract.Wirthy Language where
    type Expression Language = Expression Language
    type Designator Language = Designator Language
 
+   type Import Language = Import Language
    type FieldList Language = FieldList Language
    type ProcedureHeading Language = ProcedureHeading Language
    type FormalParameters Language = FormalParameters Language
@@ -40,16 +41,12 @@ instance Abstract.Wirthy Language where
    type IdentDef Language = IdentDef Language
    type QualIdent Language = QualIdent Language
 
-   moduleUnit = Module
-
    -- Declaration
    constantDeclaration = ConstantDeclaration
    typeDeclaration = TypeDeclaration
    variableDeclaration = VariableDeclaration
    procedureDeclaration = ProcedureDeclaration
-   forwardDeclaration = ForwardDeclaration
 
-   procedureHeading = ProcedureHeading
    formalParameters = FormalParameters
    fpSection = FPSection
    procedureBody = ProcedureBody
@@ -88,8 +85,6 @@ instance Abstract.Wirthy Language where
    subtract = Subtract
    and = And
    or = Or
-   charCode = CharCode
-   charConstant = CharConstant
    divide = Divide
    integerDivide = IntegerDivide
    modulo = Modulo
@@ -103,7 +98,6 @@ instance Abstract.Wirthy Language where
    read = Read
    real = Real
    relation = Relation
-   set = Set
    string = String
 
    element = Element
@@ -129,13 +123,20 @@ instance Abstract.Nameable Language where
 
 instance Abstract.Oberon Language where
    type WithAlternative Language = WithAlternative Language
+   moduleUnit = Module
+   moduleImport = (,)
    exported = flip IdentDef Exported
-   is = IsA
    qualIdent = QualIdent
    getQualIdentNames (QualIdent moduleName name) = Just (moduleName, name)
    getQualIdentNames _ = Nothing
+   procedureHeading = ProcedureHeading
+   forwardDeclaration = ForwardDeclaration
    withStatement alt = With (alt :| []) Nothing
    withAlternative = WithAlternative
+   charCode = CharCode
+   charConstant = CharConstant
+   is = IsA
+   set = Set
 
 instance Abstract.Oberon2 Language where
    readOnly = flip IdentDef ReadOnly
@@ -144,7 +145,7 @@ instance Abstract.Oberon2 Language where
    variantWithStatement = With
 
 data Module l f' f =
-   Module Ident [Import] [f (Abstract.Declaration l f' f')] (Maybe (f (Abstract.StatementSequence l f' f')))
+   Module Ident [Import l] [f (Abstract.Declaration l f' f')] (Maybe (f (Abstract.StatementSequence l f' f')))
 
 deriving instance (Typeable l, Typeable f, Typeable f',
                    Data (f (Abstract.Declaration l f' f')), Data (f (Abstract.StatementSequence l f' f'))) =>
@@ -154,7 +155,7 @@ deriving instance (Show (f (Abstract.Declaration l f' f')), Show (f (Abstract.St
 
 type Ident = Text
 
-type Import = (Maybe Ident, Ident)
+type Import l = (Maybe Ident, Ident)
 
 data Declaration l f' f = ConstantDeclaration (Abstract.IdentDef l) (f (Abstract.ConstExpression l f' f'))
                         | TypeDeclaration (Abstract.IdentDef l) (f (Abstract.Type l f' f'))

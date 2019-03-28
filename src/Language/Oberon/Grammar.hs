@@ -34,8 +34,8 @@ data OberonGrammar l f p = OberonGrammar {
    ident :: p Abstract.Ident,
    letter :: p Text,
    digit :: p Text,
-   importList :: p [Abstract.Import],
-   import_prod :: p Abstract.Import,
+   importList :: p [Abstract.Import l],
+   import_prod :: p (Abstract.Import l),
    declarationSequence :: p [f (Abstract.Declaration l f f)],
    constantDeclaration :: p (Abstract.Declaration l f f),
    identdef :: p (Abstract.IdentDef l),
@@ -205,7 +205,7 @@ grammar OberonGrammar{..} = OberonGrammar{
    letter = satisfyCharInput isLetter,
    digit = satisfyCharInput isDigit,
    importList = keyword "IMPORT" *> sepBy1 import_prod (delimiter ",") <* delimiter ";",
-   import_prod = (,) <$> optional (ident <* delimiter ":=") <*> ident,
+   import_prod = Abstract.moduleImport <$> optional (ident <* delimiter ":=") <*> ident,
    declarationSequence = concatMany (keyword "CONST" *> many (wrap constantDeclaration <* delimiter ";")
                                      <|> keyword "TYPE" *> many (wrap typeDeclaration <* delimiter ";")
                                      <|> keyword "VAR" *> many (wrap variableDeclaration <* delimiter ";"))

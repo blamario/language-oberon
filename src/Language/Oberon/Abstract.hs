@@ -13,8 +13,6 @@ import Transformation.Deep (Product)
 
 type Ident = Text
 
-type Import = (Maybe Ident, Ident)
-
 data RelOp = Equal | Unequal | Less | LessOrEqual | Greater | GreaterOrEqual | In
    deriving (Data, Eq, Show)
 
@@ -36,20 +34,16 @@ class Wirthy l where
    type CaseLabels l        = (x :: (* -> *) -> (* -> *) -> *) | x -> l
    type Element l           = (x :: (* -> *) -> (* -> *) -> *) | x -> l
    
+   type Import l  = x | x -> l
    type IdentDef l  = x | x -> l
    type QualIdent l = x | x -> l
-
-   -- Module
-   moduleUnit :: Ident -> [Import] -> [f (Declaration l f' f')] -> Maybe (f (StatementSequence l f' f')) -> Module l f' f
 
    -- Declaration
    constantDeclaration :: IdentDef l -> f (ConstExpression l f' f') -> Declaration l f' f
    typeDeclaration :: IdentDef l -> f (Type l f' f') -> Declaration l f' f
    variableDeclaration :: IdentList l -> f (Type l f' f') -> Declaration l f' f
    procedureDeclaration :: f (ProcedureHeading l f' f') -> f (ProcedureBody l f' f') -> Declaration l f' f
-   forwardDeclaration :: IdentDef l -> Maybe (f (FormalParameters l f' f')) -> Declaration l f' f
 
-   procedureHeading :: Bool -> IdentDef l -> Maybe (f (FormalParameters l f' f')) -> ProcedureHeading l f' f
    formalParameters :: [f (FPSection l f' f')] -> Maybe (ReturnType l) -> FormalParameters l f' f
    fpSection :: Bool -> NonEmpty Ident -> f (Type l f' f') -> FPSection l f' f
    procedureBody :: [f (Declaration l f' f')] -> Maybe (f (StatementSequence l f' f')) -> ProcedureBody l f' f
@@ -90,8 +84,6 @@ class Wirthy l where
    -- Expression
    add, subtract :: f (Expression l f' f') -> f (Expression l f' f') -> Expression l f' f
    and, or :: f (Expression l f' f') -> f (Expression l f' f') -> Expression l f' f
-   charCode :: Int -> Expression l f' f
-   charConstant :: Char -> Expression l f' f
    divide, integerDivide, modulo, multiply :: f (Expression l f' f') -> f (Expression l f' f') -> Expression l f' f
    functionCall :: f (Designator l f' f') -> [f (Expression l f' f')] -> Expression l f' f
    integer :: Text -> Expression l f' f
@@ -101,7 +93,6 @@ class Wirthy l where
    read :: f (Designator l f' f') -> Expression l f' f
    real :: Text -> Expression l f' f
    relation :: RelOp -> f (Expression l f' f') -> f (Expression l f' f') -> Expression l f' f
-   set :: [f (Element l f' f')] -> Expression l f' f
    string :: Text -> Expression l f' f
 
    element :: f (Expression l f' f') -> Element l f' f
@@ -126,13 +117,22 @@ class Wirthy l => Nameable l where
 class Wirthy l => Oberon l where
    type WithAlternative l   = (x :: (* -> *) -> (* -> *) -> *) | x -> l
 
+   moduleUnit :: Ident -> [Import l] -> [f (Declaration l f' f')] -> Maybe (f (StatementSequence l f' f')) -> Module l f' f
+   moduleImport :: Maybe Ident -> Ident -> Import l
    qualIdent :: Ident -> Ident -> QualIdent l
    getQualIdentNames :: QualIdent l -> Maybe (Ident, Ident)
-   is :: f (Expression l f' f') -> QualIdent l -> Expression l f' f
    exported :: Ident -> IdentDef l
+
+   forwardDeclaration :: IdentDef l -> Maybe (f (FormalParameters l f' f')) -> Declaration l f' f
+   procedureHeading :: Bool -> IdentDef l -> Maybe (f (FormalParameters l f' f')) -> ProcedureHeading l f' f
 
    withStatement :: f (WithAlternative l f' f') -> Statement l f' f
    withAlternative :: QualIdent l -> QualIdent l -> f (StatementSequence l f' f') -> WithAlternative l f' f
+
+   charCode :: Int -> Expression l f' f
+   charConstant :: Char -> Expression l f' f
+   is :: f (Expression l f' f') -> QualIdent l -> Expression l f' f
+   set :: [f (Element l f' f')] -> Expression l f' f
 
 class Oberon l => Oberon2 l where
    readOnly :: Ident -> IdentDef l
