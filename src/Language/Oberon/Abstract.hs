@@ -28,7 +28,7 @@ class Wirthy l where
    type ProcedureHeading l  = (x :: (* -> *) -> (* -> *) -> *) | x -> l
    type FormalParameters l  = (x :: (* -> *) -> (* -> *) -> *) | x -> l
    type FPSection l         = (x :: (* -> *) -> (* -> *) -> *) | x -> l
-   type ProcedureBody l     = (x :: (* -> *) -> (* -> *) -> *) | x -> l
+   type Block l             = (x :: (* -> *) -> (* -> *) -> *) | x -> l
    type StatementSequence l = (x :: (* -> *) -> (* -> *) -> *) | x -> l
    type Case l              = (x :: (* -> *) -> (* -> *) -> *) | x -> l
    type CaseLabels l        = (x :: (* -> *) -> (* -> *) -> *) | x -> l
@@ -42,11 +42,11 @@ class Wirthy l where
    constantDeclaration :: IdentDef l -> f (ConstExpression l f' f') -> Declaration l f' f
    typeDeclaration :: IdentDef l -> f (Type l f' f') -> Declaration l f' f
    variableDeclaration :: IdentList l -> f (Type l f' f') -> Declaration l f' f
-   procedureDeclaration :: f (ProcedureHeading l f' f') -> f (ProcedureBody l f' f') -> Declaration l f' f
+   procedureDeclaration :: f (ProcedureHeading l f' f') -> f (Block l f' f') -> Declaration l f' f
 
    formalParameters :: [f (FPSection l f' f')] -> Maybe (ReturnType l) -> FormalParameters l f' f
    fpSection :: Bool -> NonEmpty Ident -> f (Type l f' f') -> FPSection l f' f
-   procedureBody :: [f (Declaration l f' f')] -> Maybe (f (StatementSequence l f' f')) -> ProcedureBody l f' f
+   block :: [f (Declaration l f' f')] -> Maybe (f (StatementSequence l f' f')) -> Block l f' f
 
    fieldList :: NonEmpty (IdentDef l) -> f (Type l f' f') -> FieldList l f' f
    emptyFieldList :: FieldList l f' f

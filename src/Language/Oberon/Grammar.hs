@@ -77,7 +77,7 @@ data OberonGrammar l f p = OberonGrammar {
    formalParameters :: p (Abstract.FormalParameters l f f),
    fPSection :: p (Abstract.FPSection l f f),
    formalType :: p (Abstract.Type l f f),
-   procedureBody :: p (Abstract.ProcedureBody l f f),
+   procedureBody :: p (Abstract.Block l f f),
    forwardDeclaration :: p (Abstract.Declaration l f f),
    statementSequence :: p (Abstract.StatementSequence l f f),
    statement :: p (Abstract.Statement l f f),
@@ -153,7 +153,7 @@ definitionMixin g@OberonGrammar{..} = g{
                     return (Abstract.moduleUnit name imports declarations Nothing),
    procedureDeclaration = Abstract.procedureDeclaration . snd . sequenceA 
                           <$> wrap procedureHeading 
-                          <*> wrap (pure $ Abstract.procedureBody [] Nothing),
+                          <*> wrap (pure $ Abstract.block [] Nothing),
    identdef = Abstract.exported <$> ident <* optional (delimiter "*")}
 
 grammar2 g@OberonGrammar{..} = g1{
@@ -302,7 +302,7 @@ grammar OberonGrammar{..} = OberonGrammar{
    formalType = Abstract.arrayType [] <$ keyword "ARRAY" <* keyword "OF" <*> wrap formalType 
                 <|> Abstract.typeReference <$> qualident
                 <|> Abstract.procedureType <$ keyword "PROCEDURE" <*> optional (wrap formalParameters),
-   procedureBody = Abstract.procedureBody <$> declarationSequence
+   procedureBody = Abstract.block <$> declarationSequence
                    <*> optional (keyword "BEGIN" *> wrap statementSequence) <* keyword "END",
    forwardDeclaration = Abstract.forwardDeclaration <$ keyword "PROCEDURE" <* delimiter "^"
                         <*> identdef <*> optional (wrap formalParameters),

@@ -32,7 +32,7 @@ instance Abstract.Wirthy Language where
    type ProcedureHeading Language = ProcedureHeading Language
    type FormalParameters Language = FormalParameters Language
    type FPSection Language = FPSection Language
-   type ProcedureBody Language = ProcedureBody Language
+   type Block Language = Block Language
    type StatementSequence Language = StatementSequence Language
    type Case Language = Case Language
    type CaseLabels Language = CaseLabels Language
@@ -49,7 +49,7 @@ instance Abstract.Wirthy Language where
 
    formalParameters = FormalParameters
    fpSection = FPSection
-   procedureBody = ProcedureBody
+   block = Block
    
    fieldList = FieldList
    emptyFieldList = EmptyFieldList
@@ -161,16 +161,16 @@ data Declaration l f' f = ConstantDeclaration (Abstract.IdentDef l) (f (Abstract
                         | TypeDeclaration (Abstract.IdentDef l) (f (Abstract.Type l f' f'))
                         | VariableDeclaration (Abstract.IdentList l) (f (Abstract.Type l f' f'))
                         | ProcedureDeclaration (f (Abstract.ProcedureHeading l f' f'))
-                                               (f (Abstract.ProcedureBody l f' f'))
+                                               (f (Abstract.Block l f' f'))
                         | ForwardDeclaration (Abstract.IdentDef l) (Maybe (f (Abstract.FormalParameters l f' f')))
 
 deriving instance (Data l, Typeable f, Typeable f',
                    Data (f (Abstract.Type l f' f')), Data (f (Abstract.ConstExpression l f' f')),
                    Data (f (Abstract.FormalParameters l f' f')), Data (f (Abstract.ProcedureHeading l f' f')),
-                   Data (f (Abstract.ProcedureBody l f' f')), Data (Abstract.IdentDef l)) => Data (Declaration l f' f)
+                   Data (f (Abstract.Block l f' f')), Data (Abstract.IdentDef l)) => Data (Declaration l f' f)
 deriving instance (Show (f (Abstract.Type l f' f')), Show (f (Abstract.ConstExpression l f' f')),
                    Show (f (Abstract.FormalParameters l f' f')), Show (f (Abstract.ProcedureHeading l f' f')),
-                   Show (f (Abstract.ProcedureBody l f' f')), Show (Abstract.IdentDef l)) => Show (Declaration l f' f)
+                   Show (f (Abstract.Block l f' f')), Show (Abstract.IdentDef l)) => Show (Declaration l f' f)
 
 data QualIdent l = QualIdent Ident Ident 
                  | NonQualIdent Ident
@@ -282,16 +282,15 @@ deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Abstract.Type l
                    Data (f (Abstract.Expression l f' f'))) => Data (FPSection l f' f)
 deriving instance (Show (f (Abstract.Type l f' f')), Show (f (Abstract.Expression l f' f'))) => Show (FPSection l f' f)
 
-data ProcedureBody l f' f =
-   ProcedureBody [f (Abstract.Declaration l f' f')] (Maybe (f (Abstract.StatementSequence l f' f')))
+data Block l f' f = Block [f (Abstract.Declaration l f' f')] (Maybe (f (Abstract.StatementSequence l f' f')))
 
 deriving instance (Typeable l, Typeable f, Typeable f', Data (f (Abstract.Declaration l f' f')),
                    Data (f (Abstract.Designator l f' f')), Data (f (Abstract.Expression l f' f')),
                    Data (f (Abstract.StatementSequence l f' f'))) =>
-                  Data (ProcedureBody l f' f)
+                  Data (Block l f' f)
 deriving instance (Show (f (Abstract.Declaration l f' f')), Show (f (Abstract.Designator l f' f')),
                    Show (f (Abstract.Expression l f' f')), Show (f (Abstract.StatementSequence l f' f'))) =>
-                  Show (ProcedureBody l f' f)
+                  Show (Block l f' f)
 
 newtype StatementSequence l f' f = StatementSequence (NonEmpty (f (Abstract.Statement l f' f')))
 
@@ -355,5 +354,5 @@ deriving instance Show (f (Abstract.ConstExpression l f' f')) => Show (CaseLabel
 $(mconcat <$> mapM Transformation.Deep.TH.deriveAll
   [''Module, ''Declaration, ''Type, ''Expression,
    ''Element, ''Designator, ''FieldList,
-   ''ProcedureHeading, ''FormalParameters, ''FPSection, ''ProcedureBody,
+   ''ProcedureHeading, ''FormalParameters, ''FPSection, ''Block,
    ''Statement, ''StatementSequence, ''WithAlternative, ''Case, ''CaseLabels])

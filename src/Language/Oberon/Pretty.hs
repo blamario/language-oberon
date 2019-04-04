@@ -35,7 +35,7 @@ instance (Abstract.Nameable l, Pretty (Abstract.IdentDef l), Pretty (Abstract.Ty
           Pretty (Abstract.Declaration l Identity Identity),
           Pretty (Abstract.Expression l Identity Identity), Pretty (Abstract.FormalParameters l Identity Identity),
           Pretty (Abstract.ProcedureHeading l Identity Identity),
-          Pretty (Abstract.ProcedureBody l Identity Identity)) =>
+          Pretty (Abstract.Block l Identity Identity)) =>
          Pretty (Declaration l Identity Identity) where
    pretty (ConstantDeclaration ident (Identity expr)) = "CONST" <+> pretty ident <+> "=" <+> pretty expr <> semi
    pretty (TypeDeclaration ident typeDef) = "TYPE" <+> pretty ident <+> "=" <+> pretty typeDef <> semi
@@ -157,8 +157,8 @@ instance Pretty (Abstract.Type l Identity Identity) => Pretty (FPSection l Ident
       (if var then ("VAR" <+>) else id) $ hsep (punctuate comma $ pretty <$> toList names) <+> colon <+> pretty t
    
 instance (Pretty (Abstract.Declaration l Identity Identity), Pretty (Abstract.StatementSequence l Identity Identity)) =>
-         Pretty (ProcedureBody l Identity Identity) where
-   pretty (ProcedureBody declarations body) =
+         Pretty (Block l Identity Identity) where
+   pretty (Block declarations body) =
       vsep ((indent 3 . pretty <$> declarations)
             ++ foldMap (\statements-> ["BEGIN", prettyBlock statements]) body)
 
