@@ -181,7 +181,7 @@ instance {-# overlaps #-}
 
 class CoFormalParameters l where
    getFPSections :: Abstract.FormalParameters l f' f -> [f (Abstract.FPSection l f' f')]
-   evalFPSection :: Abstract.FPSection l f' f -> (Bool -> NonEmpty Ident -> f (Abstract.Type l f' f') -> r) -> r
+   evalFPSection :: Abstract.FPSection l f' f -> (Bool -> [Ident] -> f (Abstract.Type l f' f') -> r) -> r
    getLocalDeclarations :: Abstract.Block l f' f -> [f (Abstract.Declaration l f' f')]
 
 instance CoFormalParameters Language where
@@ -206,7 +206,7 @@ instance {-# overlaps #-}
                                  Just (Compose (_, Ambiguous (fp :| []))) | sections <- getFPSections fp
                                     -> Map.fromList (concatMap binding sections)
              binding (Compose (_, Ambiguous (section :| []))) = evalFPSection section $ \ _ names types->
-                [(v, evalStateT (Deep.traverseDown res $ DeclaredVariable types) s) | v <- NonEmpty.toList names]
+                [(v, evalStateT (Deep.traverseDown res $ DeclaredVariable types) s) | v <- names]
          in Success ((pos, proc), (innerScope, state))
    traverse res (Compose (pos, Ambiguous (proc@(TypeBoundHeading var receiverName receiverType _ _ parameters) :| []))) =
       StateT $ \s@(scope, state)->
@@ -219,7 +219,7 @@ instance {-# overlaps #-}
                                  Just (Compose (_, Ambiguous (fp :| []))) | sections <- getFPSections fp
                                     -> Map.fromList (concatMap binding sections)
              binding (Compose (_, Ambiguous (section :| []))) = evalFPSection section $ \ _ names types->
-                [(v, evalStateT (Deep.traverseDown res $ DeclaredVariable types) s) | v <- NonEmpty.toList names]
+                [(v, evalStateT (Deep.traverseDown res $ DeclaredVariable types) s) | v <- names]
          in Success ((pos, proc), (innerScope, state))
 
 instance {-# overlaps #-}

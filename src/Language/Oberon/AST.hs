@@ -266,7 +266,7 @@ data ProcedureHeading l f' f =
 
 data FormalParameters l f' f = FormalParameters [f (Abstract.FPSection l f' f')] (Maybe (Abstract.ReturnType l))
 
-data FPSection l f' f = FPSection Bool (NonEmpty Ident) (f (Abstract.Type l f' f'))
+data FPSection l f' f = FPSection Bool [Ident] (f (Abstract.Type l f' f'))
 
 deriving instance (Data l, Typeable f, Typeable f', Data (Abstract.IdentDef l),
                    Data (f (Abstract.FormalParameters l f' f'))) => Data (ProcedureHeading l f' f)

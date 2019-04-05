@@ -298,7 +298,7 @@ grammar OberonGrammar{..} = OberonGrammar{
    formalParameters = Abstract.formalParameters <$> parens (sepBy (wrap fPSection) (delimiter ";"))
                       <*> optional (delimiter ":" *> qualident),
    fPSection = Abstract.fpSection <$> (True <$ keyword "VAR" <|> pure False) 
-               <*> sepByNonEmpty ident (delimiter ",") <* delimiter ":" <*> wrap formalType,
+               <*> sepBy1 ident (delimiter ",") <* delimiter ":" <*> wrap formalType,
    formalType = Abstract.arrayType [] <$ keyword "ARRAY" <* keyword "OF" <*> wrap formalType 
                 <|> Abstract.typeReference <$> qualident
                 <|> Abstract.procedureType <$ keyword "PROCEDURE" <*> optional (wrap formalParameters),

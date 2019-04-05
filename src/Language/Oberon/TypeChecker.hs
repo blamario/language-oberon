@@ -446,9 +446,8 @@ instance (Abstract.Wirthy l, Ord (Abstract.QualIdent l),
          Attribution TypeCheck (AST.FPSection l) (Int, AST.FPSection l (Semantics TypeCheck) (Semantics TypeCheck)) where
    attribution TypeCheck (pos, AST.FPSection var names _typeDef) (Inherited inheritance, AST.FPSection _var _names typeDef) =
       (Synthesized SynTCSec{sectionErrors= typeErrors (syn typeDef),
-                            sectionParameters= (var, definedType (syn typeDef)) <$ toList names,
-                            sectionEnv= Map.fromList (toList
-                                                      $ flip (,) (definedType $ syn typeDef) . Abstract.nonQualIdent
+                            sectionParameters= (var, definedType (syn typeDef)) <$ names,
+                            sectionEnv= Map.fromList (flip (,) (definedType $ syn typeDef) . Abstract.nonQualIdent
                                                       <$> names)},
        AST.FPSection var names (Inherited inheritance))
 

@@ -154,7 +154,7 @@ instance (Pretty (Abstract.FPSection l Identity Identity),
 
 instance Pretty (Abstract.Type l Identity Identity) => Pretty (FPSection l Identity Identity) where
    pretty (FPSection var names t) =
-      (if var then ("VAR" <+>) else id) $ hsep (punctuate comma $ pretty <$> toList names) <+> colon <+> pretty t
+      (if var then ("VAR" <+>) else id) $ hsep (punctuate comma $ pretty <$> names) <+> colon <+> pretty t
    
 instance (Pretty (Abstract.Declaration l Identity Identity), Pretty (Abstract.StatementSequence l Identity Identity)) =>
          Pretty (Block l Identity Identity) where

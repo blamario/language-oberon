@@ -45,7 +45,7 @@ class Wirthy l where
    procedureDeclaration :: f (ProcedureHeading l f' f') -> f (Block l f' f') -> Declaration l f' f
 
    formalParameters :: [f (FPSection l f' f')] -> Maybe (ReturnType l) -> FormalParameters l f' f
-   fpSection :: Bool -> NonEmpty Ident -> f (Type l f' f') -> FPSection l f' f
+   fpSection :: Bool -> [Ident] -> f (Type l f' f') -> FPSection l f' f
    block :: [f (Declaration l f' f')] -> Maybe (f (StatementSequence l f' f')) -> Block l f' f
 
    fieldList :: NonEmpty (IdentDef l) -> f (Type l f' f') -> FieldList l f' f
