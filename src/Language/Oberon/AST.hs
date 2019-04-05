@@ -55,10 +55,8 @@ instance Abstract.Wirthy Language where
    emptyFieldList = EmptyFieldList
 
    -- Type
-   arrayType = ArrayType
    pointerType = PointerType
    procedureType = ProcedureType
-   recordType = RecordType
    typeReference = TypeReference
 
    -- Statement
@@ -107,7 +105,6 @@ instance Abstract.Wirthy Language where
    variable = Variable
    field = Field
    index = Index
-   typeGuard = TypeGuard
    dereference = Dereference
 
    -- Identifier
@@ -129,6 +126,9 @@ instance Abstract.Oberon Language where
    qualIdent = QualIdent
    getQualIdentNames (QualIdent moduleName name) = Just (moduleName, name)
    getQualIdentNames _ = Nothing
+
+   arrayType = ArrayType
+   recordType = RecordType
    procedureHeading = ProcedureHeading
    forwardDeclaration = ForwardDeclaration
    withStatement alt = With (alt :| []) Nothing
@@ -137,6 +137,7 @@ instance Abstract.Oberon Language where
    charConstant = CharConstant
    is = IsA
    set = Set
+   typeGuard = TypeGuard
 
 instance Abstract.Oberon2 Language where
    readOnly = flip IdentDef ReadOnly

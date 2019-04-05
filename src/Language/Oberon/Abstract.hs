@@ -52,10 +52,8 @@ class Wirthy l where
    emptyFieldList :: FieldList l f' f
 
    -- Type
-   arrayType :: [f (ConstExpression l f' f')] -> f (Type l f' f') -> Type l f' f
    pointerType :: f (Type l f' f') -> Type l f' f
    procedureType :: Maybe (f (FormalParameters l f' f')) -> Type l f' f
-   recordType :: Maybe (BaseType l) -> NonEmpty (f (FieldList l f' f')) -> Type l f' f
    typeReference :: QualIdent l -> Type l f' f
 
    -- Statement
@@ -102,7 +100,6 @@ class Wirthy l where
    variable :: QualIdent l -> Designator l f' f
    field :: f (Designator l f' f') -> Ident -> Designator l f' f
    index :: f (Designator l f' f') -> NonEmpty (f (Expression l f' f')) -> Designator l f' f
-   typeGuard :: f (Designator l f' f') -> QualIdent l -> Designator l f' f
    dereference :: f (Designator l f' f') -> Designator l f' f
 
    -- Identifier
@@ -126,6 +123,9 @@ class Wirthy l => Oberon l where
    forwardDeclaration :: IdentDef l -> Maybe (f (FormalParameters l f' f')) -> Declaration l f' f
    procedureHeading :: Bool -> IdentDef l -> Maybe (f (FormalParameters l f' f')) -> ProcedureHeading l f' f
 
+   arrayType :: [f (ConstExpression l f' f')] -> f (Type l f' f') -> Type l f' f
+   recordType :: Maybe (BaseType l) -> NonEmpty (f (FieldList l f' f')) -> Type l f' f
+
    withStatement :: f (WithAlternative l f' f') -> Statement l f' f
    withAlternative :: QualIdent l -> QualIdent l -> f (StatementSequence l f' f') -> WithAlternative l f' f
 
@@ -133,6 +133,8 @@ class Wirthy l => Oberon l where
    charConstant :: Char -> Expression l f' f
    is :: f (Expression l f' f') -> QualIdent l -> Expression l f' f
    set :: [f (Element l f' f')] -> Expression l f' f
+
+   typeGuard :: f (Designator l f' f') -> QualIdent l -> Designator l f' f
 
 class Oberon l => Oberon2 l where
    readOnly :: Ident -> IdentDef l
