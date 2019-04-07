@@ -111,6 +111,77 @@ instance Abstract.Wirthy Language where
    identDef = flip IdentDef PrivateOnly
    nonQualIdent = NonQualIdent
 
+instance Abstract.CoWirthy Language where
+   coDeclaration (ConstantDeclaration name value) =
+      Abstract.constantDeclaration <$> Abstract.coIdentDef name <*> traverse Abstract.coExpression value
+   coDeclaration (TypeDeclaration name ty) =
+      Abstract.typeDeclaration <$> Abstract.coIdentDef name <*> traverse Abstract.coType ty
+   coDeclaration (VariableDeclaration name ty) =
+      Abstract.variableDeclaration <$> traverse Abstract.coIdentDef name <*> traverse Abstract.coType ty
+--   coDeclaration (ProcedureDeclaration name ty) = Abstract.procedureDeclaration <$> Abstract.coIdentDef name <*> traverse Abstract.coType ty
+   coDeclaration ForwardDeclaration{} = Nothing
+   
+--   coType (TypeReference q) = Just (Abstract.typeReference q)
+--   coType (ProcedureType params) = Just (Abstract.procedureType params)
+   coType (PointerType destination) = Abstract.pointerType <$> traverse Abstract.coType destination
+   coType _ = Nothing
+   
+   coStatement EmptyStatement = Just Abstract.emptyStatement
+   coStatement (Assignment destination expression) = Abstract.assignment <$> traverse Abstract.coDesignator destination
+                                                                         <*> traverse Abstract.coExpression expression
+   coStatement (ProcedureCall procedure parameters) =
+      Abstract.procedureCall <$> traverse Abstract.coDesignator procedure
+                             <*> traverse (traverse (traverse Abstract.coExpression)) parameters
+--   coStatement (If branches fallback) = Just (Abstract.ifStatement branches fallback)
+--   coStatement (CaseStatement scrutinee cases fallback) = Just (Abstract.caseStatement scrutinee cases fallback)
+   coStatement (While condition body) = Abstract.whileStatement <$> traverse Abstract.coExpression condition
+                                                                <*> traverse Abstract.coStatementSequence body
+   coStatement (Repeat body condition) = Abstract.repeatStatement <$> traverse Abstract.coStatementSequence body
+                                                                  <*> traverse Abstract.coExpression condition
+   coStatement (For index from to by body) = Nothing
+   coStatement (Loop body) = Abstract.loopStatement <$> traverse Abstract.coStatementSequence body
+   coStatement (With alternatives fallback) = Nothing
+   coStatement Exit = Just Abstract.exitStatement
+   coStatement (Return result) = Abstract.returnStatement <$> traverse (traverse Abstract.coExpression) result
+   
+   coExpression (Relation op left right) = Abstract.relation op <$> traverse Abstract.coExpression left
+                                                                <*> traverse Abstract.coExpression right
+   coExpression (IsA left right) = Nothing
+   coExpression (Positive e) = Abstract.positive <$> traverse Abstract.coExpression e
+   coExpression (Negative e) = Abstract.negative <$> traverse Abstract.coExpression e
+   coExpression (Add left right) = Abstract.add <$> traverse Abstract.coExpression left <*> traverse Abstract.coExpression right
+   coExpression (Subtract left right) = Abstract.subtract <$> traverse Abstract.coExpression left
+                                                          <*> traverse Abstract.coExpression right
+   coExpression (Or left right) = Abstract.or <$> traverse Abstract.coExpression left <*> traverse Abstract.coExpression right
+   coExpression (Multiply left right) = Abstract.multiply <$> traverse Abstract.coExpression left
+                                                          <*> traverse Abstract.coExpression right
+   coExpression (Divide left right) = Abstract.divide <$> traverse Abstract.coExpression left
+                                                      <*> traverse Abstract.coExpression right
+   coExpression (IntegerDivide left right) = Abstract.integerDivide <$> traverse Abstract.coExpression left
+                                                                    <*> traverse Abstract.coExpression right
+   coExpression (Modulo left right) = Abstract.modulo <$> traverse Abstract.coExpression left
+                                                      <*> traverse Abstract.coExpression right
+   coExpression (And left right) = Abstract.and <$> traverse Abstract.coExpression left
+                                                <*> traverse Abstract.coExpression right
+   coExpression (Integer n) = Just (Abstract.integer n)
+   coExpression (Real r) = Just (Abstract.real r)
+   coExpression (CharConstant c) = Nothing
+   coExpression (String s) = Just (Abstract.string s)
+   coExpression Nil = Just Abstract.nil
+   coExpression (Set elements) = Nothing
+   coExpression (Read var) = Abstract.read <$> traverse Abstract.coDesignator var
+   coExpression (FunctionCall function parameters) =
+      Abstract.functionCall <$> traverse Abstract.coDesignator function
+                            <*> traverse (traverse Abstract.coExpression) parameters
+   coExpression (Not e) = Abstract.not <$> traverse Abstract.coExpression e
+   
+--   coDesignator (Variable q) = Just (Abstract.variable q)
+   coDesignator (Field record name) = Abstract.field <$> traverse Abstract.coDesignator record <*> pure name
+   coDesignator (Index array indexes) = Abstract.index <$> traverse Abstract.coDesignator array
+                                                       <*> traverse (traverse Abstract.coExpression) indexes
+   coDesignator (TypeGuard scrutinee typeName) = Nothing
+   coDesignator (Dereference pointer) = Abstract.dereference <$> traverse Abstract.coDesignator pointer
+
 instance Abstract.Nameable Language where
    getProcedureName (ProcedureHeading _ iddef _) = Abstract.getIdentDefName iddef
    getProcedureName (TypeBoundHeading _ _ _ _ iddef _) = Abstract.getIdentDefName iddef
