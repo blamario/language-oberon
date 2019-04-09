@@ -30,73 +30,73 @@ import Prelude hiding (length, takeWhile)
 
 -- | All the productions of the Oberon grammar
 data OberonGrammar l f p = OberonGrammar {
-   module_prod :: p (Abstract.Module l f f),
+   module_prod :: p (Abstract.Module l l f f),
    ident :: p Abstract.Ident,
    letter :: p Text,
    digit :: p Text,
    importList :: p [Abstract.Import l],
    import_prod :: p (Abstract.Import l),
-   declarationSequence :: p [f (Abstract.Declaration l f f)],
-   constantDeclaration :: p (Abstract.Declaration l f f),
+   declarationSequence :: p [f (Abstract.Declaration l l f f)],
+   constantDeclaration :: p (Abstract.Declaration l l f f),
    identdef :: p (Abstract.IdentDef l),
-   constExpression :: p (f (Abstract.Expression l f f)),
-   expression :: p (f (Abstract.Expression l f f)),
-   simpleExpression :: p (f (Abstract.Expression l f f)),
-   term :: p (f (Abstract.Expression l f f)),
-   factor :: p (f (Abstract.Expression l f f)),
-   number :: p (Abstract.Expression l f f),
-   integer :: p (Abstract.Expression l f f),
+   constExpression :: p (f (Abstract.Expression l l f f)),
+   expression :: p (f (Abstract.Expression l l f f)),
+   simpleExpression :: p (f (Abstract.Expression l l f f)),
+   term :: p (f (Abstract.Expression l l f f)),
+   factor :: p (f (Abstract.Expression l l f f)),
+   number :: p (Abstract.Expression l l f f),
+   integer :: p (Abstract.Expression l l f f),
    hexDigit :: p Text,
-   real :: p (Abstract.Expression l f f),
+   real :: p (Abstract.Expression l l f f),
    scaleFactor :: p Text,
-   charConstant :: p (Abstract.Expression l f f),
+   charConstant :: p (Abstract.Expression l l f f),
    string_prod :: p Text,
-   set :: p (Abstract.Expression l f f),
-   element :: p (Abstract.Element l f f),
-   designator :: p (f (Abstract.Designator l f f)),
-   expList :: p (NonEmpty (f (Abstract.Expression l f f))),
-   actualParameters :: p [f (Abstract.Expression l f f)],
+   set :: p (Abstract.Expression l l f f),
+   element :: p (Abstract.Element l l f f),
+   designator :: p (f (Abstract.Designator l l f f)),
+   expList :: p (NonEmpty (f (Abstract.Expression l l f f))),
+   actualParameters :: p [f (Abstract.Expression l l f f)],
    mulOperator :: p (BinOp l f),
    addOperator :: p (BinOp l f),
    relation :: p Abstract.RelOp,
-   typeDeclaration :: p (Abstract.Declaration l f f),
-   type_prod :: p (Abstract.Type l f f),
+   typeDeclaration :: p (Abstract.Declaration l l f f),
+   type_prod :: p (Abstract.Type l l f f),
    qualident :: p (Abstract.QualIdent l),
-   arrayType :: p (Abstract.Type l f f),
-   length :: p (f (Abstract.Expression l f f)),
-   recordType :: p (Abstract.Type l f f),
+   arrayType :: p (Abstract.Type l l f f),
+   length :: p (f (Abstract.Expression l l f f)),
+   recordType :: p (Abstract.Type l l f f),
    baseType :: p (Abstract.BaseType l),
-   fieldListSequence :: p (NonEmpty (f (Abstract.FieldList l f f))),
-   fieldList :: p (Abstract.FieldList l f f),
+   fieldListSequence :: p (NonEmpty (f (Abstract.FieldList l l f f))),
+   fieldList :: p (Abstract.FieldList l l f f),
    identList :: p (Abstract.IdentList l),
-   pointerType :: p (Abstract.Type l f f),
-   procedureType :: p (Abstract.Type l f f),
-   variableDeclaration :: p (Abstract.Declaration l f f),
-   procedureDeclaration :: p (Abstract.Declaration l f f),
-   procedureHeading :: p (Abstract.Ident, Abstract.ProcedureHeading l f f),
-   formalParameters :: p (Abstract.FormalParameters l f f),
-   fPSection :: p (Abstract.FPSection l f f),
-   formalType :: p (Abstract.Type l f f),
-   procedureBody :: p (Abstract.Block l f f),
-   forwardDeclaration :: p (Abstract.Declaration l f f),
-   statementSequence :: p (Abstract.StatementSequence l f f),
-   statement :: p (Abstract.Statement l f f),
-   assignment :: p (Abstract.Statement l f f),
-   procedureCall :: p (Abstract.Statement l f f),
-   ifStatement :: p (Abstract.Statement l f f),
-   caseStatement :: p (Abstract.Statement l f f),
-   case_prod :: p (Abstract.Case l f f),
-   caseLabelList :: p (NonEmpty (f (Abstract.CaseLabels l f f))),
-   caseLabels :: p (Abstract.CaseLabels l f f),
-   whileStatement :: p (Abstract.Statement l f f),
-   repeatStatement :: p (Abstract.Statement l f f),
-   forStatement :: p (Abstract.Statement l f f),
-   loopStatement :: p (Abstract.Statement l f f),
-   withStatement :: p (Abstract.Statement l f f)}
+   pointerType :: p (Abstract.Type l l f f),
+   procedureType :: p (Abstract.Type l l f f),
+   variableDeclaration :: p (Abstract.Declaration l l f f),
+   procedureDeclaration :: p (Abstract.Declaration l l f f),
+   procedureHeading :: p (Abstract.Ident, Abstract.ProcedureHeading l l f f),
+   formalParameters :: p (Abstract.FormalParameters l l f f),
+   fPSection :: p (Abstract.FPSection l l f f),
+   formalType :: p (Abstract.Type l l f f),
+   procedureBody :: p (Abstract.Block l l f f),
+   forwardDeclaration :: p (Abstract.Declaration l l f f),
+   statementSequence :: p (Abstract.StatementSequence l l f f),
+   statement :: p (Abstract.Statement l l f f),
+   assignment :: p (Abstract.Statement l l f f),
+   procedureCall :: p (Abstract.Statement l l f f),
+   ifStatement :: p (Abstract.Statement l l f f),
+   caseStatement :: p (Abstract.Statement l l f f),
+   case_prod :: p (Abstract.Case l l f f),
+   caseLabelList :: p (NonEmpty (f (Abstract.CaseLabels l l f f))),
+   caseLabels :: p (Abstract.CaseLabels l l f f),
+   whileStatement :: p (Abstract.Statement l l f f),
+   repeatStatement :: p (Abstract.Statement l l f f),
+   forStatement :: p (Abstract.Statement l l f f),
+   loopStatement :: p (Abstract.Statement l l f f),
+   withStatement :: p (Abstract.Statement l l f f)}
 
-newtype BinOp l f = BinOp {applyBinOp :: (f (Abstract.Expression l f f)
-                                          -> f (Abstract.Expression l f f)
-                                          -> f (Abstract.Expression l f f))}
+newtype BinOp l f = BinOp {applyBinOp :: (f (Abstract.Expression l l f f)
+                                          -> f (Abstract.Expression l l f f)
+                                          -> f (Abstract.Expression l l f f))}
 
 instance Show (BinOp l f) where
    show = const "BinOp{}"
@@ -220,7 +220,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                 <|> wrap (Abstract.is <$> simpleExpression <* keyword "IS" <*> qualident)
                 <?> "expression",
    simpleExpression = 
-      (wrap (Abstract.positive <$ operator "+" <*> term) <|> wrap (Abstract.negative <$ operator "-" <*> term) <|> term)
+      (wrap (Abstract.positive <$ operator "+" <*> term) <|> wrap (Abstract.negative <$ operator "-" <*> term :: Parser (OberonGrammar l NodeWrap) Text (Abstract.Expression l l NodeWrap NodeWrap)) <|> term)
       <**> (appEndo <$> concatMany (Endo <$> (flip . applyBinOp <$> addOperator <*> term))),
    term = factor <**> (appEndo <$> concatMany (Endo <$> (flip . applyBinOp <$> mulOperator <*> factor))),
    factor = wrapAmbiguous (number
@@ -230,7 +230,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                            <|> set
                            <|> Abstract.read <$> designator
                            <|> Abstract.functionCall <$> designator <*> actualParameters
-                           <|> Abstract.not <$ operator "~" <*> factor)
+                           <|> (Abstract.not <$ operator "~" <*> factor :: Parser (OberonGrammar l NodeWrap) Text (Abstract.Expression l l NodeWrap NodeWrap)))
             <|> parens expression,
    number  =  integer <|> real,
    integer = Abstract.integer 
@@ -250,7 +250,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                     Abstract.variable <$> qualident
                 <|> Abstract.field <$> designator <* delimiter "." <*> ident
                 <|> Abstract.index <$> designator <*> brackets expList
-                <|> Abstract.typeGuard <$> designator <*> parens qualident
+                <|> (Abstract.typeGuard <$> designator <*> parens qualident :: Parser (OberonGrammar l NodeWrap) Text (Abstract.Designator l l NodeWrap NodeWrap))
                 <|> Abstract.dereference <$> designator <* operator "^",
    expList = sepByNonEmpty expression (delimiter ","),
    actualParameters = parens (sepBy expression (delimiter ",")),

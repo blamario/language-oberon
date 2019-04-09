@@ -17,144 +17,142 @@ data RelOp = Equal | Unequal | Less | LessOrEqual | Greater | GreaterOrEqual | I
    deriving (Data, Eq, Show)
 
 class Wirthy l where
-   type Module l      = (m :: (* -> *) -> (* -> *) -> *) | m -> l
-   type Declaration l = (d :: (* -> *) -> (* -> *) -> *) | d -> l
-   type Type l        = (t :: (* -> *) -> (* -> *) -> *) | t -> l
-   type Statement l   = (s :: (* -> *) -> (* -> *) -> *) | s -> l
-   type Expression l  = (e :: (* -> *) -> (* -> *) -> *) | e -> l
-   type Designator l  = (d :: (* -> *) -> (* -> *) -> *) | d -> l
+   type Module l      = (m :: * -> (* -> *) -> (* -> *) -> *) | m -> l
+   type Declaration l = (d :: * -> (* -> *) -> (* -> *) -> *) | d -> l
+   type Type l        = (t :: * -> (* -> *) -> (* -> *) -> *) | t -> l
+   type Statement l   = (s :: * -> (* -> *) -> (* -> *) -> *) | s -> l
+   type Expression l  = (e :: * -> (* -> *) -> (* -> *) -> *) | e -> l
+   type Designator l  = (d :: * -> (* -> *) -> (* -> *) -> *) | d -> l
 
-   type FieldList l         = (x :: (* -> *) -> (* -> *) -> *) | x -> l
-   type ProcedureHeading l  = (x :: (* -> *) -> (* -> *) -> *) | x -> l
-   type FormalParameters l  = (x :: (* -> *) -> (* -> *) -> *) | x -> l
-   type FPSection l         = (x :: (* -> *) -> (* -> *) -> *) | x -> l
-   type Block l             = (x :: (* -> *) -> (* -> *) -> *) | x -> l
-   type StatementSequence l = (x :: (* -> *) -> (* -> *) -> *) | x -> l
-   type Case l              = (x :: (* -> *) -> (* -> *) -> *) | x -> l
-   type CaseLabels l        = (x :: (* -> *) -> (* -> *) -> *) | x -> l
-   type Element l           = (x :: (* -> *) -> (* -> *) -> *) | x -> l
+   type FieldList l         = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
+   type ProcedureHeading l  = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
+   type FormalParameters l  = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
+   type FPSection l         = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
+   type Block l             = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
+   type StatementSequence l = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
+   type Case l              = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
+   type CaseLabels l        = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
+   type Element l           = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
    
    type Import l  = x | x -> l
    type IdentDef l  = x | x -> l
    type QualIdent l = x | x -> l
 
    -- Declaration
-   constantDeclaration :: IdentDef l -> f (ConstExpression l f' f') -> Declaration l f' f
-   typeDeclaration :: IdentDef l -> f (Type l f' f') -> Declaration l f' f
-   variableDeclaration :: IdentList l -> f (Type l f' f') -> Declaration l f' f
-   procedureDeclaration :: f (ProcedureHeading l f' f') -> f (Block l f' f') -> Declaration l f' f
+   constantDeclaration :: IdentDef l' -> f (ConstExpression l' l' f' f') -> Declaration l l' f' f
+   typeDeclaration :: IdentDef l' -> f (Type l' l' f' f') -> Declaration l l' f' f
+   variableDeclaration :: IdentList l' -> f (Type l' l' f' f') -> Declaration l l' f' f
+   procedureDeclaration :: f (ProcedureHeading l' l' f' f') -> f (Block l' l' f' f') -> Declaration l l' f' f
 
-   formalParameters :: [f (FPSection l f' f')] -> Maybe (ReturnType l) -> FormalParameters l f' f
-   fpSection :: Bool -> [Ident] -> f (Type l f' f') -> FPSection l f' f
-   block :: [f (Declaration l f' f')] -> Maybe (f (StatementSequence l f' f')) -> Block l f' f
+   formalParameters :: [f (FPSection l' l' f' f')] -> Maybe (ReturnType l') -> FormalParameters l l' f' f
+   fpSection :: Bool -> [Ident] -> f (Type l' l' f' f') -> FPSection l l' f' f
+   block :: [f (Declaration l' l' f' f')] -> Maybe (f (StatementSequence l' l' f' f')) -> Block l l' f' f
 
-   fieldList :: NonEmpty (IdentDef l) -> f (Type l f' f') -> FieldList l f' f
-   emptyFieldList :: FieldList l f' f
+   fieldList :: NonEmpty (IdentDef l') -> f (Type l' l' f' f') -> FieldList l l' f' f
+   emptyFieldList :: FieldList l l' f' f
 
    -- Type
-   pointerType :: f (Type l f' f') -> Type l f' f
-   procedureType :: Maybe (f (FormalParameters l f' f')) -> Type l f' f
-   typeReference :: QualIdent l -> Type l f' f
+   pointerType :: f (Type l' l' f' f') -> Type l l' f' f
+   procedureType :: Maybe (f (FormalParameters l' l' f' f')) -> Type l l' f' f
+   typeReference :: QualIdent l' -> Type l l' f' f
 
    -- Statement
-   assignment :: f (Designator l f' f') -> f (Expression l f' f') -> Statement l f' f
-   caseStatement :: f (Expression l f' f') -> NonEmpty (f (Case l f' f')) -> Maybe (f (StatementSequence l f' f')) 
-                 -> Statement l f' f
-   emptyStatement :: Statement l f' f
-   exitStatement :: Statement l f' f
-   ifStatement :: NonEmpty (f (Product (Expression l) (StatementSequence l) f' f')) 
-               -> Maybe (f (StatementSequence l f' f')) 
-               -> Statement l f' f
-   loopStatement :: f (StatementSequence l f' f') -> Statement l f' f
-   procedureCall :: f (Designator l f' f') -> Maybe [f (Expression l f' f')] -> Statement l f' f
-   repeatStatement :: f (StatementSequence l f' f') -> f (Expression l f' f') -> Statement l f' f
-   returnStatement :: Maybe (f (Expression l f' f')) -> Statement l f' f
-   whileStatement :: f (Expression l f' f') -> f (StatementSequence l f' f') -> Statement l f' f
+   assignment :: f (Designator l' l' f' f') -> f (Expression l' l' f' f') -> Statement l l' f' f
+   caseStatement :: f (Expression l' l' f' f') -> NonEmpty (f (Case l' l' f' f')) -> Maybe (f (StatementSequence l' l' f' f')) 
+                 -> Statement l l' f' f
+   emptyStatement :: Statement l l' f' f
+   exitStatement :: Statement l l' f' f
+   ifStatement :: NonEmpty (f (Product (Expression l' l') (StatementSequence l' l') f' f')) 
+               -> Maybe (f (StatementSequence l' l' f' f')) 
+               -> Statement l l' f' f
+   loopStatement :: f (StatementSequence l' l' f' f') -> Statement l l' f' f
+   procedureCall :: f (Designator l' l' f' f') -> Maybe [f (Expression l' l' f' f')] -> Statement l l' f' f
+   repeatStatement :: f (StatementSequence l' l' f' f') -> f (Expression l' l' f' f') -> Statement l l' f' f
+   returnStatement :: Maybe (f (Expression l' l' f' f')) -> Statement l l' f' f
+   whileStatement :: f (Expression l' l' f' f') -> f (StatementSequence l' l' f' f') -> Statement l l' f' f
 
-   caseAlternative :: NonEmpty (f (CaseLabels l f' f')) -> f (StatementSequence l f' f') -> Case l f' f
-   emptyCase :: Case l f' f
+   caseAlternative :: NonEmpty (f (CaseLabels l' l' f' f')) -> f (StatementSequence l' l' f' f') -> Case l l' f' f
+   emptyCase :: Case l l' f' f
 
-   singleLabel :: f (ConstExpression l f' f') -> CaseLabels l f' f
-   labelRange :: f (ConstExpression l f' f') -> f (ConstExpression l f' f') -> CaseLabels l f' f
+   singleLabel :: f (ConstExpression l' l' f' f') -> CaseLabels l l' f' f
+   labelRange :: f (ConstExpression l' l' f' f') -> f (ConstExpression l' l' f' f') -> CaseLabels l l' f' f
 
-   statementSequence :: NonEmpty (f (Statement l f' f')) -> StatementSequence l f' f
+   statementSequence :: NonEmpty (f (Statement l' l' f' f')) -> StatementSequence l l' f' f
 
    -- Expression
-   add, subtract :: f (Expression l f' f') -> f (Expression l f' f') -> Expression l f' f
-   and, or :: f (Expression l f' f') -> f (Expression l f' f') -> Expression l f' f
-   divide, integerDivide, modulo, multiply :: f (Expression l f' f') -> f (Expression l f' f') -> Expression l f' f
-   functionCall :: f (Designator l f' f') -> [f (Expression l f' f')] -> Expression l f' f
-   integer :: Text -> Expression l f' f
-   negative, positive :: f (Expression l f' f') -> Expression l f' f
-   nil :: Expression l f' f
-   not :: f (Expression l f' f') -> Expression l f' f
-   read :: f (Designator l f' f') -> Expression l f' f
-   real :: Text -> Expression l f' f
-   relation :: RelOp -> f (Expression l f' f') -> f (Expression l f' f') -> Expression l f' f
-   string :: Text -> Expression l f' f
+   add, subtract :: f (Expression l' l' f' f') -> f (Expression l' l' f' f') -> Expression l l' f' f
+   and, or :: f (Expression l' l' f' f') -> f (Expression l' l' f' f') -> Expression l l' f' f
+   divide, integerDivide, modulo, multiply :: f (Expression l' l' f' f') -> f (Expression l' l' f' f') -> Expression l l' f' f
+   functionCall :: f (Designator l' l' f' f') -> [f (Expression l' l' f' f')] -> Expression l l' f' f
+   integer :: Text -> Expression l l' f' f
+   negative, positive :: f (Expression l' l' f' f') -> Expression l l' f' f
+   nil :: Expression l l' f' f
+   not :: f (Expression l' l' f' f') -> Expression l l' f' f
+   read :: f (Designator l' l' f' f') -> Expression l l' f' f
+   real :: Text -> Expression l l' f' f
+   relation :: RelOp -> f (Expression l' l' f' f') -> f (Expression l' l' f' f') -> Expression l l' f' f
+   string :: Text -> Expression l l' f' f
 
-   element :: f (Expression l f' f') -> Element l f' f
-   range :: f (Expression l f' f') -> f (Expression l f' f') -> Element l f' f
+   element :: f (Expression l' l' f' f') -> Element l l' f' f
+   range :: f (Expression l' l' f' f') -> f (Expression l' l' f' f') -> Element l l' f' f
 
    -- Designator
-   variable :: QualIdent l -> Designator l f' f
-   field :: f (Designator l f' f') -> Ident -> Designator l f' f
-   index :: f (Designator l f' f') -> NonEmpty (f (Expression l f' f')) -> Designator l f' f
-   dereference :: f (Designator l f' f') -> Designator l f' f
+   variable :: QualIdent l' -> Designator l l' f' f
+   field :: f (Designator l' l' f' f') -> Ident -> Designator l l' f' f
+   index :: f (Designator l' l' f' f') -> NonEmpty (f (Expression l' l' f' f')) -> Designator l l' f' f
+   dereference :: f (Designator l' l' f' f') -> Designator l l' f' f
 
    -- Identifier
    identDef :: Ident -> IdentDef l
    nonQualIdent :: Ident -> QualIdent l
 
 class CoWirthy l where
-   coDeclaration :: (Wirthy (l' :: *), Traversable f, Traversable f') => Declaration l f' f -> Maybe (Declaration l' f' f)
-   coType        :: (Wirthy (l' :: *), Traversable f, Traversable f') => Type l f' f        -> Maybe (Type l' f' f)
-   coStatement   :: (Wirthy (l' :: *), Traversable f, Traversable f') => Statement l f' f   -> Maybe (Statement l' f' f)
-   coExpression  :: (Wirthy (l' :: *), Traversable f, Traversable f') => Expression l f' f  -> Maybe (Expression l' f' f)
-   coDesignator  :: (Wirthy (l' :: *), Traversable f, Traversable f') => Designator l f' f  -> Maybe (Designator l' f' f)
-
-   coIdentDef :: Wirthy (l' :: *) => IdentDef l -> Maybe (IdentDef l')
-   coStatementSequence :: (Wirthy (l' :: *), Traversable f, Traversable f')
-                       => StatementSequence l f' f -> Maybe (StatementSequence l' f' f)
+   coDeclaration :: (Wirthy (l' :: *), Traversable f, Traversable f') => Declaration l l'' f' f -> Maybe (Declaration l' l'' f' f)
+   coType        :: (Wirthy (l' :: *), Traversable f, Traversable f') => Type l l'' f' f        -> Maybe (Type l' l'' f' f)
+   coStatement   :: (Wirthy (l' :: *), Traversable f, Traversable f') => Statement l l'' f' f   -> Maybe (Statement l' l'' f' f)
+   coExpression  :: (Wirthy (l' :: *), Traversable f, Traversable f') => Expression l l'' f' f  -> Maybe (Expression l' l'' f' f)
+   coDesignator  :: (Wirthy (l' :: *), Traversable f, Traversable f') => Designator l l'' f' f  -> Maybe (Designator l' l'' f' f)
 
 class Wirthy l => Nameable l where
-   getProcedureName :: ProcedureHeading l f' f -> Ident
+   getProcedureName :: Nameable l' => ProcedureHeading l l' f' f -> Ident
    getIdentDefName :: IdentDef l -> Ident
    getNonQualIdentName :: QualIdent l -> Maybe Ident
 
 class Wirthy l => Oberon l where
-   type WithAlternative l   = (x :: (* -> *) -> (* -> *) -> *) | x -> l
+   type WithAlternative l = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
 
-   moduleUnit :: Ident -> [Import l] -> [f (Declaration l f' f')] -> Maybe (f (StatementSequence l f' f')) -> Module l f' f
+   moduleUnit :: Ident -> [Import l] -> [f (Declaration l' l' f' f')] -> Maybe (f (StatementSequence l' l' f' f'))
+              -> Module l l' f' f
    moduleImport :: Maybe Ident -> Ident -> Import l
    qualIdent :: Ident -> Ident -> QualIdent l
    getQualIdentNames :: QualIdent l -> Maybe (Ident, Ident)
    exported :: Ident -> IdentDef l
 
-   forwardDeclaration :: IdentDef l -> Maybe (f (FormalParameters l f' f')) -> Declaration l f' f
-   procedureHeading :: Bool -> IdentDef l -> Maybe (f (FormalParameters l f' f')) -> ProcedureHeading l f' f
+   forwardDeclaration :: IdentDef l' -> Maybe (f (FormalParameters l' l' f' f')) -> Declaration l l' f' f
+   procedureHeading :: Bool -> IdentDef l' -> Maybe (f (FormalParameters l' l' f' f')) -> ProcedureHeading l l' f' f
 
-   arrayType :: [f (ConstExpression l f' f')] -> f (Type l f' f') -> Type l f' f
-   recordType :: Maybe (BaseType l) -> NonEmpty (f (FieldList l f' f')) -> Type l f' f
+   arrayType :: [f (ConstExpression l' l' f' f')] -> f (Type l' l' f' f') -> Type l l' f' f
+   recordType :: Maybe (BaseType l') -> NonEmpty (f (FieldList l' l' f' f')) -> Type l l' f' f
 
-   withStatement :: f (WithAlternative l f' f') -> Statement l f' f
-   withAlternative :: QualIdent l -> QualIdent l -> f (StatementSequence l f' f') -> WithAlternative l f' f
+   withStatement :: f (WithAlternative l' l' f' f') -> Statement l l' f' f
+   withAlternative :: QualIdent l' -> QualIdent l' -> f (StatementSequence l' l' f' f') -> WithAlternative l l' f' f
 
-   charCode :: Int -> Expression l f' f
-   charConstant :: Char -> Expression l f' f
-   is :: f (Expression l f' f') -> QualIdent l -> Expression l f' f
-   set :: [f (Element l f' f')] -> Expression l f' f
+   charCode :: Int -> Expression l l' f' f
+   charConstant :: Char -> Expression l l' f' f
+   is :: f (Expression l' l' f' f') -> QualIdent l' -> Expression l l' f' f
+   set :: [f (Element l' l' f' f')] -> Expression l l' f' f
 
-   typeGuard :: f (Designator l f' f') -> QualIdent l -> Designator l f' f
+   typeGuard :: f (Designator l' l' f' f') -> QualIdent l' -> Designator l l' f' f
 
 class Oberon l => Oberon2 l where
    readOnly :: Ident -> IdentDef l
-   typeBoundHeading :: Bool -> Ident -> Ident -> Bool -> IdentDef l -> Maybe (f (FormalParameters l f' f'))
-                    -> ProcedureHeading l f' f
-   forStatement :: Ident -> f (Expression l f' f') -> f (Expression l f' f') -> Maybe (f (Expression l f' f')) 
-                -> f (StatementSequence l f' f') 
-                -> Statement l f' f
-   variantWithStatement :: NonEmpty (f (WithAlternative l f' f')) -> Maybe (f (StatementSequence l f' f')) -> Statement l f' f
+   typeBoundHeading :: Bool -> Ident -> Ident -> Bool -> IdentDef l' -> Maybe (f (FormalParameters l' l' f' f'))
+                    -> ProcedureHeading l l' f' f
+   forStatement :: Ident -> f (Expression l' l' f' f') -> f (Expression l' l' f' f') -> Maybe (f (Expression l' l' f' f'))
+                -> f (StatementSequence l' l' f' f') 
+                -> Statement l l' f' f
+   variantWithStatement :: NonEmpty (f (WithAlternative l' l' f' f')) -> Maybe (f (StatementSequence l' l' f' f'))
+                        -> Statement l l' f' f
 
 type BaseType l = QualIdent l
 type ReturnType l = QualIdent l

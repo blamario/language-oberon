@@ -35,15 +35,15 @@ import Text.Grampa (Ambiguous(..), Position(..), ParseFailure)
 import qualified Language.Oberon.Abstract as Abstract
 import Language.Oberon.AST
 
-data DeclarationRHS l f' f = DeclaredConstant (f (Abstract.ConstExpression l f' f'))
-                           | DeclaredType (f (Abstract.Type l f' f'))
-                           | DeclaredVariable (f (Abstract.Type l f' f'))
-                           | DeclaredProcedure Bool (Maybe (f (Abstract.FormalParameters l f' f')))
-deriving instance (Show (Abstract.FormalParameters l Placed Placed), Show (Abstract.Type l Placed Placed),
-                   Show (Abstract.ConstExpression l Placed Placed)) =>
+data DeclarationRHS l f' f = DeclaredConstant (f (Abstract.ConstExpression l l f' f'))
+                           | DeclaredType (f (Abstract.Type l l f' f'))
+                           | DeclaredVariable (f (Abstract.Type l l f' f'))
+                           | DeclaredProcedure Bool (Maybe (f (Abstract.FormalParameters l l f' f')))
+deriving instance (Show (Abstract.FormalParameters l l Placed Placed), Show (Abstract.Type l l Placed Placed),
+                   Show (Abstract.ConstExpression l l Placed Placed)) =>
                   Show (DeclarationRHS l Placed Placed)
-deriving instance (Show (Abstract.FormalParameters l NodeWrap NodeWrap), Show (Abstract.Type l NodeWrap NodeWrap),
-                   Show (Abstract.ConstExpression l NodeWrap NodeWrap)) =>
+deriving instance (Show (Abstract.FormalParameters l l NodeWrap NodeWrap), Show (Abstract.Type l l NodeWrap NodeWrap),
+                   Show (Abstract.ConstExpression l l NodeWrap NodeWrap)) =>
                   Show (DeclarationRHS l NodeWrap NodeWrap)
 
 -- | All possible resolution errors
@@ -57,7 +57,7 @@ data Error l = UnknownModule (Abstract.QualIdent l)
              | AmbiguousRecord [Designator l NodeWrap NodeWrap]
              | AmbiguousStatement [Statement l NodeWrap NodeWrap]
              | InvalidExpression (NonEmpty (Error l))
-             | InvalidFunctionParameters [NodeWrap (Abstract.Expression l NodeWrap NodeWrap)]
+             | InvalidFunctionParameters [NodeWrap (Abstract.Expression l l NodeWrap NodeWrap)]
              | InvalidRecord (NonEmpty (Error l))
              | InvalidStatement (NonEmpty (Error l))
              | NotARecord (Abstract.QualIdent l)
@@ -67,7 +67,7 @@ data Error l = UnknownModule (Abstract.QualIdent l)
              | UnparseableModule Text
 deriving instance (Show (Abstract.QualIdent l),
                    Show (Declaration l NodeWrap NodeWrap), Show (Statement l NodeWrap NodeWrap),
-                   Show (Expression l NodeWrap NodeWrap), Show (Abstract.Expression l NodeWrap NodeWrap),
+                   Show (Expression l NodeWrap NodeWrap), Show (Abstract.Expression l l NodeWrap NodeWrap),
                    Show (Designator l NodeWrap NodeWrap)) => Show (Error l)
 
 type Placed = ((,) Int)
@@ -114,7 +114,7 @@ instance {-# overlaps #-}
          (_, multi) -> Failure (AmbiguousDesignator multi :| [])
 
 class Readable l where
-   getVariableName :: Abstract.Designator l f' f -> Maybe (Abstract.QualIdent l)
+   getVariableName :: Abstract.Designator l l f' f -> Maybe (Abstract.QualIdent l)
 
 instance Readable Language where
    getVariableName (Variable q) = Just q
@@ -122,10 +122,10 @@ instance Readable Language where
 
 instance {-# overlaps #-}
    (Readable l, Abstract.Nameable l, Abstract.Oberon l,
-    Deep.DownTraversable (Resolution l) (Abstract.Expression l) NodeWrap Placed (Resolved l),
-    Deep.DownTraversable (Resolution l) (Abstract.Designator l) NodeWrap Placed (Resolved l),
-    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.Expression l NodeWrap NodeWrap),
-    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.Designator l NodeWrap NodeWrap)) =>
+    Deep.DownTraversable (Resolution l) (Abstract.Expression l l) NodeWrap Placed (Resolved l),
+    Deep.DownTraversable (Resolution l) (Abstract.Designator l l) NodeWrap Placed (Resolved l),
+    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.Expression l l NodeWrap NodeWrap),
+    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.Designator l l NodeWrap NodeWrap)) =>
    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Expression l NodeWrap NodeWrap) where
    traverse res expressions = StateT $ \s@(scope, state)->
       let resolveExpression :: Expression l NodeWrap NodeWrap
@@ -154,20 +154,20 @@ instance {-# overlaps #-}
 
 instance {-# overlaps #-}
    (BindableDeclaration l, CoFormalParameters l, Abstract.Wirthy l,
-    Deep.DownTraversable (Resolution l) (Abstract.Type l) NodeWrap Placed (Resolved l),
-    Deep.DownTraversable (Resolution l) (Abstract.ProcedureHeading l) NodeWrap Placed (Resolved l),
-    Deep.DownTraversable (Resolution l) (Abstract.FormalParameters l) NodeWrap Placed (Resolved l),
-    Deep.DownTraversable (Resolution l) (Abstract.ConstExpression l) NodeWrap Placed (Resolved l),
+    Deep.DownTraversable (Resolution l) (Abstract.Type l l) NodeWrap Placed (Resolved l),
+    Deep.DownTraversable (Resolution l) (Abstract.ProcedureHeading l l) NodeWrap Placed (Resolved l),
+    Deep.DownTraversable (Resolution l) (Abstract.FormalParameters l l) NodeWrap Placed (Resolved l),
+    Deep.DownTraversable (Resolution l) (Abstract.ConstExpression l l) NodeWrap Placed (Resolved l),
     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                        (Abstract.Type l NodeWrap NodeWrap),
+                        (Abstract.Type l l NodeWrap NodeWrap),
     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                        (Abstract.ProcedureHeading l NodeWrap NodeWrap),
+                        (Abstract.ProcedureHeading l l NodeWrap NodeWrap),
     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                        (Abstract.Block l NodeWrap NodeWrap),
+                        (Abstract.Block l l NodeWrap NodeWrap),
     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                        (Abstract.FormalParameters l NodeWrap NodeWrap),
+                        (Abstract.FormalParameters l l NodeWrap NodeWrap),
     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                        (Abstract.ConstExpression l NodeWrap NodeWrap)) =>
+                        (Abstract.ConstExpression l l NodeWrap NodeWrap)) =>
    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Declaration l NodeWrap NodeWrap) where
    traverse res (Compose (pos, Ambiguous (proc@(ProcedureDeclaration heading body) :| []))) =
       do s@(scope, state) <- get
@@ -180,9 +180,9 @@ instance {-# overlaps #-}
    traverse _ declarations = StateT (const $ Failure $ pure $ AmbiguousDeclaration $ toList declarations)
 
 class CoFormalParameters l where
-   getFPSections :: Abstract.FormalParameters l f' f -> [f (Abstract.FPSection l f' f')]
-   evalFPSection :: Abstract.FPSection l f' f -> (Bool -> [Ident] -> f (Abstract.Type l f' f') -> r) -> r
-   getLocalDeclarations :: Abstract.Block l f' f -> [f (Abstract.Declaration l f' f')]
+   getFPSections :: Abstract.FormalParameters l l f' f -> [f (Abstract.FPSection l l f' f')]
+   evalFPSection :: Abstract.FPSection l l f' f -> (Bool -> [Ident] -> f (Abstract.Type l l f' f') -> r) -> r
+   getLocalDeclarations :: Abstract.Block l l f' f -> [f (Abstract.Declaration l l f' f')]
 
 instance CoFormalParameters Language where
    getFPSections (FormalParameters sections _) = sections
@@ -191,12 +191,12 @@ instance CoFormalParameters Language where
 
 instance {-# overlaps #-}
    (Abstract.Wirthy l, CoFormalParameters l,
-    Deep.DownTraversable (Resolution l) (Abstract.Type l) NodeWrap Placed (Resolved l),
-    Deep.DownTraversable (Resolution l) (Abstract.FormalParameters l) NodeWrap Placed (Resolved l),
-    Deep.DownTraversable (Resolution l) (Abstract.ConstExpression l) NodeWrap Placed (Resolved l),
-    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.Type l NodeWrap NodeWrap),
-    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.FormalParameters l NodeWrap NodeWrap),
-    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.ConstExpression l NodeWrap NodeWrap)) =>
+    Deep.DownTraversable (Resolution l) (Abstract.Type l l) NodeWrap Placed (Resolved l),
+    Deep.DownTraversable (Resolution l) (Abstract.FormalParameters l l) NodeWrap Placed (Resolved l),
+    Deep.DownTraversable (Resolution l) (Abstract.ConstExpression l l) NodeWrap Placed (Resolved l),
+    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.Type l l NodeWrap NodeWrap),
+    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.FormalParameters l l NodeWrap NodeWrap),
+    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.ConstExpression l l NodeWrap NodeWrap)) =>
    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (ProcedureHeading l NodeWrap NodeWrap) where
    traverse res (Compose (pos, Ambiguous (proc@(ProcedureHeading _ _ parameters) :| []))) =
       StateT $ \s@(scope, state)->
@@ -224,20 +224,20 @@ instance {-# overlaps #-}
 
 instance {-# overlaps #-}
    (BindableDeclaration l,
-    Deep.DownTraversable (Resolution l) (Abstract.Type l) NodeWrap Placed (Resolved l),
-    Deep.DownTraversable (Resolution l) (Abstract.FormalParameters l) NodeWrap Placed (Resolved l),
-    Deep.DownTraversable (Resolution l) (Abstract.ConstExpression l) NodeWrap Placed (Resolved l),
-    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.Type l NodeWrap NodeWrap),
-    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.FormalParameters l NodeWrap NodeWrap),
-    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.ConstExpression l NodeWrap NodeWrap)) =>
+    Deep.DownTraversable (Resolution l) (Abstract.Type l l) NodeWrap Placed (Resolved l),
+    Deep.DownTraversable (Resolution l) (Abstract.FormalParameters l l) NodeWrap Placed (Resolved l),
+    Deep.DownTraversable (Resolution l) (Abstract.ConstExpression l l) NodeWrap Placed (Resolved l),
+    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.Type l l NodeWrap NodeWrap),
+    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.FormalParameters l l NodeWrap NodeWrap),
+    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.ConstExpression l l NodeWrap NodeWrap)) =>
    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Block l NodeWrap NodeWrap) where
    traverse res (Compose (pos, Ambiguous (body@(Block declarations statements) :| []))) =
      StateT $ \(scope, state)-> Success ((pos, body), (localScope res "" declarations scope, state))
    traverse _ b = StateT (const $ Failure $ pure AmbiguousParses)
 
 instance {-# overlaps #-}
-    (Deep.DownTraversable (Resolution l) (Abstract.Designator l) NodeWrap Placed (Resolved l),
-     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.Designator l NodeWrap NodeWrap)) =>
+    (Deep.DownTraversable (Resolution l) (Abstract.Designator l l) NodeWrap Placed (Resolved l),
+     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.Designator l l NodeWrap NodeWrap)) =>
     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Statement l NodeWrap NodeWrap) where
    traverse res statements = StateT $ \s@(scope, state)->
       let resolveStatement :: Statement l NodeWrap NodeWrap
@@ -314,27 +314,27 @@ resolveName res scope q
         _ -> Failure (UnknownLocal name :| [])
 
 resolveModules :: forall l. (BindableDeclaration l, CoFormalParameters l, Abstract.Wirthy l,
-                             Deep.DownTraversable (Resolution l) (Abstract.Declaration l) NodeWrap Placed (Resolved l),
-                             Deep.DownTraversable (Resolution l) (Abstract.StatementSequence l) NodeWrap Placed (Resolved l),
-                             Deep.DownTraversable (Resolution l) (Abstract.Type l) NodeWrap Placed (Resolved l),
-                             Deep.DownTraversable (Resolution l) (Abstract.ProcedureHeading l) NodeWrap Placed (Resolved l),
-                             Deep.DownTraversable (Resolution l) (Abstract.Block l) NodeWrap Placed (Resolved l),
-                             Deep.DownTraversable (Resolution l) (Abstract.FormalParameters l) NodeWrap Placed (Resolved l),
-                             Deep.DownTraversable (Resolution l) (Abstract.ConstExpression l) NodeWrap Placed (Resolved l),
+                             Deep.DownTraversable (Resolution l) (Abstract.Declaration l l) NodeWrap Placed (Resolved l),
+                             Deep.DownTraversable (Resolution l) (Abstract.StatementSequence l l) NodeWrap Placed (Resolved l),
+                             Deep.DownTraversable (Resolution l) (Abstract.Type l l) NodeWrap Placed (Resolved l),
+                             Deep.DownTraversable (Resolution l) (Abstract.ProcedureHeading l l) NodeWrap Placed (Resolved l),
+                             Deep.DownTraversable (Resolution l) (Abstract.Block l l) NodeWrap Placed (Resolved l),
+                             Deep.DownTraversable (Resolution l) (Abstract.FormalParameters l l) NodeWrap Placed (Resolved l),
+                             Deep.DownTraversable (Resolution l) (Abstract.ConstExpression l l) NodeWrap Placed (Resolved l),
                              Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                                                 (Abstract.Type l NodeWrap NodeWrap),
+                                                 (Abstract.Type l l NodeWrap NodeWrap),
                              Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                                                 (Abstract.Declaration l NodeWrap NodeWrap),
+                                                 (Abstract.Declaration l l NodeWrap NodeWrap),
                              Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                                                 (Abstract.StatementSequence l NodeWrap NodeWrap),
+                                                 (Abstract.StatementSequence l l NodeWrap NodeWrap),
                              Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                                                 (Abstract.ProcedureHeading l NodeWrap NodeWrap),
+                                                 (Abstract.ProcedureHeading l l NodeWrap NodeWrap),
                              Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                                                 (Abstract.Block l NodeWrap NodeWrap),
+                                                 (Abstract.Block l l NodeWrap NodeWrap),
                              Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                                                 (Abstract.FormalParameters l NodeWrap NodeWrap),
+                                                 (Abstract.FormalParameters l l NodeWrap NodeWrap),
                              Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                                                 (Abstract.ConstExpression l NodeWrap NodeWrap)) =>
+                                                 (Abstract.ConstExpression l l NodeWrap NodeWrap)) =>
                   Predefined l -> Map Ident (Module l NodeWrap NodeWrap)
                 -> Validation (NonEmpty (Ident, NonEmpty (Error l))) (Map Ident (Module l Placed Placed))
 resolveModules predefinedScope modules = traverseWithKey extractErrors modules'
@@ -344,21 +344,21 @@ resolveModules predefinedScope modules = traverseWithKey extractErrors modules'
 
 resolveModule :: forall l. (BindableDeclaration l,
                             Deep.DownTraversable (Resolution l) (Declaration l) NodeWrap Placed (Resolved l),
-                            Deep.DownTraversable (Resolution l) (Abstract.Declaration l) NodeWrap Placed (Resolved l),
-                            Deep.DownTraversable (Resolution l) (Abstract.StatementSequence l) NodeWrap Placed (Resolved l),
-                            Deep.DownTraversable (Resolution l) (Abstract.Type l) NodeWrap Placed (Resolved l),
-                            Deep.DownTraversable (Resolution l) (Abstract.FormalParameters l) NodeWrap Placed (Resolved l),
-                            Deep.DownTraversable (Resolution l) (Abstract.ConstExpression l) NodeWrap Placed (Resolved l),
+                            Deep.DownTraversable (Resolution l) (Abstract.Declaration l l) NodeWrap Placed (Resolved l),
+                            Deep.DownTraversable (Resolution l) (Abstract.StatementSequence l l) NodeWrap Placed (Resolved l),
+                            Deep.DownTraversable (Resolution l) (Abstract.Type l l) NodeWrap Placed (Resolved l),
+                            Deep.DownTraversable (Resolution l) (Abstract.FormalParameters l l) NodeWrap Placed (Resolved l),
+                            Deep.DownTraversable (Resolution l) (Abstract.ConstExpression l l) NodeWrap Placed (Resolved l),
                             Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                                                (Abstract.Type l NodeWrap NodeWrap),
+                                                (Abstract.Type l l NodeWrap NodeWrap),
                             Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                                                (Abstract.Declaration l NodeWrap NodeWrap),
+                                                (Abstract.Declaration l l NodeWrap NodeWrap),
                             Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                                                (Abstract.StatementSequence l NodeWrap NodeWrap),
+                                                (Abstract.StatementSequence l l NodeWrap NodeWrap),
                             Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                                                (Abstract.FormalParameters l NodeWrap NodeWrap),
+                                                (Abstract.FormalParameters l l NodeWrap NodeWrap),
                             Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                                                (Abstract.ConstExpression l NodeWrap NodeWrap)) =>
+                                                (Abstract.ConstExpression l l NodeWrap NodeWrap)) =>
                  Scope l -> Map Ident (Validation (NonEmpty (Error l)) (Module l Placed Placed))
               -> Module l NodeWrap NodeWrap -> Validation (NonEmpty (Error l)) (Module l Placed Placed)
 resolveModule predefined modules m@(Module moduleName imports declarations body) =
@@ -376,16 +376,16 @@ resolveModule predefined modules m@(Module moduleName imports declarations body)
          moduleGlobalScope = localScope res moduleName declarations predefined
 
 localScope :: forall l. (BindableDeclaration l,
-                         Deep.DownTraversable (Resolution l) (Abstract.Type l) NodeWrap Placed (Resolved l),
-                         Deep.DownTraversable (Resolution l) (Abstract.FormalParameters l) NodeWrap Placed (Resolved l),
-                         Deep.DownTraversable (Resolution l) (Abstract.ConstExpression l) NodeWrap Placed (Resolved l),
+                         Deep.DownTraversable (Resolution l) (Abstract.Type l l) NodeWrap Placed (Resolved l),
+                         Deep.DownTraversable (Resolution l) (Abstract.FormalParameters l l) NodeWrap Placed (Resolved l),
+                         Deep.DownTraversable (Resolution l) (Abstract.ConstExpression l l) NodeWrap Placed (Resolved l),
                          Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                                             (Abstract.Type l NodeWrap NodeWrap),
+                                             (Abstract.Type l l NodeWrap NodeWrap),
                          Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                                             (Abstract.FormalParameters l NodeWrap NodeWrap),
+                                             (Abstract.FormalParameters l l NodeWrap NodeWrap),
                          Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
-                                             (Abstract.ConstExpression l NodeWrap NodeWrap)) =>
-              Resolution l -> Ident -> [NodeWrap (Abstract.Declaration l NodeWrap NodeWrap)] -> Scope l -> Scope l
+                                             (Abstract.ConstExpression l l NodeWrap NodeWrap)) =>
+              Resolution l -> Ident -> [NodeWrap (Abstract.Declaration l l NodeWrap NodeWrap)] -> Scope l -> Scope l
 localScope res qual declarations outerScope = innerScope
    where innerScope = Map.union (snd <$> scopeAdditions) outerScope
          scopeAdditions = (resolveBinding res innerScope <$>)
@@ -396,7 +396,7 @@ localScope res qual declarations outerScope = innerScope
          resolveBinding res scope dr = evalStateT (Deep.traverseDown res dr) (scope, DeclarationState)
 
 class BindableDeclaration l where
-   declarationBinding :: Foldable f => Ident -> Abstract.Declaration l f f -> [(Ident, (AccessMode, DeclarationRHS l f f))]
+   declarationBinding :: Foldable f => Ident -> Abstract.Declaration l l f f -> [(Ident, (AccessMode, DeclarationRHS l f f))]
    
 instance BindableDeclaration Language where
    declarationBinding _ (ConstantDeclaration (IdentDef name export) expr) =
