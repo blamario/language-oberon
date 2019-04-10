@@ -20,7 +20,7 @@ data Precedence e = Precedence Int e
 
 instance (Pretty (Abstract.Import l), Pretty (Abstract.Declaration l l Identity Identity),
           Pretty (Abstract.StatementSequence l l Identity Identity)) =>
-         Pretty (Module l Identity Identity) where
+         Pretty (Module λ l Identity Identity) where
    pretty (Module name imports declarations body) =
       vsep $ intersperse mempty $
       ["MODULE" <+> pretty name <> semi,
@@ -37,7 +37,7 @@ instance (Abstract.Nameable l, Pretty (Abstract.IdentDef l), Pretty (Abstract.Ty
           Pretty (Abstract.Expression l l Identity Identity), Pretty (Abstract.FormalParameters l l Identity Identity),
           Pretty (Abstract.ProcedureHeading l l Identity Identity),
           Pretty (Abstract.Block l l Identity Identity)) =>
-         Pretty (Declaration l Identity Identity) where
+         Pretty (Declaration λ l Identity Identity) where
    pretty (ConstantDeclaration ident (Identity expr)) = "CONST" <+> pretty ident <+> "=" <+> pretty expr <> semi
    pretty (TypeDeclaration ident typeDef) = "TYPE" <+> pretty ident <+> "=" <+> pretty typeDef <> semi
    pretty (VariableDeclaration idents varType) =
@@ -48,7 +48,7 @@ instance (Abstract.Nameable l, Pretty (Abstract.IdentDef l), Pretty (Abstract.Ty
                                                       <> semi]
    pretty (ForwardDeclaration ident parameters) = "PROCEDURE" <+> "^" <+> pretty ident <+> pretty parameters <> semi
 
-instance Pretty IdentDef where
+instance Pretty (IdentDef l) where
    pretty (IdentDef name Exported) = pretty name <> "*"
    pretty (IdentDef name ReadOnly) = pretty name <> "-"
    pretty (IdentDef name PrivateOnly) = pretty name
@@ -57,7 +57,7 @@ instance  (Pretty (Precedence (Abstract.Expression l l Identity Identity)),
            Pretty (Abstract.Expression l l Identity Identity),
            Pretty (Abstract.Element l l Identity Identity),
            Pretty (Abstract.Designator l l Identity Identity),
-           Pretty (Abstract.QualIdent l)) => Pretty (Expression l Identity Identity) where
+           Pretty (Abstract.QualIdent l)) => Pretty (Expression λ l Identity Identity) where
    pretty e = pretty (Precedence 0 e)
    
 instance  (Pretty (Precedence (Abstract.Expression l l Identity Identity)),
@@ -65,7 +65,7 @@ instance  (Pretty (Precedence (Abstract.Expression l l Identity Identity)),
            Pretty (Abstract.Element l l Identity Identity),
            Pretty (Abstract.Designator l l Identity Identity),
            Pretty (Abstract.QualIdent l)) =>
-          Pretty (Precedence (Expression l Identity Identity)) where
+          Pretty (Precedence (Expression λ l Identity Identity)) where
    pretty (Precedence 0 (Relation op left right)) = prettyPrec' 1 left <+> pretty op <+> prettyPrec' 1 right
    pretty (Precedence 0 (IsA left right)) = prettyPrec' 1 left <+> "IS" <+> pretty right
    pretty (Precedence p (Positive e)) | p < 2 = "+" <> prettyPrec' 2 e
@@ -105,12 +105,12 @@ instance Pretty RelOp where
    pretty GreaterOrEqual = ">="
    pretty In = "IN"
 
-instance Pretty (Abstract.Expression l l Identity Identity) => Pretty (Element l Identity Identity) where
+instance Pretty (Abstract.Expression l l Identity Identity) => Pretty (Element λ l Identity Identity) where
    pretty (Element e) = pretty e
    pretty (Range from to) = pretty from <+> ".." <+> pretty to
 
 instance (Pretty (Abstract.QualIdent l), Pretty (Abstract.Designator l l Identity Identity),
-          Pretty (Abstract.Expression l l Identity Identity)) => Pretty (Designator l Identity Identity) where
+          Pretty (Abstract.Expression l l Identity Identity)) => Pretty (Designator λ l Identity Identity) where
    pretty (Variable q) = pretty q
    pretty (Field record name) = pretty record <> dot <> pretty name
    pretty (Index array indexes) = pretty array <> brackets (hsep $ punctuate comma $ pretty <$> toList indexes)
@@ -119,7 +119,7 @@ instance (Pretty (Abstract.QualIdent l), Pretty (Abstract.Designator l l Identit
 
 instance (Pretty (Abstract.FormalParameters l l Identity Identity), Pretty (Abstract.FieldList l l Identity Identity),
           Pretty (Abstract.ConstExpression l l Identity Identity), Pretty (Abstract.Type l l Identity Identity),
-          Pretty (Abstract.BaseType l)) => Pretty (Type l Identity Identity) where
+          Pretty (Abstract.BaseType l)) => Pretty (Type λ l Identity Identity) where
    pretty (TypeReference q) = pretty q
    pretty (ArrayType dimensions itemType) =
       "ARRAY" <+> hsep (punctuate comma $ pretty . runIdentity <$> dimensions) <+> "OF" <+> pretty itemType
@@ -129,18 +129,18 @@ instance (Pretty (Abstract.FormalParameters l l Identity Identity), Pretty (Abst
    pretty (PointerType pointed) = "POINTER" <+> "TO" <+> pretty pointed
    pretty (ProcedureType parameters) = "PROCEDURE" <+> pretty parameters
 
-instance Pretty QualIdent where
+instance Pretty (QualIdent l) where
    pretty (QualIdent moduleName memberName) = pretty moduleName <> "." <> pretty memberName
    pretty (NonQualIdent localName) = pretty localName
 
 instance (Pretty (Abstract.IdentDef l), Pretty (Abstract.Type l l Identity Identity)) =>
-         Pretty (FieldList l Identity Identity) where
+         Pretty (FieldList λ l Identity Identity) where
    pretty (FieldList names t) = hsep (punctuate comma $ pretty <$> toList names) <+> ":" <+> pretty t
    pretty EmptyFieldList = mempty
 
 instance (Pretty (Abstract.IdentDef l), Pretty (Abstract.FormalParameters l l Identity Identity),
           Pretty (Abstract.Type l l Identity Identity)) =>
-         Pretty (ProcedureHeading l Identity Identity) where
+         Pretty (ProcedureHeading λ l Identity Identity) where
    pretty (ProcedureHeading indirect ident parameters) =
       "PROCEDURE" <> (if indirect then "* " else space) <> pretty ident <> pretty parameters
    pretty (TypeBoundHeading var receiverName receiverType indirect ident parameters) =
@@ -149,28 +149,28 @@ instance (Pretty (Abstract.IdentDef l), Pretty (Abstract.FormalParameters l l Id
       <> space <> (if indirect then "* " else space) <> pretty ident <> pretty parameters
 
 instance (Pretty (Abstract.FPSection l l Identity Identity),
-          Pretty (Abstract.ReturnType l)) => Pretty (FormalParameters l Identity Identity) where
+          Pretty (Abstract.ReturnType l)) => Pretty (FormalParameters λ l Identity Identity) where
    pretty (FormalParameters sections result) =
       lparen <> hsep (punctuate semi $ pretty <$> sections) <> rparen <> foldMap (colon <+>) (pretty <$> result)
 
-instance Pretty (Abstract.Type l l Identity Identity) => Pretty (FPSection l Identity Identity) where
+instance Pretty (Abstract.Type l l Identity Identity) => Pretty (FPSection λ l Identity Identity) where
    pretty (FPSection var names t) =
       (if var then ("VAR" <+>) else id) $ hsep (punctuate comma $ pretty <$> names) <+> colon <+> pretty t
    
 instance (Pretty (Abstract.Declaration l l Identity Identity), Pretty (Abstract.StatementSequence l l Identity Identity)) =>
-         Pretty (Block l Identity Identity) where
+         Pretty (Block λ l Identity Identity) where
    pretty (Block declarations body) =
       vsep ((indent 3 . pretty <$> declarations)
             ++ foldMap (\statements-> ["BEGIN", prettyBlock statements]) body)
 
-instance Pretty (Abstract.Statement l l Identity Identity) => Pretty (StatementSequence l Identity Identity) where
+instance Pretty (Abstract.Statement l l Identity Identity) => Pretty (StatementSequence λ l Identity Identity) where
    pretty (StatementSequence statements) = pretty (runIdentity <$> statements)
 
 instance (Pretty (Abstract.ConstExpression l l Identity Identity),
           Pretty (Abstract.Designator l l Identity Identity),
           Pretty (Abstract.Case l l Identity Identity),
           Pretty (Abstract.WithAlternative l l Identity Identity),
-          Pretty (Abstract.StatementSequence l l Identity Identity)) => Pretty (Statement l Identity Identity) where
+          Pretty (Abstract.StatementSequence l l Identity Identity)) => Pretty (Statement λ l Identity Identity) where
    prettyList l = vsep (dropEmptyTail $ punctuate semi $ pretty <$> l)
       where dropEmptyTail
                | not (null l), EmptyStatement <- last l = init
@@ -214,17 +214,17 @@ instance (Pretty (Abstract.ConstExpression l l Identity Identity),
    
 instance (Pretty (Abstract.CaseLabels l l Identity Identity),
           Pretty (Abstract.ConstExpression l l Identity Identity),
-          Pretty (Abstract.StatementSequence l l Identity Identity)) => Pretty (Case l Identity Identity) where
+          Pretty (Abstract.StatementSequence l l Identity Identity)) => Pretty (Case λ l Identity Identity) where
    pretty (Case labels body) = vsep [hsep (punctuate comma (pretty <$> toList labels)) <+> colon,
                                      prettyBlock body]
    pretty EmptyCase = mempty
    
 instance (Pretty (Abstract.QualIdent l), Pretty (Abstract.StatementSequence l l Identity Identity)) =>
-         Pretty (WithAlternative l Identity Identity) where
+         Pretty (WithAlternative λ l Identity Identity) where
    pretty (WithAlternative name t body) = vsep [pretty name <+> colon <+> pretty t <+> "DO",
                                                 prettyBlock body]
 
-instance Pretty (Abstract.ConstExpression l l Identity Identity) => Pretty (CaseLabels l Identity Identity) where
+instance Pretty (Abstract.ConstExpression l l Identity Identity) => Pretty (CaseLabels λ l Identity Identity) where
    pretty (SingleLabel expression) = pretty expression
    pretty (LabelRange from to) = pretty from <+> ".." <+> pretty to
 

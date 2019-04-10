@@ -51,11 +51,11 @@ data Error l = UnknownModule (Abstract.QualIdent l)
              | UnknownLocal Ident
              | UnknownImport (Abstract.QualIdent l)
              | AmbiguousParses
-             | AmbiguousDeclaration [Declaration l NodeWrap NodeWrap]
-             | AmbiguousDesignator [Designator l NodeWrap NodeWrap]
-             | AmbiguousExpression [Expression l NodeWrap NodeWrap]
-             | AmbiguousRecord [Designator l NodeWrap NodeWrap]
-             | AmbiguousStatement [Statement l NodeWrap NodeWrap]
+             | AmbiguousDeclaration [Declaration l l NodeWrap NodeWrap]
+             | AmbiguousDesignator [Designator l l NodeWrap NodeWrap]
+             | AmbiguousExpression [Expression l l NodeWrap NodeWrap]
+             | AmbiguousRecord [Designator l l NodeWrap NodeWrap]
+             | AmbiguousStatement [Statement l l NodeWrap NodeWrap]
              | InvalidExpression (NonEmpty (Error l))
              | InvalidFunctionParameters [NodeWrap (Abstract.Expression l l NodeWrap NodeWrap)]
              | InvalidRecord (NonEmpty (Error l))
@@ -66,9 +66,9 @@ data Error l = UnknownModule (Abstract.QualIdent l)
              | ClashingImports
              | UnparseableModule Text
 deriving instance (Show (Abstract.QualIdent l),
-                   Show (Declaration l NodeWrap NodeWrap), Show (Statement l NodeWrap NodeWrap),
-                   Show (Expression l NodeWrap NodeWrap), Show (Abstract.Expression l l NodeWrap NodeWrap),
-                   Show (Designator l NodeWrap NodeWrap)) => Show (Error l)
+                   Show (Declaration l l NodeWrap NodeWrap), Show (Statement l l NodeWrap NodeWrap),
+                   Show (Expression l l NodeWrap NodeWrap), Show (Abstract.Expression l l NodeWrap NodeWrap),
+                   Show (Designator l l NodeWrap NodeWrap)) => Show (Error l)
 
 type Placed = ((,) Int)
 type NodeWrap = Compose Placed Ambiguous
@@ -93,7 +93,7 @@ instance Monad (Validation (NonEmpty (Error l))) where
    Success s >>= f = f s
    Failure errors >>= _ = Failure errors
 
-instance Shallow.Functor (Resolution l) NodeWrap (Resolved l) (Module l (Resolved l) (Resolved l)) where
+instance Shallow.Functor (Resolution l) NodeWrap (Resolved l) (Module l l (Resolved l) (Resolved l)) where
    (<$>) = mapResolveDefault
 
 instance {-# overlappable #-} --Show (g Placed Placed) =>
@@ -106,7 +106,7 @@ instance {-# overlappable #-} --Show (g NodeWrap NodeWrap) =>
 
 instance {-# overlaps #-}
    Resolvable l =>
-   Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Designator l NodeWrap NodeWrap) where
+   Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Designator l l NodeWrap NodeWrap) where
    traverse res (Compose (pos, Ambiguous designators)) = StateT $ \s@(scope, state)->
       case partitionEithers (NonEmpty.toList (validationToEither . resolveDesignator res scope state <$> designators))
       of (_, [x]) -> Success ((pos, x), s)
@@ -126,10 +126,10 @@ instance {-# overlaps #-}
     Deep.DownTraversable (Resolution l) (Abstract.Designator l l) NodeWrap Placed (Resolved l),
     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.Expression l l NodeWrap NodeWrap),
     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.Designator l l NodeWrap NodeWrap)) =>
-   Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Expression l NodeWrap NodeWrap) where
+   Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Expression l l NodeWrap NodeWrap) where
    traverse res expressions = StateT $ \s@(scope, state)->
-      let resolveExpression :: Expression l NodeWrap NodeWrap
-                            -> Validation (NonEmpty (Error l)) (Expression l NodeWrap NodeWrap, ResolutionState)
+      let resolveExpression :: Expression l l NodeWrap NodeWrap
+                            -> Validation (NonEmpty (Error l)) (Expression l l NodeWrap NodeWrap, ResolutionState)
           resolveExpression e@(Read designators) =
              case evalStateT (Shallow.traverse res designators) s
              of Failure errors -> Failure errors
@@ -168,7 +168,7 @@ instance {-# overlaps #-}
                         (Abstract.FormalParameters l l NodeWrap NodeWrap),
     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
                         (Abstract.ConstExpression l l NodeWrap NodeWrap)) =>
-   Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Declaration l NodeWrap NodeWrap) where
+   Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Declaration l l NodeWrap NodeWrap) where
    traverse res (Compose (pos, Ambiguous (proc@(ProcedureDeclaration heading body) :| []))) =
       do s@(scope, state) <- get
          let Success (headingScope, _) = execStateT (Shallow.traverse res heading) s
@@ -197,7 +197,7 @@ instance {-# overlaps #-}
     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.Type l l NodeWrap NodeWrap),
     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.FormalParameters l l NodeWrap NodeWrap),
     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.ConstExpression l l NodeWrap NodeWrap)) =>
-   Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (ProcedureHeading l NodeWrap NodeWrap) where
+   Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (ProcedureHeading l l NodeWrap NodeWrap) where
    traverse res (Compose (pos, Ambiguous (proc@(ProcedureHeading _ _ parameters) :| []))) =
       StateT $ \s@(scope, state)->
          let innerScope = parameterScope `Map.union` scope
@@ -230,7 +230,7 @@ instance {-# overlaps #-}
     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.Type l l NodeWrap NodeWrap),
     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.FormalParameters l l NodeWrap NodeWrap),
     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.ConstExpression l l NodeWrap NodeWrap)) =>
-   Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Block l NodeWrap NodeWrap) where
+   Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Block l l NodeWrap NodeWrap) where
    traverse res (Compose (pos, Ambiguous (body@(Block declarations statements) :| []))) =
      StateT $ \(scope, state)-> Success ((pos, body), (localScope res "" declarations scope, state))
    traverse _ b = StateT (const $ Failure $ pure AmbiguousParses)
@@ -238,10 +238,10 @@ instance {-# overlaps #-}
 instance {-# overlaps #-}
     (Deep.DownTraversable (Resolution l) (Abstract.Designator l l) NodeWrap Placed (Resolved l),
      Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.Designator l l NodeWrap NodeWrap)) =>
-    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Statement l NodeWrap NodeWrap) where
+    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Statement l l NodeWrap NodeWrap) where
    traverse res statements = StateT $ \s@(scope, state)->
-      let resolveStatement :: Statement l NodeWrap NodeWrap
-                            -> Validation (NonEmpty (Error l)) (Statement l NodeWrap NodeWrap, ResolutionState)
+      let resolveStatement :: Statement l l NodeWrap NodeWrap
+                            -> Validation (NonEmpty (Error l)) (Statement l l NodeWrap NodeWrap, ResolutionState)
           resolveStatement p@(ProcedureCall procedures parameters) =
              case evalStateT (Shallow.traverse res procedures) s
              of Failure errors -> Failure errors
@@ -259,10 +259,10 @@ traverseResolveDefault Resolution{} (Compose (pos, Ambiguous (x :| []))) = State
 traverseResolveDefault Resolution{} _ = StateT (const $ Failure $ pure AmbiguousParses)
 
 class Resolvable l where
-   resolveDesignator :: Resolution l -> Scope l -> ResolutionState -> Designator l NodeWrap NodeWrap
-                     -> Validation (NonEmpty (Error l)) (Designator l NodeWrap NodeWrap)
-   resolveRecord :: Resolution l -> Scope l -> ResolutionState -> Designator l NodeWrap NodeWrap
-                 -> Validation (NonEmpty (Error l)) (Designator l NodeWrap NodeWrap)
+   resolveDesignator :: Resolution l -> Scope l -> ResolutionState -> Designator l l NodeWrap NodeWrap
+                     -> Validation (NonEmpty (Error l)) (Designator l l NodeWrap NodeWrap)
+   resolveRecord :: Resolution l -> Scope l -> ResolutionState -> Designator l l NodeWrap NodeWrap
+                 -> Validation (NonEmpty (Error l)) (Designator l l NodeWrap NodeWrap)
 
 instance Resolvable Language where
    resolveDesignator res scope state (Variable q) =
@@ -335,15 +335,15 @@ resolveModules :: forall l. (BindableDeclaration l, CoFormalParameters l, Abstra
                                                  (Abstract.FormalParameters l l NodeWrap NodeWrap),
                              Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
                                                  (Abstract.ConstExpression l l NodeWrap NodeWrap)) =>
-                  Predefined l -> Map Ident (Module l NodeWrap NodeWrap)
-                -> Validation (NonEmpty (Ident, NonEmpty (Error l))) (Map Ident (Module l Placed Placed))
+                  Predefined l -> Map Ident (Module l l NodeWrap NodeWrap)
+                -> Validation (NonEmpty (Ident, NonEmpty (Error l))) (Map Ident (Module l l Placed Placed))
 resolveModules predefinedScope modules = traverseWithKey extractErrors modules'
    where modules' = resolveModule predefinedScope modules' <$> modules
          extractErrors moduleKey (Failure e)   = Failure ((moduleKey, e) :| [])
          extractErrors _         (Success mod) = Success mod
 
 resolveModule :: forall l. (BindableDeclaration l,
-                            Deep.DownTraversable (Resolution l) (Declaration l) NodeWrap Placed (Resolved l),
+                            Deep.DownTraversable (Resolution l) (Declaration l l) NodeWrap Placed (Resolved l),
                             Deep.DownTraversable (Resolution l) (Abstract.Declaration l l) NodeWrap Placed (Resolved l),
                             Deep.DownTraversable (Resolution l) (Abstract.StatementSequence l l) NodeWrap Placed (Resolved l),
                             Deep.DownTraversable (Resolution l) (Abstract.Type l l) NodeWrap Placed (Resolved l),
@@ -359,8 +359,8 @@ resolveModule :: forall l. (BindableDeclaration l,
                                                 (Abstract.FormalParameters l l NodeWrap NodeWrap),
                             Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l)
                                                 (Abstract.ConstExpression l l NodeWrap NodeWrap)) =>
-                 Scope l -> Map Ident (Validation (NonEmpty (Error l)) (Module l Placed Placed))
-              -> Module l NodeWrap NodeWrap -> Validation (NonEmpty (Error l)) (Module l Placed Placed)
+                 Scope l -> Map Ident (Validation (NonEmpty (Error l)) (Module l l Placed Placed))
+              -> Module l l NodeWrap NodeWrap -> Validation (NonEmpty (Error l)) (Module l l Placed Placed)
 resolveModule predefined modules m@(Module moduleName imports declarations body) =
    evalStateT (Deep.traverseDown res m) (moduleGlobalScope, ModuleState)
    where res = Resolution moduleExports
@@ -370,7 +370,7 @@ resolveModule predefined modules m@(Module moduleName imports declarations body)
                                              Just (Just innerKey, _) -> innerKey
                                              Nothing -> mempty
                   clashingRenames _ _ = Failure (ClashingImports :| [])
-         resolveDeclaration :: NodeWrap (Declaration l NodeWrap NodeWrap) -> Resolved l (Declaration l Placed Placed)
+         resolveDeclaration :: NodeWrap (Declaration l l NodeWrap NodeWrap) -> Resolved l (Declaration l l Placed Placed)
          resolveDeclaration d = snd <$> (traverse (Deep.traverseDown res) d >>= Shallow.traverse res)
          moduleExports = foldMap exportsOfModule <$> importedModules
          moduleGlobalScope = localScope res moduleName declarations predefined
@@ -515,12 +515,12 @@ predefined2 = predefined <>
         (,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0 $ Abstract.typeReference $ Abstract.nonQualIdent "ARRAY"]
       Nothing)])
 
-exportsOfModule :: BindableDeclaration l => Module l Placed Placed -> Scope l
+exportsOfModule :: BindableDeclaration l => Module l l Placed Placed -> Scope l
 exportsOfModule = fmap Success . Map.mapMaybe isExported . globalsOfModule
    where isExported (PrivateOnly, _) = Nothing
          isExported (_, binding) = Just binding
 
-globalsOfModule :: BindableDeclaration l => Module l Placed Placed -> Map Ident (AccessMode, DeclarationRHS l Placed Placed)
+globalsOfModule :: BindableDeclaration l => Module l l Placed Placed -> Map Ident (AccessMode, DeclarationRHS l Placed Placed)
 globalsOfModule (Module name imports declarations _) =
    Map.fromList (concatMap (declarationBinding name . snd) declarations)
 
