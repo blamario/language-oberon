@@ -169,17 +169,17 @@ reportTypeErrorIn directory (moduleName, pos, err) =
       putStrLn ("Type error: " ++ TypeChecker.errorMessage err)
       Text.putStrLn (offsetContext contents pos 4)
 
-instance Pretty (Module Language Placed Placed) where
+instance Pretty (Module Language Language Placed Placed) where
    pretty m = pretty ((Identity . snd) Rank2.<$> m)
-instance Pretty (Module Language NodeWrap NodeWrap) where
+instance Pretty (Module Language Language NodeWrap NodeWrap) where
    pretty _ = error "Disambiguate before pretty-printing"
-instance Pretty (StatementSequence Language NodeWrap NodeWrap) where
+instance Pretty (StatementSequence Language Language NodeWrap NodeWrap) where
    pretty _ = error "Disambiguate before pretty-printing"
-instance Pretty (NodeWrap (Statement Language NodeWrap NodeWrap)) where
+instance Pretty (NodeWrap (Statement Language Language NodeWrap NodeWrap)) where
    pretty _ = error "Disambiguate before pretty-printing"
-instance Pretty (Statement Language NodeWrap NodeWrap) where
+instance Pretty (Statement Language Language NodeWrap NodeWrap) where
    pretty _ = error "Disambiguate before pretty-printing"
-instance Pretty (Expression Language NodeWrap NodeWrap) where
+instance Pretty (Expression Language Language NodeWrap NodeWrap) where
    pretty _ = error "Disambiguate before pretty-printing"
-instance Pretty (NodeWrap (Expression Language NodeWrap NodeWrap)) where
+instance Pretty (NodeWrap (Expression Language Language NodeWrap NodeWrap)) where
    pretty _ = error "Disambiguate before pretty-printing"
