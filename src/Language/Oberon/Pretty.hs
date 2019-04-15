@@ -3,7 +3,7 @@
 -- | This module exports the instances of the 'Pretty' type class necessary for printing of an Oberon abstract syntax
 -- tree. Note that the AST cannot be ambiguous to be pretty-printed, so it must be resolved after parsing.
 
-module Language.Oberon.Pretty () where
+module Language.Oberon.Pretty (Precedence(Precedence)) where
 
 import Data.Functor.Identity (Identity(..))
 import Data.List (intersperse)
