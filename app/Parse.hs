@@ -64,12 +64,12 @@ main = execParser opts >>= main'
     p :: Parser Opts
     p = Opts
         <$> mode
-        <*> (Oberon2 <$ switch (long "oberon2")
-             <|> Oberon1 <$ switch (long "oberon1")
-             <|> pure Oberon1)
+        <*> (flag' Oberon2 (long "oberon2")
+             <|> flag' Oberon1 (long "oberon1")
+             <|> pure Oberon2)
         <*> (option auto (long "index" <> help "Index of ambiguous parse" <> showDefault <> value 0 <> metavar "INT"))
         <*> (Pretty <$> option auto (long "pretty" <> help "Pretty-print output" <> metavar "WIDTH")
-             <|> Tree <$ switch (long "tree" <> help "Print the output as an abstract syntax tree")
+             <|> flag' Tree (long "tree" <> help "Print the output as an abstract syntax tree")
              <|> pure Plain)
         <*> optional (strOption (short 'i' <> long "include" <> metavar "DIRECTORY"
                                  <> help "Where to look for imports"))
