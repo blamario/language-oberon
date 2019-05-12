@@ -68,11 +68,11 @@ instance  (Pretty (Precedence (Abstract.Expression l l Identity Identity)),
           Pretty (Precedence (Expression λ l Identity Identity)) where
    pretty (Precedence 0 (Relation op left right)) = prettyPrec' 1 left <+> pretty op <+> prettyPrec' 1 right
    pretty (Precedence 0 (IsA left right)) = prettyPrec' 1 left <+> "IS" <+> pretty right
-   pretty (Precedence p (Positive e)) | p < 2 = "+" <> prettyPrec' 2 e
-   pretty (Precedence p (Negative e)) | p < 2 = "-" <> prettyPrec' 2 e
-   pretty (Precedence p (Add left right)) | p < 3 = prettyPrec' 3 left <> "+" <> prettyPrec' 3 right
-   pretty (Precedence p (Subtract left right)) | p < 3 = prettyPrec' 3 left <> "-" <> prettyPrec' 3 right
-   pretty (Precedence p (Or left right)) | p < 3 = prettyPrec' 3 left <+> "OR" <+> prettyPrec' 3 right
+   pretty (Precedence p (Add left right)) | p < 2 = prettyPrec' 2 left <> "+" <> prettyPrec' 2 right
+   pretty (Precedence p (Subtract left right)) | p < 2 = prettyPrec' 2 left <> "-" <> prettyPrec' 2 right
+   pretty (Precedence p (Or left right)) | p < 2 = prettyPrec' 2 left <+> "OR" <+> prettyPrec' 2 right
+   pretty (Precedence p (Positive e)) | p < 3 = "+" <> prettyPrec' 3 e
+   pretty (Precedence p (Negative e)) | p < 3 = "-" <> prettyPrec' 3 e
    pretty (Precedence p (Multiply left right)) | p < 4 = prettyPrec' 4 left <> "*" <> prettyPrec' 4 right
    pretty (Precedence p (Divide left right)) | p < 4 = prettyPrec' 4 left <> "/" <> prettyPrec' 4 right
    pretty (Precedence p (IntegerDivide left right)) | p < 4 = prettyPrec' 4 left <+> "DIV" <+> prettyPrec' 4 right
