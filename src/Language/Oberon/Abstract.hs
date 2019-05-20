@@ -92,6 +92,7 @@ class Wirthy l where
    real :: Text -> Expression l l' f' f
    relation :: RelOp -> f (Expression l' l' f' f') -> f (Expression l' l' f' f') -> Expression l l' f' f
    string :: Text -> Expression l l' f' f
+   charCode :: Int -> Expression l l' f' f
 
    element :: f (Expression l' l' f' f') -> Element l l' f' f
    range :: f (Expression l' l' f' f') -> f (Expression l' l' f' f') -> Element l l' f' f
@@ -137,8 +138,6 @@ class Wirthy l => Oberon l where
    withStatement :: f (WithAlternative l' l' f' f') -> Statement l l' f' f
    withAlternative :: QualIdent l' -> QualIdent l' -> f (StatementSequence l' l' f' f') -> WithAlternative l l' f' f
 
-   charCode :: Int -> Expression l l' f' f
-   charConstant :: Char -> Expression l l' f' f
    is :: f (Expression l' l' f' f') -> QualIdent l' -> Expression l l' f' f
    set :: [f (Element l' l' f' f')] -> Expression l l' f' f
 

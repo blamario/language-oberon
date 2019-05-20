@@ -97,6 +97,7 @@ instance Abstract.Wirthy Language where
    real = Real
    relation = Relation
    string = String
+   charCode = CharCode
 
    element = Element
    range = Range
@@ -150,8 +151,8 @@ instance Abstract.CoWirthy Language where
    coExpression (And left right) = Just (Abstract.and left right)
    coExpression (Integer n) = Just (Abstract.integer n)
    coExpression (Real r) = Just (Abstract.real r)
-   coExpression (CharConstant c) = Nothing
    coExpression (String s) = Just (Abstract.string s)
+   coExpression (CharCode c) = Just (Abstract.charCode c)
    coExpression Nil = Just Abstract.nil
    coExpression (Set elements) = Nothing
    coExpression (Read var) = Just (Abstract.read var)
@@ -186,8 +187,6 @@ instance Abstract.Oberon Language where
    forwardDeclaration = ForwardDeclaration
    withStatement alt = With (alt :| []) Nothing
    withAlternative = WithAlternative
-   charCode = CharCode
-   charConstant = CharConstant
    is = IsA
    set = Set
    typeGuard = TypeGuard
@@ -251,7 +250,6 @@ data Expression λ l f' f = Relation RelOp (f (Abstract.Expression l l f' f')) (
                          | And (f (Abstract.Expression l l f' f')) (f (Abstract.Expression l l f' f'))
                          | Integer Text
                          | Real Text
-                         | CharConstant Char
                          | CharCode Int
                          | String Text
                          | Nil 

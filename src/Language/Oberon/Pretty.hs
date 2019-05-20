@@ -80,8 +80,6 @@ instance  (Pretty (Precedence (Abstract.Expression l l Identity Identity)),
    pretty (Precedence p (And left right)) | p < 4 = prettyPrec' 4 left <+> "&" <+> prettyPrec' 4 right
    pretty (Precedence _ (Integer n)) = pretty n
    pretty (Precedence _ (Real r)) = pretty r
-   pretty (Precedence _ (CharConstant c@'"')) = squotes (pretty c)
-   pretty (Precedence _ (CharConstant c)) = dquotes (pretty c)
    pretty (Precedence _ (CharCode c)) = "0" <> pretty (showHex c "") <> "X"
    pretty (Precedence _ (String s))
       | Text.any (== '"') s = squotes (pretty s)

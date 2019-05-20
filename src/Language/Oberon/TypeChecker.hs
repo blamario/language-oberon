@@ -784,10 +784,6 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
       (Synthesized SynTCExp{expressionErrors= mempty,
                             inferredType= NominalType (Abstract.nonQualIdent "REAL") Nothing},
        AST.Real x)
-   attribution TypeCheck self (Inherited inheritance, AST.CharConstant x) =
-      (Synthesized SynTCExp{expressionErrors= mempty,
-                            inferredType= NominalType (Abstract.nonQualIdent "CHAR") Nothing},
-       AST.CharConstant x)
    attribution TypeCheck self (Inherited inheritance, AST.CharCode x) =
       (Synthesized SynTCExp{expressionErrors= mempty,
                             inferredType= NominalType (Abstract.nonQualIdent "CHAR") Nothing},
