@@ -355,8 +355,7 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
                             pointerTargets= mempty},
        AST.VariableDeclaration names (Inherited $ fst inheritance))
    attribution TypeCheck (pos, AST.ProcedureDeclaration _heading _body)
-               (Inherited inheritance,
-                AST.ProcedureDeclaration heading body) =
+               (Inherited inheritance, AST.ProcedureDeclaration heading body) =
       (Synthesized SynTCMod{moduleErrors= headingErrors (syn heading) <> errors (syn body),
                             moduleEnv= outsideEnv (syn heading),
                             pointerTargets= mempty},
@@ -778,7 +777,7 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
        AST.And (Inherited inheritance) (Inherited inheritance))
    attribution TypeCheck (pos, AST.Integer x) (Inherited inheritance, _) =
       (Synthesized SynTCExp{expressionErrors= mempty,
-                            inferredType= IntegerType (read $ Text.unpack x)},
+                            inferredType= IntegerType $ fromIntegral x},
        AST.Integer x)
    attribution TypeCheck self (Inherited inheritance, AST.Real x) =
       (Synthesized SynTCExp{expressionErrors= mempty,

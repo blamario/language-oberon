@@ -84,12 +84,12 @@ class Wirthy l where
    and, or :: f (Expression l' l' f' f') -> f (Expression l' l' f' f') -> Expression l l' f' f
    divide, integerDivide, modulo, multiply :: f (Expression l' l' f' f') -> f (Expression l' l' f' f') -> Expression l l' f' f
    functionCall :: f (Designator l' l' f' f') -> [f (Expression l' l' f' f')] -> Expression l l' f' f
-   integer :: Text -> Expression l l' f' f
+   integer :: Integer -> Expression l l' f' f
    negative, positive :: f (Expression l' l' f' f') -> Expression l l' f' f
    nil :: Expression l l' f' f
    not :: f (Expression l' l' f' f') -> Expression l l' f' f
    read :: f (Designator l' l' f' f') -> Expression l l' f' f
-   real :: Text -> Expression l l' f' f
+   real :: Double -> Expression l l' f' f
    relation :: RelOp -> f (Expression l' l' f' f') -> f (Expression l' l' f' f') -> Expression l l' f' f
    string :: Text -> Expression l l' f' f
    charCode :: Int -> Expression l l' f' f

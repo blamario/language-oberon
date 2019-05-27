@@ -159,7 +159,7 @@ instance Abstract.CoWirthy Language where
    coExpression (FunctionCall function parameters) = Just (Abstract.functionCall function parameters)
    coExpression (Not e) = Just (Abstract.not e)
    
---   coDesignator (Variable q) = Just (Abstract.variable q)
+   coDesignator (Variable q) = Just (Abstract.variable q)
    coDesignator (Field record name) = Just (Abstract.field record name)
    coDesignator (Index array indexes) = Just (Abstract.index array indexes)
    coDesignator (TypeGuard scrutinee typeName) = Nothing
@@ -248,8 +248,8 @@ data Expression λ l f' f = Relation RelOp (f (Abstract.Expression l l f' f')) (
                          | IntegerDivide (f (Abstract.Expression l l f' f')) (f (Abstract.Expression l l f' f'))
                          | Modulo (f (Abstract.Expression l l f' f')) (f (Abstract.Expression l l f' f'))
                          | And (f (Abstract.Expression l l f' f')) (f (Abstract.Expression l l f' f'))
-                         | Integer Text
-                         | Real Text
+                         | Integer Integer
+                         | Real Double
                          | CharCode Int
                          | String Text
                          | Nil 

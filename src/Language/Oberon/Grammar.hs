@@ -12,7 +12,7 @@ import Data.Char
 import Data.Functor.Compose (Compose(..))
 import Data.List.NonEmpty (NonEmpty((:|)), fromList, toList)
 import Data.Monoid ((<>), Endo(Endo, appEndo))
-import Numeric (readHex)
+import Numeric (readDec, readHex, readFloat)
 import Data.Text (Text, unpack)
 import Text.Grampa
 import Text.Grampa.ContextFree.LeftRecursive (Parser)
@@ -233,12 +233,13 @@ grammar OberonGrammar{..} = OberonGrammar{
                            <|> (Abstract.not <$ operator "~" <*> factor :: Parser (OberonGrammar l NodeWrap) Text (Abstract.Expression l l NodeWrap NodeWrap)))
             <|> parens expression,
    number  =  integer <|> real,
-   integer = Abstract.integer 
-             <$> lexicalToken (digit <> (takeCharsWhile isDigit <|> takeCharsWhile isHexDigit <> string "H")),
+   integer = Abstract.integer . fst . head
+             <$> lexicalToken (readDec . unpack <$> takeCharsWhile1 isDigit
+                               <|> readHex . unpack <$> (digit <> takeCharsWhile isHexDigit <* string "H")),
    hexDigit = satisfyCharInput isHexDigit,
-   real = Abstract.real <$> lexicalToken (digit <> takeCharsWhile isDigit <> string "."
-                                          <> takeCharsWhile isDigit <> moptional scaleFactor),
-   scaleFactor = (string "E" <|> string "D") <> moptional (string "+" <|> string "-") <> digit <> takeCharsWhile isDigit,
+   real = Abstract.real . fst . head . readFloat . unpack
+          <$> lexicalToken (takeCharsWhile1 isDigit <> string "." <> takeCharsWhile isDigit <> moptional scaleFactor),
+   scaleFactor = (string "E" <|> "E" <$ string "D") <> moptional (string "+" <|> string "-") <> takeCharsWhile1 isDigit,
    charConstant = lexicalToken (Abstract.charCode . fst . head . readHex . unpack
                                 <$> (digit <> takeCharsWhile isHexDigit <* string "X")),
    string_prod = lexicalToken (char '"' *> takeWhile (/= "\"") <* char '"'),
