@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, KindSignatures, PolyKinds, TypeFamilies, TypeFamilyDependencies #-}
+{-# LANGUAGE DeriveDataTypeable, KindSignatures, PolyKinds, RankNTypes, TypeFamilies, TypeFamilyDependencies #-}
 {-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 
 -- | Oberon Finally Tagless Abstract Syntax Tree definitions
@@ -86,7 +86,7 @@ class Wirthy l where
    functionCall :: f (Designator l' l' f' f') -> [f (Expression l' l' f' f')] -> Expression l l' f' f
    integer :: Integer -> Expression l l' f' f
    negative, positive :: f (Expression l' l' f' f') -> Expression l l' f' f
-   nil :: Expression l l' f' f
+   nil, false, true :: Wirthy l' => (forall a. a -> f a) -> Expression l l' f' f
    not :: f (Expression l' l' f' f') -> Expression l l' f' f
    read :: f (Designator l' l' f' f') -> Expression l l' f' f
    real :: Double -> Expression l l' f' f
@@ -111,13 +111,15 @@ class CoWirthy l where
    coDeclaration :: (Wirthy (l' :: *), Traversable f, Traversable f') => Declaration l l'' f' f -> Maybe (Declaration l' l'' f' f)
    coType        :: (Wirthy (l' :: *), Traversable f, Traversable f') => Type l l'' f' f        -> Maybe (Type l' l'' f' f)
    coStatement   :: (Wirthy (l' :: *), Traversable f, Traversable f') => Statement l l'' f' f   -> Maybe (Statement l' l'' f' f)
-   coExpression  :: (Wirthy (l' :: *), Traversable f, Traversable f') => Expression l l'' f' f  -> Maybe (Expression l' l'' f' f)
+   coExpression  :: (Wirthy (l' :: *), Wirthy (l'' :: *), Traversable f, Traversable f')
+                 => (forall a. a -> f a) -> Expression l l'' f' f  -> Maybe (Expression l' l'' f' f)
    coDesignator  :: (Wirthy (l' :: *), Traversable f, Traversable f') => Designator l l'' f' f  -> Maybe (Designator l' l'' f' f)
 
 class Wirthy l => Nameable l where
    getProcedureName :: Nameable l' => ProcedureHeading l l' f' f -> Ident
    getIdentDefName :: IdentDef l -> Ident
    getNonQualIdentName :: QualIdent l -> Maybe Ident
+   toBool :: (Traversable f, Traversable f', CoWirthy l', Nameable l') => Expression l l' f' f -> Maybe Bool
 
 class Wirthy l => Oberon l where
    type WithAlternative l = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l

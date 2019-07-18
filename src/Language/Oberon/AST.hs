@@ -1,5 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances, MultiParamTypeClasses, UndecidableInstances,
-             StandaloneDeriving, TemplateHaskell, TypeFamilies #-}
+             OverloadedStrings, StandaloneDeriving, TemplateHaskell, TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 
 -- | Oberon Abstract Syntax Tree definitions
@@ -80,24 +80,26 @@ instance Abstract.Wirthy Language where
 
    -- Expression
    add = Add
-   subtract = Subtract
    and = And
-   or = Or
+   charCode = CharCode
    divide = Divide
+   false wrap = Read (wrap $ Abstract.variable $ Abstract.nonQualIdent "FALSE")
+   functionCall = FunctionCall
+   integer = Integer
    integerDivide = IntegerDivide
    modulo = Modulo
    multiply = Multiply
-   functionCall = FunctionCall
-   integer = Integer
    negative = Negative
-   positive = Positive
-   nil = Nil
+   nil = const Nil
    not = Not
+   or = Or
+   positive = Positive
    read = Read
    real = Real
    relation = Relation
    string = String
-   charCode = CharCode
+   subtract = Subtract
+   true wrap = Read (wrap $ Abstract.variable $ Abstract.nonQualIdent "TRUE")
 
    element = Element
    range = Range
@@ -137,27 +139,27 @@ instance Abstract.CoWirthy Language where
    coStatement Exit = Just Abstract.exitStatement
    coStatement (Return result) = Just (Abstract.returnStatement result)
    
-   coExpression (Relation op left right) = Just (Abstract.relation op left right)
-   coExpression (IsA left right) = Nothing
-   coExpression (Positive e) = Just (Abstract.positive e)
-   coExpression (Negative e) = Just (Abstract.negative e)
-   coExpression (Add left right) = Just (Abstract.add left right)
-   coExpression (Subtract left right) = Just (Abstract.subtract left right)
-   coExpression (Or left right) = Just (Abstract.or left right)
-   coExpression (Multiply left right) = Just (Abstract.multiply left right)
-   coExpression (Divide left right) = Just (Abstract.divide left right)
-   coExpression (IntegerDivide left right) = Just (Abstract.integerDivide left right)
-   coExpression (Modulo left right) = Just (Abstract.modulo left right)
-   coExpression (And left right) = Just (Abstract.and left right)
-   coExpression (Integer n) = Just (Abstract.integer n)
-   coExpression (Real r) = Just (Abstract.real r)
-   coExpression (String s) = Just (Abstract.string s)
-   coExpression (CharCode c) = Just (Abstract.charCode c)
-   coExpression Nil = Just Abstract.nil
-   coExpression (Set elements) = Nothing
-   coExpression (Read var) = Just (Abstract.read var)
-   coExpression (FunctionCall function parameters) = Just (Abstract.functionCall function parameters)
-   coExpression (Not e) = Just (Abstract.not e)
+   coExpression wrap (Relation op left right) = Just (Abstract.relation op left right)
+   coExpression wrap (IsA left right) = Nothing
+   coExpression wrap (Positive e) = Just (Abstract.positive e)
+   coExpression wrap (Negative e) = Just (Abstract.negative e)
+   coExpression wrap (Add left right) = Just (Abstract.add left right)
+   coExpression wrap (Subtract left right) = Just (Abstract.subtract left right)
+   coExpression wrap (Or left right) = Just (Abstract.or left right)
+   coExpression wrap (Multiply left right) = Just (Abstract.multiply left right)
+   coExpression wrap (Divide left right) = Just (Abstract.divide left right)
+   coExpression wrap (IntegerDivide left right) = Just (Abstract.integerDivide left right)
+   coExpression wrap (Modulo left right) = Just (Abstract.modulo left right)
+   coExpression wrap (And left right) = Just (Abstract.and left right)
+   coExpression wrap (Integer n) = Just (Abstract.integer n)
+   coExpression wrap (Real r) = Just (Abstract.real r)
+   coExpression wrap (String s) = Just (Abstract.string s)
+   coExpression wrap (CharCode c) = Just (Abstract.charCode c)
+   coExpression wrap Nil = Just (Abstract.nil wrap)
+   coExpression wrap (Set elements) = Nothing
+   coExpression wrap (Read var) = Just (Abstract.read var)
+   coExpression wrap (FunctionCall function parameters) = Just (Abstract.functionCall function parameters)
+   coExpression wrap (Not e) = Just (Abstract.not e)
    
    coDesignator (Variable q) = Just (Abstract.variable q)
    coDesignator (Field record name) = Just (Abstract.field record name)
@@ -171,6 +173,15 @@ instance Abstract.Nameable Language where
    getIdentDefName (IdentDef name _) = name
    getNonQualIdentName (NonQualIdent name) = Just name
    getNonQualIdentName _ = Nothing
+
+   toBool (Read des)
+      | any (isNamedVar "TRUE" . Abstract.coDesignator) des = Just True
+      | any (isNamedVar "FALSE" . Abstract.coDesignator) des = Just False
+   toBool _ = Nothing
+
+isNamedVar :: Abstract.Nameable l => Ident -> Maybe (Designator Language l f f) -> Bool
+isNamedVar name (Just (Variable q)) | Abstract.getNonQualIdentName q == Just name = True
+isNamedVar _ _ = False
 
 instance Abstract.Oberon Language where
    type WithAlternative Language = WithAlternative Language

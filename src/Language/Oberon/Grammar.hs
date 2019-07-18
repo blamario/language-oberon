@@ -226,7 +226,7 @@ grammar OberonGrammar{..} = OberonGrammar{
    factor = wrapAmbiguous (number
                            <|> charConstant
                            <|> Abstract.string <$> string_prod
-                           <|> Abstract.nil <$ keyword "NIL"
+                           <|> (\pos-> Abstract.nil (Compose . (,) pos . pure)) <$> (getSourcePos <* keyword "NIL")
                            <|> set
                            <|> Abstract.read <$> designator
                            <|> Abstract.functionCall <$> designator <*> actualParameters
