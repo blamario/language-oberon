@@ -23,6 +23,7 @@ class Wirthy l where
    type Statement l   = (s :: * -> (* -> *) -> (* -> *) -> *) | s -> l
    type Expression l  = (e :: * -> (* -> *) -> (* -> *) -> *) | e -> l
    type Designator l  = (d :: * -> (* -> *) -> (* -> *) -> *) | d -> l
+   type Value l       = (v :: * -> (* -> *) -> (* -> *) -> *) | v -> l
 
    type FieldList l         = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
    type ProcedureHeading l  = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
@@ -84,18 +85,21 @@ class Wirthy l where
    and, or :: f (Expression l' l' f' f') -> f (Expression l' l' f' f') -> Expression l l' f' f
    divide, integerDivide, modulo, multiply :: f (Expression l' l' f' f') -> f (Expression l' l' f' f') -> Expression l l' f' f
    functionCall :: f (Designator l' l' f' f') -> [f (Expression l' l' f' f')] -> Expression l l' f' f
-   integer :: Integer -> Expression l l' f' f
+   literal :: f (Value l' l' f' f') -> Expression l l' f' f
    negative, positive :: f (Expression l' l' f' f') -> Expression l l' f' f
-   nil, false, true :: Wirthy l' => (forall a. a -> f a) -> Expression l l' f' f
    not :: f (Expression l' l' f' f') -> Expression l l' f' f
    read :: f (Designator l' l' f' f') -> Expression l l' f' f
-   real :: Double -> Expression l l' f' f
    relation :: RelOp -> f (Expression l' l' f' f') -> f (Expression l' l' f' f') -> Expression l l' f' f
-   string :: Text -> Expression l l' f' f
-   charCode :: Int -> Expression l l' f' f
 
    element :: f (Expression l' l' f' f') -> Element l l' f' f
    range :: f (Expression l' l' f' f') -> f (Expression l' l' f' f') -> Element l l' f' f
+
+   -- Value
+   integer :: Integer -> Value l l' f' f
+   nil, false, true :: Value l l' f' f
+   real :: Double -> Value l l' f' f
+   string :: Text -> Value l l' f' f
+   charCode :: Int -> Value l l' f' f
 
    -- Designator
    variable :: QualIdent l' -> Designator l l' f' f
@@ -111,9 +115,9 @@ class CoWirthy l where
    coDeclaration :: (Wirthy (l' :: *), Traversable f, Traversable f') => Declaration l l'' f' f -> Maybe (Declaration l' l'' f' f)
    coType        :: (Wirthy (l' :: *), Traversable f, Traversable f') => Type l l'' f' f        -> Maybe (Type l' l'' f' f)
    coStatement   :: (Wirthy (l' :: *), Traversable f, Traversable f') => Statement l l'' f' f   -> Maybe (Statement l' l'' f' f)
-   coExpression  :: (Wirthy (l' :: *), Wirthy (l'' :: *), Traversable f, Traversable f')
-                 => (forall a. a -> f a) -> Expression l l'' f' f  -> Maybe (Expression l' l'' f' f)
+   coExpression  :: (Wirthy (l' :: *), Traversable f, Traversable f') => Expression l l'' f' f  -> Maybe (Expression l' l'' f' f)
    coDesignator  :: (Wirthy (l' :: *), Traversable f, Traversable f') => Designator l l'' f' f  -> Maybe (Designator l' l'' f' f)
+   coValue       :: (Wirthy (l' :: *), Traversable f, Traversable f') => Value l l'' f' f  -> Maybe (Value l' l'' f' f)
 
 class Wirthy l => Nameable l where
    getProcedureName :: Nameable l' => ProcedureHeading l l' f' f -> Ident

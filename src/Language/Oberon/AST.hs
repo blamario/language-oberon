@@ -26,6 +26,7 @@ instance Abstract.Wirthy Language where
    type Statement Language = Statement Language
    type Expression Language = Expression Language
    type Designator Language = Designator Language
+   type Value Language = Value Language
 
    type Import Language = Import Language
    type FieldList Language = FieldList Language
@@ -81,28 +82,31 @@ instance Abstract.Wirthy Language where
    -- Expression
    add = Add
    and = And
-   charCode = CharCode
    divide = Divide
-   false wrap = Read (wrap $ Abstract.variable $ Abstract.nonQualIdent "FALSE")
    functionCall = FunctionCall
-   integer = Integer
    integerDivide = IntegerDivide
+   literal = Literal
    modulo = Modulo
    multiply = Multiply
    negative = Negative
-   nil = const Nil
    not = Not
    or = Or
    positive = Positive
    read = Read
-   real = Real
    relation = Relation
-   string = String
    subtract = Subtract
-   true wrap = Read (wrap $ Abstract.variable $ Abstract.nonQualIdent "TRUE")
 
    element = Element
    range = Range
+
+   -- Value
+   charCode = CharCode
+   false = Boolean False
+   integer = Integer
+   nil = Nil
+   real = Real
+   string = String
+   true = Boolean True
 
    -- Designator
    variable = Variable
@@ -139,27 +143,30 @@ instance Abstract.CoWirthy Language where
    coStatement Exit = Just Abstract.exitStatement
    coStatement (Return result) = Just (Abstract.returnStatement result)
    
-   coExpression wrap (Relation op left right) = Just (Abstract.relation op left right)
-   coExpression wrap (IsA left right) = Nothing
-   coExpression wrap (Positive e) = Just (Abstract.positive e)
-   coExpression wrap (Negative e) = Just (Abstract.negative e)
-   coExpression wrap (Add left right) = Just (Abstract.add left right)
-   coExpression wrap (Subtract left right) = Just (Abstract.subtract left right)
-   coExpression wrap (Or left right) = Just (Abstract.or left right)
-   coExpression wrap (Multiply left right) = Just (Abstract.multiply left right)
-   coExpression wrap (Divide left right) = Just (Abstract.divide left right)
-   coExpression wrap (IntegerDivide left right) = Just (Abstract.integerDivide left right)
-   coExpression wrap (Modulo left right) = Just (Abstract.modulo left right)
-   coExpression wrap (And left right) = Just (Abstract.and left right)
-   coExpression wrap (Integer n) = Just (Abstract.integer n)
-   coExpression wrap (Real r) = Just (Abstract.real r)
-   coExpression wrap (String s) = Just (Abstract.string s)
-   coExpression wrap (CharCode c) = Just (Abstract.charCode c)
-   coExpression wrap Nil = Just (Abstract.nil wrap)
-   coExpression wrap (Set elements) = Nothing
-   coExpression wrap (Read var) = Just (Abstract.read var)
-   coExpression wrap (FunctionCall function parameters) = Just (Abstract.functionCall function parameters)
-   coExpression wrap (Not e) = Just (Abstract.not e)
+   coExpression (Relation op left right) = Just (Abstract.relation op left right)
+   coExpression (IsA left right) = Nothing
+   coExpression (Positive e) = Just (Abstract.positive e)
+   coExpression (Negative e) = Just (Abstract.negative e)
+   coExpression (Add left right) = Just (Abstract.add left right)
+   coExpression (Subtract left right) = Just (Abstract.subtract left right)
+   coExpression (Or left right) = Just (Abstract.or left right)
+   coExpression (Multiply left right) = Just (Abstract.multiply left right)
+   coExpression (Divide left right) = Just (Abstract.divide left right)
+   coExpression (IntegerDivide left right) = Just (Abstract.integerDivide left right)
+   coExpression (Modulo left right) = Just (Abstract.modulo left right)
+   coExpression (And left right) = Just (Abstract.and left right)
+   coExpression (Set elements) = Nothing
+   coExpression (Read var) = Just (Abstract.read var)
+   coExpression (FunctionCall function parameters) = Just (Abstract.functionCall function parameters)
+   coExpression (Not e) = Just (Abstract.not e)
+
+   coValue Nil = Just Abstract.nil
+   coValue (Boolean False) = Just Abstract.false
+   coValue (Boolean True) = Just Abstract.true
+   coValue (Integer n) = Just (Abstract.integer n)
+   coValue (Real r) = Just (Abstract.real r)
+   coValue (String s) = Just (Abstract.string s)
+   coValue (CharCode c) = Just (Abstract.charCode c)
    
    coDesignator (Variable q) = Just (Abstract.variable q)
    coDesignator (Field record name) = Just (Abstract.field record name)
@@ -259,32 +266,41 @@ data Expression λ l f' f = Relation RelOp (f (Abstract.Expression l l f' f')) (
                          | IntegerDivide (f (Abstract.Expression l l f' f')) (f (Abstract.Expression l l f' f'))
                          | Modulo (f (Abstract.Expression l l f' f')) (f (Abstract.Expression l l f' f'))
                          | And (f (Abstract.Expression l l f' f')) (f (Abstract.Expression l l f' f'))
-                         | Integer Integer
-                         | Real Double
-                         | CharCode Int
-                         | String Text
-                         | Nil 
                          | Set [f (Abstract.Element l l f' f')]
                          | Read (f (Abstract.Designator l l f' f'))
                          | FunctionCall (f (Abstract.Designator l l f' f')) [f (Abstract.Expression l l f' f')]
                          | Not (f (Abstract.Expression l l f' f'))
+                         | Literal (f (Abstract.Value l l f' f'))
 
-deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f', Data (Abstract.QualIdent l),
+deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f',
+                   Data (Abstract.QualIdent l), Data (f (Abstract.Value l l f' f')),
                    Data (f (Abstract.Designator l l f' f')), Data (f (Abstract.Element l l f' f')),
                    Data (f (Abstract.Expression l l f' f'))) =>
                   Data (Expression λ l f' f)
-deriving instance (Show (Abstract.QualIdent l), Show (f (Abstract.Designator l l f' f')),
+deriving instance (Show (Abstract.QualIdent l), Show (f (Abstract.Value l l f' f')), Show (f (Abstract.Designator l l f' f')),
                    Show (f (Abstract.Element l l f' f')), Show (f (Abstract.Expression l l f' f'))) =>
                   Show (Expression λ l f' f)
-deriving instance (Eq (Abstract.QualIdent l), Eq (f (Abstract.Designator l l f' f')), Eq (f (Abstract.Element l l f' f')),
-                  Eq (f (Abstract.Expression l l f' f'))) => Eq (Expression λ l f' f)
+deriving instance (Eq (Abstract.QualIdent l), Eq (f (Abstract.Value l l f' f')),
+                   Eq (f (Abstract.Designator l l f' f')), Eq (f (Abstract.Element l l f' f')),
+                   Eq (f (Abstract.Expression l l f' f'))) => Eq (Expression λ l f' f)
 
 data Element λ l f' f = Element (f (Abstract.Expression l l f' f'))
                       | Range (f (Abstract.Expression l l f' f')) (f (Abstract.Expression l l f' f'))
 
-deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f', Data (f (Abstract.Expression l l f' f'))) => Data (Element λ l f' f)
+deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f', Data (f (Abstract.Expression l l f' f'))) =>
+                  Data (Element λ l f' f)
 deriving instance Show (f (Abstract.Expression l l f' f')) => Show (Element λ l f' f)
 deriving instance Eq (f (Abstract.Expression l l f' f')) => Eq (Element λ l f' f)
+
+data Value λ l (f' :: * -> *) (f :: * -> *) = Boolean Bool
+                                            | CharCode Int
+                                            | Integer Integer
+                                            | Nil
+                                            | Real Double
+                                            | String Text
+                                            deriving (Eq, Show)
+
+deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f') => Data (Value λ l f' f)
 
 data Designator λ l f' f = Variable (Abstract.QualIdent l)
                          | Field (f (Abstract.Designator l l f' f')) Ident 
@@ -415,8 +431,14 @@ deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f', Data (f (Ab
                   Data (CaseLabels λ l f' f)
 deriving instance Show (f (Abstract.ConstExpression l l f' f')) => Show (CaseLabels λ l f' f)
 
+$(mconcat <$> mapM Rank2.TH.unsafeDeriveApply
+  [''Declaration, ''Type, ''Expression, ''Value,
+   ''Element, ''Designator, ''FieldList,
+   ''ProcedureHeading, ''FormalParameters, ''FPSection, ''Block,
+   ''Statement, ''StatementSequence, ''WithAlternative, ''Case, ''CaseLabels])
+
 $(mconcat <$> mapM Transformation.Deep.TH.deriveAll
-  [''Module, ''Declaration, ''Type, ''Expression,
+  [''Module, ''Declaration, ''Type, ''Expression, ''Value,
    ''Element, ''Designator, ''FieldList,
    ''ProcedureHeading, ''FormalParameters, ''FPSection, ''Block,
    ''Statement, ''StatementSequence, ''WithAlternative, ''Case, ''CaseLabels])

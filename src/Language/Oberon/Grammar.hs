@@ -225,23 +225,25 @@ grammar OberonGrammar{..} = OberonGrammar{
    term = factor <**> (appEndo <$> concatMany (Endo <$> (flip . applyBinOp <$> mulOperator <*> factor))),
    factor = wrapAmbiguous (number
                            <|> charConstant
-                           <|> Abstract.string <$> string_prod
-                           <|> (\pos-> Abstract.nil (Compose . (,) pos . pure)) <$> (getSourcePos <* keyword "NIL")
+                           <|> Abstract.literal <$> wrap (Abstract.string <$> string_prod)
+                           <|> Abstract.literal <$> wrap (Abstract.nil <$ keyword "NIL")
                            <|> set
                            <|> Abstract.read <$> designator
                            <|> Abstract.functionCall <$> designator <*> actualParameters
                            <|> (Abstract.not <$ operator "~" <*> factor :: Parser (OberonGrammar l NodeWrap) Text (Abstract.Expression l l NodeWrap NodeWrap)))
             <|> parens expression,
    number  =  integer <|> real,
-   integer = Abstract.integer . fst . head
-             <$> lexicalToken (readDec . unpack <$> takeCharsWhile1 isDigit
-                               <|> readHex . unpack <$> (digit <> takeCharsWhile isHexDigit <* string "H")),
+   integer = Abstract.literal
+             <$> wrap (Abstract.integer . fst . head
+                       <$> lexicalToken (readDec . unpack <$> takeCharsWhile1 isDigit
+                                         <|> readHex . unpack <$> (digit <> takeCharsWhile isHexDigit <* string "H"))),
    hexDigit = satisfyCharInput isHexDigit,
-   real = Abstract.real . fst . head . readFloat . unpack
-          <$> lexicalToken (takeCharsWhile1 isDigit <> string "." <> takeCharsWhile isDigit <> moptional scaleFactor),
+   real = Abstract.literal
+             <$> wrap (Abstract.real . fst . head . readFloat . unpack
+                       <$> lexicalToken (takeCharsWhile1 isDigit <> string "." <> takeCharsWhile isDigit <> moptional scaleFactor)),
    scaleFactor = (string "E" <|> "E" <$ string "D") <> moptional (string "+" <|> string "-") <> takeCharsWhile1 isDigit,
-   charConstant = lexicalToken (Abstract.charCode . fst . head . readHex . unpack
-                                <$> (digit <> takeCharsWhile isHexDigit <* string "X")),
+   charConstant = Abstract.literal <$> wrap (lexicalToken (Abstract.charCode . fst . head . readHex . unpack
+                                                           <$> (digit <> takeCharsWhile isHexDigit <* string "X"))),
    string_prod = lexicalToken (char '"' *> takeWhile (/= "\"") <* char '"'),
    set = Abstract.set <$> braces (sepBy (wrap element) (delimiter ",")),
    element = Abstract.element <$> expression
@@ -250,7 +252,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                     Abstract.variable <$> qualident
                 <|> Abstract.field <$> designator <* delimiter "." <*> ident
                 <|> Abstract.index <$> designator <*> brackets expList
-                <|> (Abstract.typeGuard <$> designator <*> parens qualident :: Parser (OberonGrammar l NodeWrap) Text (Abstract.Designator l l NodeWrap NodeWrap))
+                <|> Abstract.typeGuard <$> designator <*> parens qualident
                 <|> Abstract.dereference <$> designator <* operator "^",
    expList = sepByNonEmpty expression (delimiter ","),
    actualParameters = parens (sepBy expression (delimiter ",")),

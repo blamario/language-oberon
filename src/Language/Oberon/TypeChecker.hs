@@ -224,6 +224,8 @@ type instance Atts (Inherited TypeCheck) (AST.Expression l l f' f) = InhTC l
 type instance Atts (Synthesized TypeCheck) (AST.Expression l l f' f) = SynTCExp l
 type instance Atts (Inherited TypeCheck) (AST.Element l l f' f) = InhTC l
 type instance Atts (Synthesized TypeCheck) (AST.Element l l f' f) = SynTCExp l
+type instance Atts (Inherited TypeCheck) (AST.Value l l f' f) = InhTC l
+type instance Atts (Synthesized TypeCheck) (AST.Value l l f' f) = SynTCExp l
 type instance Atts (Inherited TypeCheck) (AST.Designator l l f' f) = InhTC l
 type instance Atts (Synthesized TypeCheck) (AST.Designator l l f' f) = SynTCDes l
 type instance Atts (Inherited TypeCheck) (Deep.Product (AST.Expression l l) (AST.StatementSequence l l) f' f) = InhTC l
@@ -667,10 +669,12 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Inherited TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
           Atts (Inherited TypeCheck) (Abstract.Element l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
           Atts (Inherited TypeCheck) (Abstract.Designator l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
+          Atts (Inherited TypeCheck) (Abstract.Value l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
           Atts (Synthesized TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ SynTCExp l,
           Atts (Synthesized TypeCheck) (Abstract.Element l l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ SynTCExp l,
+          Atts (Synthesized TypeCheck) (Abstract.Value l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ SynTCExp l,
           Atts (Synthesized TypeCheck) (Abstract.Designator l l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ SynTCDes l) =>
          Attribution TypeCheck (AST.Expression l l)
@@ -775,26 +779,6 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
       (Synthesized SynTCExp{expressionErrors= binaryBooleanOperatorErrors inheritance pos (syn left) (syn right),
                             inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing},
        AST.And (Inherited inheritance) (Inherited inheritance))
-   attribution TypeCheck (pos, AST.Integer x) (Inherited inheritance, _) =
-      (Synthesized SynTCExp{expressionErrors= mempty,
-                            inferredType= IntegerType $ fromIntegral x},
-       AST.Integer x)
-   attribution TypeCheck self (Inherited inheritance, AST.Real x) =
-      (Synthesized SynTCExp{expressionErrors= mempty,
-                            inferredType= NominalType (Abstract.nonQualIdent "REAL") Nothing},
-       AST.Real x)
-   attribution TypeCheck self (Inherited inheritance, AST.CharCode x) =
-      (Synthesized SynTCExp{expressionErrors= mempty,
-                            inferredType= NominalType (Abstract.nonQualIdent "CHAR") Nothing},
-       AST.CharCode x)
-   attribution TypeCheck (pos, AST.String x) (Inherited inheritance, _) =
-      (Synthesized SynTCExp{expressionErrors= mempty,
-                            inferredType= StringType (Text.length x)},
-       AST.String x)
-   attribution TypeCheck self (Inherited inheritance, AST.Nil) =
-      (Synthesized SynTCExp{expressionErrors= mempty,
-                            inferredType= NilType},
-       AST.Nil)
    attribution TypeCheck self (Inherited inheritance, AST.Set elements) =
       (Synthesized SynTCExp{expressionErrors= mempty,
                             inferredType= NominalType (Abstract.nonQualIdent "SET") Nothing},
@@ -803,6 +787,10 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
       (Synthesized SynTCExp{expressionErrors= designatorErrors (syn designator),
                             inferredType= designatorType (syn designator)},
        AST.Read (Inherited inheritance))
+   attribution TypeCheck self (Inherited inheritance, AST.Literal value) =
+      (Synthesized SynTCExp{expressionErrors= expressionErrors (syn value),
+                            inferredType= inferredType (syn value)},
+       AST.Literal (Inherited inheritance))
    attribution TypeCheck (pos, AST.FunctionCall _designator parameters)
                (Inherited inheritance, AST.FunctionCall designator parameters') =
       (Synthesized SynTCExp{expressionErrors=
@@ -852,6 +840,32 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
       (Synthesized SynTCExp{expressionErrors= booleanExpressionErrors inheritance pos (syn expr),
                             inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing},
        AST.Not (Inherited inheritance))
+
+instance (Abstract.Wirthy l,
+          Atts (Inherited TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
+          Atts (Synthesized TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck))
+          ~ SynTCExp l) =>
+         Attribution TypeCheck (AST.Value l l) (Int, AST.Value l l (Semantics TypeCheck) (Semantics TypeCheck)) where
+   attribution TypeCheck (pos, AST.Integer x) (Inherited inheritance, _) =
+      (Synthesized SynTCExp{expressionErrors= mempty,
+                            inferredType= IntegerType $ fromIntegral x},
+       AST.Integer x)
+   attribution TypeCheck self (Inherited inheritance, AST.Real x) =
+      (Synthesized SynTCExp{expressionErrors= mempty,
+                            inferredType= NominalType (Abstract.nonQualIdent "REAL") Nothing},
+       AST.Real x)
+   attribution TypeCheck self (Inherited inheritance, AST.CharCode x) =
+      (Synthesized SynTCExp{expressionErrors= mempty,
+                            inferredType= NominalType (Abstract.nonQualIdent "CHAR") Nothing},
+       AST.CharCode x)
+   attribution TypeCheck (pos, AST.String x) (Inherited inheritance, _) =
+      (Synthesized SynTCExp{expressionErrors= mempty,
+                            inferredType= StringType (Text.length x)},
+       AST.String x)
+   attribution TypeCheck self (Inherited inheritance, AST.Nil) =
+      (Synthesized SynTCExp{expressionErrors= mempty,
+                            inferredType= NilType},
+       AST.Nil)
 
 instance (Abstract.Wirthy l, Abstract.Nameable l,
           Atts (Inherited TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
@@ -1233,10 +1247,12 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Inherited TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
           Atts (Inherited TypeCheck) (Abstract.Element l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
           Atts (Inherited TypeCheck) (Abstract.Designator l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
+          Atts (Inherited TypeCheck) (Abstract.Value l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
           Atts (Synthesized TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ SynTCExp l,
           Atts (Synthesized TypeCheck) (Abstract.Element l l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ SynTCExp l,
+          Atts (Synthesized TypeCheck) (Abstract.Value l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ SynTCExp l,
           Atts (Synthesized TypeCheck) (Abstract.Designator l l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ SynTCDes l) =>
          Shallow.Functor TypeCheck Placed (Semantics TypeCheck)
@@ -1258,6 +1274,13 @@ instance (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
           ~ SynTCDes l) =>
          Shallow.Functor TypeCheck Placed (Semantics TypeCheck)
                          (AST.Designator l l (Semantics TypeCheck) (Semantics TypeCheck)) where
+   (<$>) = AG.mapDefault id snd
+instance (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
+          Atts (Inherited TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
+          Atts (Synthesized TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck))
+          ~ SynTCExp l) =>
+         Shallow.Functor TypeCheck Placed (Semantics TypeCheck)
+                         (AST.Value l l (Semantics TypeCheck) (Semantics TypeCheck)) where
    (<$>) = AG.mapDefault id snd
 instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Inherited TypeCheck) (Abstract.Type l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
@@ -1364,9 +1387,3 @@ predefined2 = predefined <>
    Map.fromList (first Abstract.nonQualIdent <$>
                  [("ASSERT", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing),
                                                   (False, NominalType (Abstract.nonQualIdent "INTEGER") Nothing)] Nothing)])
-
-$(mconcat <$> mapM Rank2.TH.unsafeDeriveApply
-  [''AST.Declaration, ''AST.Type, ''AST.Expression,
-   ''AST.Element, ''AST.Designator, ''AST.FieldList,
-   ''AST.ProcedureHeading, ''AST.FormalParameters, ''AST.FPSection, ''AST.Block,
-   ''AST.Statement, ''AST.StatementSequence, ''AST.WithAlternative, ''AST.Case, ''AST.CaseLabels])

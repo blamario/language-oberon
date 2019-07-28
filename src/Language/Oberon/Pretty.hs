@@ -58,6 +58,7 @@ instance  (Pretty (Precedence (Abstract.Expression l l Identity Identity)),
            Pretty (Abstract.Expression l l Identity Identity),
            Pretty (Abstract.Element l l Identity Identity),
            Pretty (Abstract.Designator l l Identity Identity),
+           Pretty (Abstract.Value l l Identity Identity),
            Pretty (Abstract.QualIdent l)) => Pretty (Expression λ l Identity Identity) where
    pretty e = pretty (Precedence 0 e)
    
@@ -65,7 +66,8 @@ instance  (Pretty (Precedence (Abstract.Expression l l Identity Identity)),
            Pretty (Abstract.Expression l l Identity Identity),
            Pretty (Abstract.Element l l Identity Identity),
            Pretty (Abstract.Designator l l Identity Identity),
-           Pretty (Abstract.QualIdent l)) =>
+           Pretty (Abstract.QualIdent l),
+           Pretty (Abstract.Value l l Identity Identity)) =>
           Pretty (Precedence (Expression λ l Identity Identity)) where
    pretty (Precedence 0 (Relation op left right)) = prettyPrec' 1 left <+> pretty op <+> prettyPrec' 1 right
    pretty (Precedence 0 (IsA left right)) = prettyPrec' 1 left <+> "IS" <+> pretty right
@@ -79,17 +81,11 @@ instance  (Pretty (Precedence (Abstract.Expression l l Identity Identity)),
    pretty (Precedence p (IntegerDivide left right)) | p < 4 = prettyPrec' 4 left <+> "DIV" <+> prettyPrec' 4 right
    pretty (Precedence p (Modulo left right)) | p < 4 = prettyPrec' 4 left <+> "MOD" <+> prettyPrec' 4 right
    pretty (Precedence p (And left right)) | p < 4 = prettyPrec' 4 left <+> "&" <+> prettyPrec' 4 right
-   pretty (Precedence _ (Integer n)) = pretty n
-   pretty (Precedence _ (Real r)) = pretty (map toUpper $ show r)
-   pretty (Precedence _ (CharCode c)) = "0" <> pretty (showHex c "") <> "X"
-   pretty (Precedence _ (String s))
-      | Text.any (== '"') s = squotes (pretty s)
-      | otherwise = dquotes (pretty s)
-   pretty (Precedence _ Nil) = "NIL"
    pretty (Precedence _ (Set elements)) = braces (hsep $ punctuate comma $ pretty . runIdentity <$> elements)
    pretty (Precedence _ (Read (Identity var))) = pretty var
    pretty (Precedence _ (FunctionCall (Identity fun) parameters)) =
       pretty fun <> parens (hsep $ punctuate comma $ pretty . runIdentity <$> parameters)
+   pretty (Precedence _ (Literal (Identity val))) = pretty val
    pretty (Precedence p (Not e)) | p < 5 = "~" <> prettyPrec' 5 e
    pretty (Precedence _ e) = parens (pretty e)
 
@@ -107,6 +103,18 @@ instance Pretty RelOp where
 instance Pretty (Abstract.Expression l l Identity Identity) => Pretty (Element λ l Identity Identity) where
    pretty (Element e) = pretty e
    pretty (Range from to) = pretty from <+> ".." <+> pretty to
+
+instance Pretty (Value λ l Identity Identity) where
+   pretty (Boolean False) = "FALSE"
+   pretty (Boolean True) = "TRUE"
+   pretty (Integer n) = pretty n
+   pretty (Real r) = pretty (map toUpper $ show r)
+   pretty (CharCode c) = "0" <> pretty (showHex c "") <> "X"
+   pretty (String s)
+      | Text.any (== '"') s = squotes (pretty s)
+      | otherwise = dquotes (pretty s)
+   pretty Nil = "NIL"
+
 
 instance (Pretty (Abstract.QualIdent l), Pretty (Abstract.Designator l l Identity Identity),
           Pretty (Abstract.Expression l l Identity Identity)) => Pretty (Designator λ l Identity Identity) where
