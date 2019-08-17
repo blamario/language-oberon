@@ -32,23 +32,50 @@ import qualified Language.Oberon.AST as AST
 
 import Debug.Trace
 
-data Type l = NominalType (Abstract.QualIdent l) (Maybe (Type l))
-            | RecordType{ancestry :: [Abstract.QualIdent l],
-                         recordFields :: Map AST.Ident (Type l)}
-            | NilType
-            | IntegerType Int
-            | StringType Int
-            | ArrayType [Int] (Type l)
-            | PointerType (Type l)
-            | ReceiverType (Type l)
-            | ProcedureType Bool [(Bool, Type l)] (Maybe (Type l))
-            | UnknownType
+foldConstants :: (Abstract.Oberon l, Abstract.Nameable l,
+                  Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
+                  Atts (Inherited ConstantFold)
+                  (Abstract.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))
+                  ~ InhCF l,
+                  Atts (Inherited ConstantFold)
+                       (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold))
+                  ~ InhCF l,
+                  Atts (Synthesized ConstantFold)
+                       (Abstract.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))
+                  ~ SynCFMod' l (Abstract.Declaration l l),
+                  Atts (Synthesized ConstantFold)
+                       (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold))
+                  ~ SynCF' (Abstract.StatementSequence l l),
+                  Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+                                  (Abstract.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold)),
+                  Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+                                  (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold)),
+                  Deep.Functor ConstantFold (Abstract.Declaration l l) Placed (Semantics ConstantFold),
+                  Deep.Functor ConstantFold (Abstract.StatementSequence l l) Placed (Semantics ConstantFold))
+              => Environment l -> Map AST.Ident (AST.Module l l Placed Placed)
+              -> Map AST.Ident (AST.Module l l Placed Placed)
+foldConstants predef modules =
+   runIdentity <$>
+   getModules (modulesFolded $
+               syn (ConstantFold Shallow.<$> (0, ConstantFold Deep.<$> Modules modules')
+                    `Rank2.apply`
+                    Inherited (InhCFRoot predef)))
+   where modules' = ((,) 0) <$> modules
 
 type Environment l = Map (Abstract.QualIdent l) (Abstract.Expression l l ((,) Int) ((,) Int))
 
-newtype Modules l f' f = Modules (Map AST.Ident (f (AST.Module l l f' f')))
+newtype Modules l f' f = Modules {getModules :: Map AST.Ident (f (AST.Module l l f' f'))}
 
 data ConstantFold = ConstantFold
+
+data ConstantFoldSyn l = ConstantFoldSyn (InhCF l)
+data ConstantFoldInh l = ConstantFoldInh (InhCF l)
+
+instance (Atts (Synthesized ConstantFold) (f ((,) Int) ((,) Int)) ~ SynCF' f,
+          Atts (Inherited ConstantFold) (f ((,) Int) ((,) Int)) ~ InhCF l) =>
+         Shallow.Functor (ConstantFoldSyn l) (Semantics ConstantFold) ((,) Int)
+                         (f ((,) Int) ((,) Int)) where
+   ConstantFoldSyn inh <$> f = folded (syn $ Rank2.apply f $ Inherited inh)
 
 data InhCFRoot l = InhCFRoot{rootEnv :: Environment l}
 
