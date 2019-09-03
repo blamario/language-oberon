@@ -23,6 +23,7 @@ import qualified Rank2
 import qualified Rank2.TH
 import qualified Transformation as Shallow
 import qualified Transformation.Deep as Deep
+import qualified Transformation.Full as Full
 import qualified Transformation.AG as AG
 import qualified Transformation.Rank2
 import Transformation.AG (Attribution(..), Atts, Inherited(..), Synthesized(..), Semantics)
@@ -1303,6 +1304,91 @@ instance (Abstract.Nameable l,
                          (AST.FieldList l l (Semantics TypeCheck) (Semantics TypeCheck)) where
    (<$>) = AG.mapDefault id snd
 
+instance (Deep.Functor TypeCheck (AST.Declaration l l) Placed (Semantics TypeCheck),
+          Shallow.Functor TypeCheck Placed (Semantics TypeCheck) (AST.Declaration l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
+         Full.Functor TypeCheck (AST.Declaration l l) Placed (Semantics TypeCheck) where
+  (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor TypeCheck (AST.FieldList l l) Placed (Semantics TypeCheck),
+          Shallow.Functor TypeCheck Placed (Semantics TypeCheck) (AST.FieldList l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
+         Full.Functor TypeCheck (AST.FieldList l l) Placed (Semantics TypeCheck) where
+  (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor TypeCheck (AST.ProcedureHeading l l) Placed (Semantics TypeCheck),
+          Shallow.Functor TypeCheck Placed (Semantics TypeCheck) (AST.ProcedureHeading l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
+         Full.Functor TypeCheck (AST.ProcedureHeading l l) Placed (Semantics TypeCheck) where
+  (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor TypeCheck (AST.FormalParameters l l) Placed (Semantics TypeCheck),
+          Shallow.Functor TypeCheck Placed (Semantics TypeCheck) (AST.FormalParameters l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
+         Full.Functor TypeCheck (AST.FormalParameters l l) Placed (Semantics TypeCheck) where
+  (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor TypeCheck (AST.FPSection l l) Placed (Semantics TypeCheck),
+          Shallow.Functor TypeCheck Placed (Semantics TypeCheck) (AST.FPSection l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
+         Full.Functor TypeCheck (AST.FPSection l l) Placed (Semantics TypeCheck) where
+  (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor TypeCheck (AST.Type l l) Placed (Semantics TypeCheck),
+          Shallow.Functor TypeCheck Placed (Semantics TypeCheck) (AST.Type l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
+         Full.Functor TypeCheck (AST.Type l l) Placed (Semantics TypeCheck) where
+  (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor TypeCheck (AST.Block l l) Placed (Semantics TypeCheck),
+          Shallow.Functor TypeCheck Placed (Semantics TypeCheck) (AST.Block l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
+         Full.Functor TypeCheck (AST.Block l l) Placed (Semantics TypeCheck) where
+  (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor TypeCheck (AST.StatementSequence l l) Placed (Semantics TypeCheck),
+          Shallow.Functor TypeCheck Placed (Semantics TypeCheck) (AST.StatementSequence l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
+         Full.Functor TypeCheck (AST.StatementSequence l l) Placed (Semantics TypeCheck) where
+  (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor TypeCheck (AST.Statement l l) Placed (Semantics TypeCheck),
+          Shallow.Functor TypeCheck Placed (Semantics TypeCheck) (AST.Statement l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
+         Full.Functor TypeCheck (AST.Statement l l) Placed (Semantics TypeCheck) where
+  (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor TypeCheck (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)) Placed (Semantics TypeCheck),
+          Shallow.Functor TypeCheck Placed (Semantics TypeCheck) (Deep.Product (AST.Expression l l) (AST.StatementSequence l l) (Semantics TypeCheck) (Semantics TypeCheck))) =>
+         Full.Functor TypeCheck (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)) Placed (Semantics TypeCheck) where
+  (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor TypeCheck (AST.Case l l) Placed (Semantics TypeCheck),
+          Shallow.Functor TypeCheck Placed (Semantics TypeCheck) (AST.Case l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
+         Full.Functor TypeCheck (AST.Case l l) Placed (Semantics TypeCheck) where
+  (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor TypeCheck (AST.CaseLabels l l) Placed (Semantics TypeCheck),
+          Shallow.Functor TypeCheck Placed (Semantics TypeCheck) (AST.CaseLabels l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
+         Full.Functor TypeCheck (AST.CaseLabels l l) Placed (Semantics TypeCheck) where
+  (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor TypeCheck (AST.WithAlternative l l) Placed (Semantics TypeCheck),
+          Shallow.Functor TypeCheck Placed (Semantics TypeCheck) (AST.WithAlternative l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
+         Full.Functor TypeCheck (AST.WithAlternative l l) Placed (Semantics TypeCheck) where
+  (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor TypeCheck (AST.Expression l l) Placed (Semantics TypeCheck),
+          Shallow.Functor TypeCheck Placed (Semantics TypeCheck) (AST.Expression l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
+         Full.Functor TypeCheck (AST.Expression l l) Placed (Semantics TypeCheck) where
+  (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor TypeCheck (AST.Element l l) Placed (Semantics TypeCheck),
+          Shallow.Functor TypeCheck Placed (Semantics TypeCheck) (AST.Element l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
+         Full.Functor TypeCheck (AST.Element l l) Placed (Semantics TypeCheck) where
+  (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor TypeCheck (AST.Designator l l) Placed (Semantics TypeCheck),
+          Shallow.Functor TypeCheck Placed (Semantics TypeCheck) (AST.Designator l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
+         Full.Functor TypeCheck (AST.Designator l l) Placed (Semantics TypeCheck) where
+  (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor TypeCheck (AST.Value l l) Placed (Semantics TypeCheck),
+          Shallow.Functor TypeCheck Placed (Semantics TypeCheck) (AST.Value l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
+         Full.Functor TypeCheck (AST.Value l l) Placed (Semantics TypeCheck) where
+  (<$>) = Full.mapUpDefault
+
 -- * Unsafe Rank2 AST instances
 
 instance Rank2.Apply (AST.Module l l f') where
@@ -1321,12 +1407,8 @@ checkModules :: (Abstract.Oberon l, Abstract.Nameable l,
                  ~ SynTCMod l,
                  Atts (Synthesized TypeCheck) (Abstract.StatementSequence l l (Semantics TypeCheck) (Semantics TypeCheck))
                  ~ SynTC l,
-                 Shallow.Functor TypeCheck Placed (Semantics TypeCheck)
-                                 (Abstract.Declaration l l (Semantics TypeCheck) (Semantics TypeCheck)),
-                 Shallow.Functor TypeCheck Placed (Semantics TypeCheck)
-                                 (Abstract.StatementSequence l l (Semantics TypeCheck) (Semantics TypeCheck)),
-                 Deep.Functor TypeCheck (Abstract.Declaration l l) Placed (Semantics TypeCheck),
-                 Deep.Functor TypeCheck (Abstract.StatementSequence l l) Placed (Semantics TypeCheck))
+                 Full.Functor TypeCheck (Abstract.Declaration l l) Placed (Semantics TypeCheck),
+                 Full.Functor TypeCheck (Abstract.StatementSequence l l) Placed (Semantics TypeCheck))
              => Environment l -> Map AST.Ident (AST.Module l l Placed Placed) -> [Error l]
 checkModules predef modules =
    errors (syn (TypeCheck Shallow.<$> (0, TypeCheck Deep.<$> Modules modules')

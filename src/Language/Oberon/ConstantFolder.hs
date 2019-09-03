@@ -23,6 +23,7 @@ import qualified Rank2
 import qualified Rank2.TH
 import qualified Transformation as Shallow
 import qualified Transformation.Deep as Deep
+import qualified Transformation.Full as Full
 import qualified Transformation.AG as AG
 import qualified Transformation.Rank2
 import Transformation.AG (Attribution(..), Atts, Inherited(..), Synthesized(..), Semantics)
@@ -46,10 +47,8 @@ foldConstants :: (Abstract.Oberon l, Abstract.Nameable l,
                   Atts (Synthesized ConstantFold)
                        (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold))
                   ~ SynCF' (Abstract.StatementSequence l l),
-                  Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-                                  (Abstract.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold)),
-                  Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-                                  (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold)),
+                  Full.Functor ConstantFold (Abstract.Declaration l l) Placed (Semantics ConstantFold),
+                  Full.Functor ConstantFold (Abstract.StatementSequence l l) Placed (Semantics ConstantFold),
                   Deep.Functor ConstantFold (Abstract.Declaration l l) Placed (Semantics ConstantFold),
                   Deep.Functor ConstantFold (Abstract.StatementSequence l l) Placed (Semantics ConstantFold))
               => Environment l -> Map AST.Ident (AST.Module l l Placed Placed)
@@ -809,6 +808,9 @@ instance (Abstract.Nameable l,
          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
                          (AST.FieldList l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    (<$>) = AG.mapDefault id snd
+
+-- instance Full.Functor ConstantFold (AST.Declaration l l) Placed (Semantics ConstantFold) where
+--    (<$>) = Full.defaultMapUp
 
 -- * Unsafe Rank2 AST instances
 
