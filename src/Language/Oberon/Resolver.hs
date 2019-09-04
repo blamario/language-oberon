@@ -312,6 +312,13 @@ resolveName res scope q
         _ -> Failure (UnknownLocal name :| [])
 
 resolveModules :: forall l. (BindableDeclaration l, CoFormalParameters l, Abstract.Wirthy l,
+                             Deep.Traversable (Resolution l) (Abstract.Declaration l l) NodeWrap Placed (Resolved l),
+                             Deep.Traversable (Resolution l) (Abstract.Type l l) NodeWrap Placed (Resolved l),
+                             Deep.Traversable (Resolution l) (Abstract.ProcedureHeading l l) NodeWrap Placed (Resolved l),
+                             Deep.Traversable (Resolution l) (Abstract.FormalParameters l l) NodeWrap Placed (Resolved l),
+                             Deep.Traversable (Resolution l) (Abstract.Expression l l) NodeWrap Placed (Resolved l),
+                             Deep.Traversable (Resolution l) (Abstract.Block l l) NodeWrap Placed (Resolved l),
+                             Deep.Traversable (Resolution l) (Abstract.StatementSequence l l) NodeWrap Placed (Resolved l),
                              Full.Traversable (Resolution l) (Abstract.Declaration l l) NodeWrap Placed (Resolved l),
                              Full.Traversable (Resolution l) (Abstract.Type l l) NodeWrap Placed (Resolved l),
                              Full.Traversable (Resolution l) (Abstract.ProcedureHeading l l) NodeWrap Placed (Resolved l),

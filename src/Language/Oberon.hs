@@ -7,6 +7,7 @@ module Language.Oberon (parseModule, parseAndResolveModule, parseAndResolveModul
 import Language.Oberon.AST (Language, Module(..))
 import qualified Language.Oberon.Grammar as Grammar
 import qualified Language.Oberon.Resolver as Resolver
+import qualified Language.Oberon.ConstantFolder as ConstantFolder
 import qualified Language.Oberon.TypeChecker as TypeChecker
 
 import qualified Transformation.Rank2 as Rank2
