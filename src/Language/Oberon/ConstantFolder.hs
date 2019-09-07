@@ -61,14 +61,13 @@ foldConstants predef modules =
                     Inherited (InhCFRoot predef)))
    where modules' = ((,) 0) <$> modules
 
-type Environment l = Map (Abstract.QualIdent l) (Abstract.Expression l l ((,) Int) ((,) Int))
+type Environment l = Map (Abstract.QualIdent l) (Abstract.Value l l ((,) Int) ((,) Int))
 
 newtype Modules l f' f = Modules {getModules :: Map AST.Ident (f (AST.Module l l f' f'))}
 
 data ConstantFold = ConstantFold
 
 data ConstantFoldSyn l = ConstantFoldSyn (InhCF l)
-data ConstantFoldInh l = ConstantFoldInh (InhCF l)
 
 instance (Atts (Synthesized ConstantFold) (f ((,) Int) ((,) Int)) ~ SynCF' f,
           Atts (Inherited ConstantFold) (f ((,) Int) ((,) Int)) ~ InhCF l) =>
@@ -118,7 +117,7 @@ type instance Atts (Synthesized ConstantFold) (AST.Expression l l f' f) = SynCFE
 type instance Atts (Synthesized ConstantFold) (AST.Element l l f' f) = SynCF' (AST.Element l l)
 type instance Atts (Synthesized ConstantFold) (AST.Value l l f' f) = SynCF' (AST.Value l l)
 type instance Atts (Synthesized ConstantFold) (AST.Designator l l f' f) =
-   SynCF (AST.Designator l l ((,) Int) ((,) Int), Maybe (AST.Expression l l ((,) Int) ((,) Int)))
+   SynCF (AST.Designator l l ((,) Int) ((,) Int), Maybe (AST.Value l l ((,) Int) ((,) Int)))
 type instance Atts (Synthesized ConstantFold) (Deep.Product (AST.Expression l l) (AST.StatementSequence l l) f' f) =
    SynCF' (Deep.Product (AST.Expression l l) (AST.StatementSequence l l))
 type instance Atts (Synthesized ConstantFold) (AST.Statement l l f' f) = SynCF' (AST.Statement l l)
@@ -180,7 +179,8 @@ instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Sh
                | Just name <- Abstract.getNonQualIdentName q = Abstract.qualIdent moduleName name
                | otherwise = q
 
-instance (Abstract.Nameable l, Ord (Abstract.QualIdent l), Abstract.Expression l ~ AST.Expression l,
+instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
+          Abstract.Expression l ~ AST.Expression l, Abstract.Value l ~ AST.Value l,
           Atts (Inherited ConstantFold) (Abstract.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))
           ~ InhCF l,
           Atts (Inherited ConstantFold) (Abstract.Type l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
@@ -204,8 +204,11 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l), Abstract.Expression l
                      (Int, AST.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    attribution ConstantFold (pos, AST.ConstantDeclaration namedef _)
                (Inherited inheritance, AST.ConstantDeclaration _ expression) =
-      (Synthesized SynCFMod{moduleEnv= Map.singleton (Abstract.nonQualIdent name) (snd $ foldedExp $ syn expression),
-                            moduleFolded = (pos, AST.ConstantDeclaration namedef (foldedExp $ syn expression))},
+      (Synthesized $ case foldedValue (syn expression)
+                     of Just val -> SynCFMod{moduleEnv= Map.singleton (Abstract.nonQualIdent name) val,
+                                             moduleFolded = (pos, AST.ConstantDeclaration namedef (pos, Abstract.literal (pos, val)))}
+                        Nothing -> SynCFMod{moduleEnv= mempty,
+                                            moduleFolded = (pos, AST.ConstantDeclaration namedef (foldedExp $ syn expression))},
        AST.ConstantDeclaration namedef (Inherited inheritance))
       where name = Abstract.getIdentDefName namedef
    attribution ConstantFold (pos, AST.TypeDeclaration namedef _)
@@ -360,16 +363,11 @@ instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Synthesized ConstantFold) (Abstract.Expression l l (Semantics ConstantFold) (Semantics ConstantFold))
           ~ SynCFExp l,
           Atts (Synthesized ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Expression l l ((,) Int) ((,) Int)))) =>
+          ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Value l l ((,) Int) ((,) Int)))) =>
          Attribution ConstantFold (AST.Statement l l) (Int, AST.Statement l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    attribution ConstantFold (pos, self) (Inherited inheritance, AST.Assignment lhs rhs) =
       (Synthesized SynCF{folded= (pos, AST.Assignment (fst <$> folded (syn lhs)) (foldedExp $ syn rhs))},
        AST.Assignment (Inherited inheritance) (Inherited inheritance))
-   {-
-   attribution ConstantFold (pos, self) (Inherited inheritance, stat) =
-      (Synthesized SynCF{folded= (pos, ConstantFoldSyn inheritance Deep.<$> stat)},
-       ConstantFoldInh inheritance Deep.<$> stat)
-   -}
 
 instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Inherited ConstantFold) (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
@@ -419,7 +417,7 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Synthesized ConstantFold) (Abstract.Element l l (Semantics ConstantFold) (Semantics ConstantFold))
           ~ SynCF' (Abstract.Element l l),
           Atts (Synthesized ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Expression l l ((,) Int) ((,) Int)))) =>
+          ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Value l l ((,) Int) ((,) Int)))) =>
          Attribution ConstantFold (AST.Expression l l)
                      (Int, AST.Expression l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    attribution ConstantFold (pos, AST.Relation op _ _) (Inherited inheritance, AST.Relation _op left right) =
@@ -504,8 +502,34 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
                         Nothing -> SynCFExp{foldedExp= (pos, AST.Not $ foldedExp $ syn expr),
                                             foldedValue= Nothing},
        AST.Not (Inherited inheritance))
---   attribution ConstantFold (pos, _) (Inherited inheritance, expression) =
---      (Synthesized SynCF{folded= (pos, (folded . syn) Rank2.<$> expression)}, const (Inherited inheritance) <$> expression)
+   attribution ConstantFold (pos, AST.IsA _ right) (Inherited inheritance, AST.IsA left _) =
+      (Synthesized SynCFExp{foldedExp= (pos, AST.IsA (foldedExp $ syn left) right),
+                            foldedValue= Nothing},
+       AST.IsA (Inherited inheritance) right)
+   attribution ConstantFold (pos, _) (Inherited inheritance, AST.Set elements) =
+      (Synthesized SynCFExp{foldedExp= (pos, AST.Set (folded . syn <$> elements)),
+                            foldedValue= Nothing},
+       AST.Set [Inherited inheritance])
+   attribution ConstantFold (pos, _) (Inherited inheritance, AST.Read des) =
+      (Synthesized $ case folded (syn des)
+                     of (pos', (des', Just val)) -> SynCFExp{foldedExp= (pos, Abstract.literal (pos', val)),
+                                                             foldedValue= Just val}
+                        (pos', (des', Nothing)) -> SynCFExp{foldedExp= (pos, AST.Read (pos', des')),
+                                                            foldedValue= Nothing},
+                        
+       AST.Read (Inherited inheritance))
+      {-
+   attribution ConstantFold (pos, _) (Inherited inheritance, AST.FunctionCall fn args) =
+      (Synthesized $ case (folded (syn fn), foldedValue <$> args)
+                     of ((pos', (des', Just (Builtin "MAX"))), [Just (Builtin "INTEGER")])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal $ Abstract.integer maxInteger),
+                                       foldedValue= Just (Abstract.integer maxInteger)},
+       AST.FunctionCall (Inherited inheritance) [Inherited inheritance])
+-}
+   attribution ConstantFold (pos, _) (Inherited inheritance, AST.Literal val) =
+      (Synthesized SynCFExp{foldedExp= (pos, AST.Literal (folded $ syn val)),
+                            foldedValue= Just (snd $ folded $ syn val)},
+       AST.Literal (Inherited inheritance))
 
 
 instance Attribution ConstantFold (AST.Value l l)
@@ -594,12 +618,13 @@ instance (Abstract.Wirthy l, Abstract.Nameable l, Abstract.Expression l ~ AST.Ex
 
 instance (Abstract.CoWirthy l, Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
           Abstract.Expression l l ((,) Int) ((,) Int) ~ AST.Expression l l ((,) Int) ((,) Int),
+          Abstract.Value l l ((,) Int) ((,) Int) ~ AST.Value l l ((,) Int) ((,) Int),
           Atts (Inherited ConstantFold) (Abstract.Expression l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
           Atts (Inherited ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
           Atts (Synthesized ConstantFold) (Abstract.Expression l l (Semantics ConstantFold) (Semantics ConstantFold))
           ~ SynCFExp l,
           Atts (Synthesized ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Expression l l ((,) Int) ((,) Int)))) =>
+          ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Value l l ((,) Int) ((,) Int)))) =>
          Attribution ConstantFold (AST.Designator l l) (Int, AST.Designator l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    attribution ConstantFold (pos, AST.Variable q) (Inherited inheritance, _) =
       (Synthesized SynCF{folded= (pos, (AST.Variable q,
@@ -636,7 +661,8 @@ instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Sh
          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
                          (AST.Module l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    (<$>) = AG.mapDefault id snd
-instance (Abstract.Nameable l, Ord (Abstract.QualIdent l), Abstract.Expression l ~ AST.Expression l,
+instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
+          Abstract.Expression l ~ AST.Expression l,  Abstract.Value l ~ AST.Value l,
           Rank2.Apply (Abstract.Block l l (Semantics ConstantFold)),
           Atts (Inherited ConstantFold) (Abstract.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))
           ~ InhCF l,
@@ -707,34 +733,6 @@ instance (Atts (Inherited ConstantFold) (Abstract.Statement l l (Semantics Const
                          (AST.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    (<$>) = AG.mapDefault id snd
 
-{-
-instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Abstract.Expression l ~ AST.Expression l,
-          Atts (Inherited ConstantFold) (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Deep.Product (Abstract.Expression l l) (Abstract.StatementSequence l l)
-                                      (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Case l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.WithAlternative l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Expression l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.StatementSequence l l),
-          Atts (Synthesized ConstantFold) (Deep.Product (Abstract.Expression l l) (Abstract.StatementSequence l l)
-                                        (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Deep.Product (Abstract.Expression l l) (Abstract.StatementSequence l l)),
-          Atts (Synthesized ConstantFold) (Abstract.Case l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.Case l l),
-          Atts (Synthesized ConstantFold) (Abstract.WithAlternative l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.WithAlternative l l),
-          Atts (Synthesized ConstantFold) (Abstract.Expression l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCFExp l,
-          Atts (Synthesized ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Expression l l ((,) Int) ((,) Int)))) =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-                         (AST.Statement l l (Semantics ConstantFold) (Semantics ConstantFold)) where
-   (<$>) = AG.mapDefault id snd
--}
-
 instance (Atts (Inherited ConstantFold) (Abstract.CaseLabels l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
           Atts (Inherited ConstantFold) (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
           Atts (Synthesized ConstantFold) (Abstract.CaseLabels l l (Semantics ConstantFold) (Semantics ConstantFold))
@@ -769,7 +767,7 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Synthesized ConstantFold) (Abstract.Element l l (Semantics ConstantFold) (Semantics ConstantFold))
           ~ SynCF' (Abstract.Element l l),
           Atts (Synthesized ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Expression l l ((,) Int) ((,) Int)))) =>
+          ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Value l l ((,) Int) ((,) Int)))) =>
          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
                          (AST.Expression l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    (<$>) = AG.mapDefault id snd
@@ -781,13 +779,14 @@ instance (Abstract.Wirthy l, Abstract.Nameable l, Abstract.Expression l ~ AST.Ex
                          (AST.Element l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    (<$>) = AG.mapDefault id snd
 instance (Abstract.CoWirthy l, Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
-          Abstract.Expression l ~ AST.Expression l,
+          Abstract.Expression l l ((,) Int) ((,) Int) ~ AST.Expression l l ((,) Int) ((,) Int),
+          Abstract.Value l ~ AST.Value l,
           Atts (Inherited ConstantFold) (Abstract.Expression l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
           Atts (Inherited ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
           Atts (Synthesized ConstantFold) (Abstract.Expression l l (Semantics ConstantFold) (Semantics ConstantFold))
           ~ SynCFExp l,
           Atts (Synthesized ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Expression l l ((,) Int) ((,) Int)))) =>
+          ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Value l l ((,) Int) ((,) Int)))) =>
          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
                          (AST.Designator l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    (<$>) = AG.mapDefault id snd
@@ -818,8 +817,110 @@ instance (Abstract.Nameable l,
                          (AST.FieldList l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    (<$>) = AG.mapDefault id snd
 
--- instance Full.Functor ConstantFold (AST.Declaration l l) Placed (Semantics ConstantFold) where
---    (<$>) = Full.defaultMapUp
+instance (Deep.Functor ConstantFold (AST.Declaration l l) Placed (Semantics ConstantFold),
+          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+          (AST.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.Declaration l l) Placed (Semantics ConstantFold) where
+   (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor ConstantFold (AST.Type l l) Placed (Semantics ConstantFold),
+          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+          (AST.Type l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.Type l l) Placed (Semantics ConstantFold) where
+   (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor ConstantFold (AST.FieldList l l) Placed (Semantics ConstantFold),
+          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+          (AST.FieldList l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.FieldList l l) Placed (Semantics ConstantFold) where
+   (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor ConstantFold (AST.ProcedureHeading l l) Placed (Semantics ConstantFold),
+          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+          (AST.ProcedureHeading l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.ProcedureHeading l l) Placed (Semantics ConstantFold) where
+   (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor ConstantFold (AST.FormalParameters l l) Placed (Semantics ConstantFold),
+          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+          (AST.FormalParameters l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.FormalParameters l l) Placed (Semantics ConstantFold) where
+   (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor ConstantFold (AST.FPSection l l) Placed (Semantics ConstantFold),
+          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+          (AST.FPSection l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.FPSection l l) Placed (Semantics ConstantFold) where
+   (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor ConstantFold (AST.Expression l l) Placed (Semantics ConstantFold),
+          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+          (AST.Expression l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.Expression l l) Placed (Semantics ConstantFold) where
+   (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor ConstantFold (AST.Element l l) Placed (Semantics ConstantFold),
+          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+          (AST.Element l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.Element l l) Placed (Semantics ConstantFold) where
+   (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor ConstantFold (AST.Value l l) Placed (Semantics ConstantFold),
+          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+          (AST.Value l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.Value l l) Placed (Semantics ConstantFold) where
+   (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor ConstantFold (AST.Designator l l) Placed (Semantics ConstantFold),
+          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+          (AST.Designator l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.Designator l l) Placed (Semantics ConstantFold) where
+   (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor ConstantFold (AST.Block l l) Placed (Semantics ConstantFold),
+          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+          (AST.Block l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.Block l l) Placed (Semantics ConstantFold) where
+   (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor ConstantFold (AST.StatementSequence l l) Placed (Semantics ConstantFold),
+          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+          (AST.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.StatementSequence l l) Placed (Semantics ConstantFold) where
+   (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor ConstantFold (AST.Statement l l) Placed (Semantics ConstantFold),
+          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+          (AST.Statement l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.Statement l l) Placed (Semantics ConstantFold) where
+   (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor ConstantFold (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)) Placed (Semantics ConstantFold),
+          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+          (Deep.Product (AST.Expression l l) (AST.StatementSequence l l) (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (Deep.Product (AST.Expression l l) (AST.StatementSequence l l))
+                      Placed (Semantics ConstantFold) where
+   (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor ConstantFold (AST.Case l l) Placed (Semantics ConstantFold),
+          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+          (AST.Case l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.Case l l) Placed (Semantics ConstantFold) where
+   (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor ConstantFold (AST.CaseLabels l l) Placed (Semantics ConstantFold),
+          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+          (AST.CaseLabels l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.CaseLabels l l) Placed (Semantics ConstantFold) where
+   (<$>) = Full.mapUpDefault
+
+instance (Deep.Functor ConstantFold (AST.WithAlternative l l) Placed (Semantics ConstantFold),
+          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+          (AST.WithAlternative l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.WithAlternative l l) Placed (Semantics ConstantFold) where
+   (<$>) = Full.mapUpDefault
+
+-- * Shortcuts
 
 instance (Full.Functor (ConstantFoldSyn l) (Abstract.Designator l l) (Semantics ConstantFold) Placed,
           Full.Functor (ConstantFoldSyn l) (Abstract.Expression l l) (Semantics ConstantFold) Placed,
@@ -831,17 +932,25 @@ instance (Full.Functor (ConstantFoldSyn l) (Abstract.Designator l l) (Semantics 
                          (AST.Statement l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    ConstantFold <$> (pos, stat) = Rank2.Arrow sem
      where sem inherited = Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> stat))
---             where f x = folded (x inh)
-{-
-   (<$>) = \ t x -> knit (attribution t x) (snd x)
-     where knit r chSem = Rank2.Arrow knit'
-             where knit' inh = syn
-                     where (syn, chInh) = r (inh, chSyn)
-                           chSyn = chSem Rank2.<*> chInh
--}
 
 instance Full.Functor (ConstantFoldSyn l) (AST.Expression l l) (Semantics ConstantFold) Placed where
   ConstantFoldSyn inh <$> sem = foldedExp (syn $ Rank2.apply sem $ Inherited inh)
+
+instance Full.Functor (ConstantFoldSyn l) (AST.Designator l l) (Semantics ConstantFold) Placed where
+  ConstantFoldSyn inh <$> sem = fst <$> folded (syn $ Rank2.apply sem $ Inherited inh)
+
+instance Full.Functor (ConstantFoldSyn l) (AST.StatementSequence l l) (Semantics ConstantFold) Placed where
+  ConstantFoldSyn inh <$> sem = folded (syn $ Rank2.apply sem $ Inherited inh)
+
+instance Full.Functor (ConstantFoldSyn l) (AST.Case l l) (Semantics ConstantFold) Placed where
+  ConstantFoldSyn inh <$> sem = folded (syn $ Rank2.apply sem $ Inherited inh)
+
+instance Full.Functor (ConstantFoldSyn l) (AST.WithAlternative l l) (Semantics ConstantFold) Placed where
+  ConstantFoldSyn inh <$> sem = folded (syn $ Rank2.apply sem $ Inherited inh)
+
+instance Full.Functor (ConstantFoldSyn l) (Deep.Product (AST.Expression l l) (AST.StatementSequence l l))
+                      (Semantics ConstantFold) Placed where
+  ConstantFoldSyn inh <$> sem = folded (syn $ Rank2.apply sem $ Inherited inh)
 
 -- * Unsafe Rank2 AST instances
 
@@ -850,3 +959,10 @@ instance Rank2.Apply (AST.Module l l f') where
       AST.Module name1 imports1 (liftA2 Rank2.apply decls1 decls2) (liftA2 Rank2.apply body1 body2)
 
 type Placed = ((,) Int)
+
+predefined, predefined2 :: (Abstract.Wirthy l, Ord (Abstract.QualIdent l)) => Environment l
+-- | The set of 'Predefined' types and procedures defined in the Oberon Language Report.
+predefined = Map.fromList $ map (first Abstract.nonQualIdent) $
+   [("TRUE", Abstract.true),
+    ("FALSE", Abstract.false)]
+predefined2 = predefined
