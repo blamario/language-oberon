@@ -114,6 +114,7 @@ instance Pretty (Value λ l Identity Identity) where
       | Text.any (== '"') s = squotes (pretty s)
       | otherwise = dquotes (pretty s)
    pretty Nil = "NIL"
+   pretty (Builtin name) = pretty name
 
 
 instance (Pretty (Abstract.QualIdent l), Pretty (Abstract.Designator l l Identity Identity),

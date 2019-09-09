@@ -855,6 +855,10 @@ instance (Abstract.Wirthy l,
       (Synthesized SynTCExp{expressionErrors= mempty,
                             inferredType= NominalType (Abstract.nonQualIdent "REAL") Nothing},
        AST.Real x)
+   attribution TypeCheck self (Inherited inheritance, AST.Boolean x) =
+      (Synthesized SynTCExp{expressionErrors= mempty,
+                            inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing},
+       AST.Boolean x)
    attribution TypeCheck self (Inherited inheritance, AST.CharCode x) =
       (Synthesized SynTCExp{expressionErrors= mempty,
                             inferredType= NominalType (Abstract.nonQualIdent "CHAR") Nothing},
@@ -867,6 +871,10 @@ instance (Abstract.Wirthy l,
       (Synthesized SynTCExp{expressionErrors= mempty,
                             inferredType= NilType},
        AST.Nil)
+   attribution TypeCheck (pos, AST.Builtin x) (Inherited inheritance, _) =
+      (Synthesized SynTCExp{expressionErrors= mempty,
+                            inferredType= NominalType (Abstract.nonQualIdent x) Nothing},
+       AST.Builtin x)
 
 instance (Abstract.Wirthy l, Abstract.Nameable l,
           Atts (Inherited TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,

@@ -100,6 +100,7 @@ class Wirthy l where
    real :: Double -> Value l l' f' f
    string :: Text -> Value l l' f' f
    charCode :: Int -> Value l l' f' f
+   builtin :: Text -> Value l l' f' f
 
    -- Designator
    variable :: QualIdent l' -> Designator l l' f' f

@@ -100,6 +100,7 @@ instance Abstract.Wirthy Language where
    range = Range
 
    -- Value
+   builtin = Builtin
    charCode = CharCode
    false = Boolean False
    integer = Integer
@@ -163,6 +164,7 @@ instance Abstract.CoWirthy Language where
    coValue Nil = Just Abstract.nil
    coValue (Boolean False) = Just Abstract.false
    coValue (Boolean True) = Just Abstract.true
+   coValue (Builtin name) = Just (Abstract.builtin name)
    coValue (Integer n) = Just (Abstract.integer n)
    coValue (Real r) = Just (Abstract.real r)
    coValue (String s) = Just (Abstract.string s)
@@ -293,6 +295,7 @@ deriving instance Show (f (Abstract.Expression l l f' f')) => Show (Element λ l
 deriving instance Eq (f (Abstract.Expression l l f' f')) => Eq (Element λ l f' f)
 
 data Value λ l (f' :: * -> *) (f :: * -> *) = Boolean Bool
+                                            | Builtin Text
                                             | CharCode Int
                                             | Integer Integer
                                             | Nil

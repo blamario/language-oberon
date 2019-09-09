@@ -6,10 +6,12 @@ module Language.Oberon.ConstantFolder where
 import Control.Applicative (liftA2, (<|>))
 import Control.Arrow (first)
 import Control.Monad (join)
-import Data.Char (chr)
 import Data.Coerce (coerce)
+import Data.Bits (shift)
+import Data.Char (chr, ord, toUpper)
 import Data.Foldable (toList)
 import Data.Functor.Identity (Identity(..))
+import Data.Int (Int32)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.List as List
@@ -18,6 +20,7 @@ import Data.Map.Lazy (Map)
 import qualified Data.Map.Lazy as Map
 import Data.Semigroup (Semigroup(..), sconcat)
 import qualified Data.Text as Text
+import Foreign.Storable (sizeOf)
 
 import qualified Rank2
 import qualified Rank2.TH
@@ -516,26 +519,143 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
                                                              foldedValue= Just val}
                         (pos', (des', Nothing)) -> SynCFExp{foldedExp= (pos, AST.Read (pos', des')),
                                                             foldedValue= Nothing},
-                        
        AST.Read (Inherited inheritance))
-      {-
    attribution ConstantFold (pos, _) (Inherited inheritance, AST.FunctionCall fn args) =
-      (Synthesized $ case (folded (syn fn), foldedValue <$> args)
-                     of ((pos', (des', Just (Builtin "MAX"))), [Just (Builtin "INTEGER")])
-                           -> SynCFExp{foldedExp= (pos, Abstract.literal $ Abstract.integer maxInteger),
-                                       foldedValue= Just (Abstract.integer maxInteger)},
+      (Synthesized $ case (snd (snd $ folded $ syn fn), foldedValue . syn <$> args)
+                     of (Just (AST.Builtin "CAP"), [Just (AST.String s)])
+                           | Text.length s == 1, capital <- Text.toUpper s
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.string capital)),
+                                       foldedValue= Just (Abstract.string capital)}
+                        (Just (AST.Builtin "CAP"), [Just (AST.CharCode c)])
+                           | capital <- ord (toUpper $ chr c)
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.charCode capital)),
+                                       foldedValue= Just (Abstract.charCode capital)}
+                        (Just (AST.Builtin "CHR"), [Just (AST.Integer code)])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.charCode $ fromIntegral code)),
+                                       foldedValue= Just (Abstract.charCode $ fromIntegral code)}
+                        (Just (AST.Builtin "ORD"), [Just (AST.String s)])
+                           | Text.length s == 1, code <- ord (Text.head s)
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer $ toInteger code)),
+                                       foldedValue= Just (Abstract.integer $ toInteger code)}
+                        (Just (AST.Builtin "ORD"), [Just (AST.CharCode code)])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer $ toInteger code)),
+                                       foldedValue= Just (Abstract.integer $ toInteger code)}
+                        (Just (AST.Builtin "ABS"), [Just (AST.Integer i)])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer $ abs i)),
+                                       foldedValue= Just (Abstract.integer $ abs i)}
+                        (Just (AST.Builtin "ABS"), [Just (AST.Real r)])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.real $ abs r)),
+                                       foldedValue= Just (Abstract.real $ abs r)}
+                        (Just (AST.Builtin "ASH"), [Just (AST.Integer i), Just (AST.Integer j)])
+                           | shifted <- shift i (fromIntegral j)
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer shifted)),
+                                       foldedValue= Just (Abstract.integer shifted)}
+                        (Just (AST.Builtin "ENTIER"), [Just (AST.Real x)])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer $ ceiling x)),
+                                       foldedValue= Just (Abstract.integer $ ceiling x)}
+                        (Just (AST.Builtin "LEN"), [Just (AST.String s)])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer $ toInteger $ Text.length s)),
+                                       foldedValue= Just (Abstract.integer $ toInteger $ Text.length s)}
+                        (Just (AST.Builtin "LONG"), [Just (AST.Integer x)])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer x)),
+                                       foldedValue= Just (Abstract.integer x)}
+                        (Just (AST.Builtin "LONG"), [Just (AST.Real x)])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.real x)),
+                                       foldedValue= Just (Abstract.real x)}
+                        (Just (AST.Builtin "SHORT"), [Just (AST.Integer x)])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer x)),
+                                       foldedValue= Just (Abstract.integer x)}
+                        (Just (AST.Builtin "SHORT"), [Just (AST.Real x)])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.real x)),
+                                       foldedValue= Just (Abstract.real x)}
+                        (Just (AST.Builtin "ODD"), [Just (AST.Integer x)])
+                           | x `mod` 2 == 1
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.true)),
+                                       foldedValue= Just Abstract.true}
+                           | otherwise
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.false)),
+                                       foldedValue= Just Abstract.false}
+                        (Just (AST.Builtin "SIZE"), [Just (AST.Builtin "INTEGER")])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer intSize)),
+                                       foldedValue= Just (Abstract.integer intSize)}
+                        (Just (AST.Builtin "SIZE"), [Just (AST.Builtin "LONGINT")])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer intSize)),
+                                       foldedValue= Just (Abstract.integer intSize)}
+                        (Just (AST.Builtin "SIZE"), [Just (AST.Builtin "SHORTINT")])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer int32Size)),
+                                       foldedValue= Just (Abstract.integer int32Size)}
+                        (Just (AST.Builtin "SIZE"), [Just (AST.Builtin "REAL")])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer doubleSize)),
+                                       foldedValue= Just (Abstract.integer doubleSize)}
+                        (Just (AST.Builtin "SIZE"), [Just (AST.Builtin "LONGREAL")])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer doubleSize)),
+                                       foldedValue= Just (Abstract.integer doubleSize)}
+                        (Just (AST.Builtin "SIZE"), [Just (AST.Builtin "SHORTREAL")])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer floatSize)),
+                                       foldedValue= Just (Abstract.integer floatSize)}
+                        (Just (AST.Builtin "MAX"), [Just (AST.Builtin "INTEGER")])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer maxInteger)),
+                                       foldedValue= Just (Abstract.integer maxInteger)}
+                        (Just (AST.Builtin "MAX"), [Just (AST.Builtin "LONGINT")])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer maxInteger)),
+                                       foldedValue= Just (Abstract.integer maxInteger)}
+                        (Just (AST.Builtin "MAX"), [Just (AST.Builtin "SHORTINT")])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer maxInteger)),
+                                       foldedValue= Just (Abstract.integer maxInt32)}
+                        (Just (AST.Builtin "MAX"), [Just (AST.Builtin "SET")])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer maxInteger)),
+                                       foldedValue= Just (Abstract.integer maxSet)}
+                        (Just (AST.Builtin "MAX"), [Just (AST.Builtin "REAL")])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.real maxReal)),
+                                       foldedValue= Just (Abstract.real maxReal)}
+                        (Just (AST.Builtin "MAX"), [Just (AST.Builtin "LONGREAL")])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.real maxReal)),
+                                       foldedValue= Just (Abstract.real maxReal)}
+                        (Just (AST.Builtin "MIN"), [Just (AST.Builtin "INTEGER")])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer minInteger)),
+                                       foldedValue= Just (Abstract.integer minInteger)}
+                        (Just (AST.Builtin "MIN"), [Just (AST.Builtin "LONGINT")])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer minInteger)),
+                                       foldedValue= Just (Abstract.integer minInteger)}
+                        (Just (AST.Builtin "MIN"), [Just (AST.Builtin "SHORTINT")])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer minInteger)),
+                                       foldedValue= Just (Abstract.integer minInt32)}
+                        (Just (AST.Builtin "MIN"), [Just (AST.Builtin "SET")])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer minInteger)),
+                                       foldedValue= Just (Abstract.integer minSet)}
+                        (Just (AST.Builtin "MIN"), [Just (AST.Builtin "REAL")])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.real minReal)),
+                                       foldedValue= Just (Abstract.real minReal)}
+                        (Just (AST.Builtin "MIN"), [Just (AST.Builtin "LONGREAL")])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.real minReal)),
+                                       foldedValue= Just (Abstract.real minReal)}
+                        _ -> SynCFExp{foldedExp= (pos, AST.FunctionCall (fst <$> folded (syn fn)) (foldedExp . syn <$> args)),
+                                      foldedValue= Nothing},
        AST.FunctionCall (Inherited inheritance) [Inherited inheritance])
--}
    attribution ConstantFold (pos, _) (Inherited inheritance, AST.Literal val) =
       (Synthesized SynCFExp{foldedExp= (pos, AST.Literal (folded $ syn val)),
                             foldedValue= Just (snd $ folded $ syn val)},
        AST.Literal (Inherited inheritance))
 
+maxInteger, minInteger, maxInt32, minInt32, maxSet, minSet :: Integer
+maxInteger = toInteger (maxBound :: Int)
+minInteger = toInteger (minBound :: Int)
+maxInt32 = toInteger (maxBound :: Int32)
+minInt32 = toInteger (minBound :: Int32)
+maxSet = 63
+minSet = 0
 
-instance Attribution ConstantFold (AST.Value l l)
-                     (Int, AST.Value l l (Semantics ConstantFold) (Semantics ConstantFold)) where
-   attribution ConstantFold (pos, AST.Integer n) (Inherited inheritance, _) =
-      (Synthesized SynCF{folded= (pos, AST.Integer n)}, AST.Integer n)
+doubleSize, floatSize, intSize, int32Size :: Integer
+doubleSize = toInteger (sizeOf (0 :: Double))
+floatSize = toInteger (sizeOf (0 :: Float))
+intSize = toInteger (sizeOf (0 :: Int))
+int32Size = toInteger (sizeOf (0 :: Int32))
+
+maxReal, minReal :: Double
+maxReal = encodeFloat (floatRadix x - 1) (snd (floatRange x) - 1)
+   where x = 0 :: Double
+minReal = encodeFloat (floatRadix x - 1) (fst (floatRange x))
+   where x = 0 :: Double
 
 foldBinaryArithmetic :: forall l f. (f ~ ((,) Int),
                                      Abstract.Expression l ~ AST.Expression l, Abstract.Value l ~ AST.Value l,
