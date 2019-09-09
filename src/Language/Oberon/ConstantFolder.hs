@@ -64,7 +64,7 @@ foldConstants predef modules =
                     Inherited (InhCFRoot predef)))
    where modules' = ((,) 0) <$> modules
 
-type Environment l = Map (Abstract.QualIdent l) (Abstract.Value l l ((,) Int) ((,) Int))
+type Environment l = Map (Abstract.QualIdent l) (Maybe (Abstract.Value l l ((,) Int) ((,) Int)))
 
 newtype Modules l f' f = Modules {getModules :: Map AST.Ident (f (AST.Module l l f' f'))}
 
@@ -207,13 +207,14 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
                      (Int, AST.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    attribution ConstantFold (pos, AST.ConstantDeclaration namedef _)
                (Inherited inheritance, AST.ConstantDeclaration _ expression) =
-      (Synthesized $ case foldedValue (syn expression)
-                     of Just val -> SynCFMod{moduleEnv= Map.singleton (Abstract.nonQualIdent name) val,
-                                             moduleFolded = (pos, AST.ConstantDeclaration namedef (pos, Abstract.literal (pos, val)))}
-                        Nothing -> SynCFMod{moduleEnv= mempty,
-                                            moduleFolded = (pos, AST.ConstantDeclaration namedef (foldedExp $ syn expression))},
+      (Synthesized $
+       SynCFMod{moduleEnv= Map.singleton (Abstract.nonQualIdent name) val,
+                moduleFolded = (pos,
+                                AST.ConstantDeclaration namedef $
+                                maybe (foldedExp $ syn expression) ((,) pos . Abstract.literal . (,) pos) val)},
        AST.ConstantDeclaration namedef (Inherited inheritance))
       where name = Abstract.getIdentDefName namedef
+            val = foldedValue (syn expression)
    attribution ConstantFold (pos, AST.TypeDeclaration namedef _)
                (Inherited inheritance, AST.TypeDeclaration _ definition) =
       (Synthesized SynCFMod{moduleEnv= mempty,
@@ -748,7 +749,7 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Abstract.Oberon l, Ord (Abst
          Attribution ConstantFold (AST.Designator l l) (Int, AST.Designator l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    attribution ConstantFold (pos, AST.Variable q) (Inherited inheritance, _) =
       (Synthesized SynCF{folded= (pos, (AST.Variable q,
-                                        Map.lookup q (env inheritance)))},
+                                        join (Map.lookup q $ env inheritance)))},
 --                                        >>= Abstract.coExpression :: Maybe (AST.Expression l l ((,) Int) ((,) Int))))},
        AST.Variable q)
    attribution ConstantFold (pos, AST.Field _record fieldName) (Inherited inheritance, AST.Field record _fieldName) =
@@ -1083,6 +1084,10 @@ type Placed = ((,) Int)
 predefined, predefined2 :: (Abstract.Wirthy l, Ord (Abstract.QualIdent l)) => Environment l
 -- | The set of 'Predefined' types and procedures defined in the Oberon Language Report.
 predefined = Map.fromList $ map (first Abstract.nonQualIdent) $
-   [("TRUE", Abstract.true),
-    ("FALSE", Abstract.false)]
+   [("TRUE", Just Abstract.true),
+    ("FALSE", Just Abstract.false)]
+   ++ map builtin ["BOOLEAN", "CHAR", "SHORTINT", "INTEGER", "LONGINT", "REAL", "LONGREAL", "SET",
+                   "ABS", "ASH", "CAP", "LEN", "MAX", "MIN",
+                   "ODD", "SIZE", "ORD", "CHR", "SHORT", "LONG", "ENTIER"]
+   where builtin name = (name, Just $ Abstract.builtin name)
 predefined2 = predefined
