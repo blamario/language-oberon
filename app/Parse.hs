@@ -2,7 +2,8 @@
 
 module Main where
 
-import Language.Oberon (Placed, LanguageVersion(Oberon1, Oberon2), parseAndResolveModule, resolvePosition, resolvePositions)
+import Language.Oberon (Placed, LanguageVersion(Oberon1, Oberon2), Options(..),
+                        parseAndResolveModule, resolvePosition, resolvePositions)
 import Language.Oberon.AST (Language, Module(..), StatementSequence, Statement, Expression)
 import qualified Language.Oberon.AST as AST
 import qualified Language.Oberon.Grammar as Grammar
@@ -37,7 +38,7 @@ import System.FilePath (FilePath, addExtension, combine, takeDirectory)
 
 import Prelude hiding (getLine, getContents, readFile)
 
-data GrammarMode = TypeCheckedModuleMode | ModuleWithImportsMode | ModuleMode | AmbiguousModuleMode | DefinitionMode
+data GrammarMode = ModuleWithImportsMode | ModuleMode | AmbiguousModuleMode | DefinitionMode
                  | StatementsMode | StatementMode | ExpressionMode
     deriving Show
 
@@ -45,12 +46,14 @@ data Output = Plain | Pretty Int | Tree
             deriving Show
 
 data Opts = Opts
-    { optsMode        :: GrammarMode
-    , optsVersion     :: LanguageVersion
-    , optsIndex       :: Int
-    , optsOutput      :: Output
-    , optsInclude     :: Maybe FilePath
-    , optsFile        :: Maybe FilePath
+    { optsMode          :: GrammarMode
+    , optsVersion       :: LanguageVersion
+    , optsCheckTypes    :: Bool
+    , optsFoldConstants :: Bool
+    , optsIndex         :: Int
+    , optsOutput        :: Output
+    , optsInclude       :: Maybe FilePath
+    , optsFile          :: Maybe FilePath
     } deriving Show
 
 main :: IO ()
@@ -67,6 +70,8 @@ main = execParser opts >>= main'
         <*> (flag' Oberon2 (long "oberon2")
              <|> flag' Oberon1 (long "oberon1")
              <|> pure Oberon2)
+        <*> (switch (long "check-types"))
+        <*> (switch (long "fold-constants"))
         <*> (option auto (long "index" <> help "Index of ambiguous parse" <> showDefault <> value 0 <> metavar "INT"))
         <*> (Pretty <$> option auto (long "pretty" <> help "Pretty-print output" <> metavar "WIDTH")
              <|> flag' Tree (long "tree" <> help "Print the output as an abstract syntax tree")
@@ -78,8 +83,7 @@ main = execParser opts >>= main'
               <> help "Oberon file to parse"))
 
     mode :: Parser GrammarMode
-    mode = TypeCheckedModuleMode <$ switch (long "type-checked-module")
-       <|> ModuleWithImportsMode <$ switch (long "module-with-imports")
+    mode = ModuleWithImportsMode <$ switch (long "module-with-imports")
        <|> ModuleMode          <$ switch (long "module")
        <|> AmbiguousModuleMode <$ switch (long "module-ambiguous")
        <|> DefinitionMode      <$ switch (long "definition")
@@ -92,14 +96,12 @@ main' Opts{..} =
     case optsFile of
         Just file -> (if file == "-" then getContents else readFile file)
                      >>= case optsMode
-                         of TypeCheckedModuleMode ->
+                         of ModuleWithImportsMode ->
                                let dir = fromMaybe (takeDirectory file) optsInclude
-                               in \source-> parseAndResolveModule True optsVersion dir source
+                               in \source-> parseAndResolveModule Options{checkTypes= optsCheckTypes,
+                                                                          foldConstants= optsFoldConstants,
+                                                                          version= optsVersion} dir source
                                             >>= succeed optsOutput (reportTypeErrorIn dir) id
-                            ModuleWithImportsMode ->
-                              \source-> parseAndResolveModule False optsVersion
-                                          (fromMaybe (takeDirectory file) optsInclude) source
-                                        >>= succeed optsOutput (error "no type checking") id
                             ModuleMode ->
                               go (Resolver.resolveModule predefined mempty) Grammar.module_prod chosenGrammar file
                             DefinitionMode ->
