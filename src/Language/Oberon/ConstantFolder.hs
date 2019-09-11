@@ -253,33 +253,6 @@ instance (Atts (Inherited ConstantFold) (Abstract.Statement l l (Semantics Const
       (Synthesized SynCF{folded= (pos, AST.StatementSequence (folded . syn <$> statements))},
        AST.StatementSequence (pure $ Inherited inheritance))
 
-instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Abstract.Expression l ~ AST.Expression l,
-          Atts (Inherited ConstantFold) (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Deep.Product (Abstract.Expression l l) (Abstract.StatementSequence l l)
-                                      (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Case l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.WithAlternative l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Expression l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.StatementSequence l l),
-          Atts (Synthesized ConstantFold) (Deep.Product (Abstract.Expression l l) (Abstract.StatementSequence l l)
-                                        (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Deep.Product (Abstract.Expression l l) (Abstract.StatementSequence l l)),
-          Atts (Synthesized ConstantFold) (Abstract.Case l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.Case l l),
-          Atts (Synthesized ConstantFold) (Abstract.WithAlternative l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.WithAlternative l l),
-          Atts (Synthesized ConstantFold) (Abstract.Expression l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCFExp l,
-          Atts (Synthesized ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Value l l ((,) Int) ((,) Int)))) =>
-         Attribution ConstantFold (AST.Statement l l) (Int, AST.Statement l l (Semantics ConstantFold) (Semantics ConstantFold)) where
-   attribution ConstantFold (pos, self) (Inherited inheritance, AST.Assignment lhs rhs) =
-      (Synthesized SynCF{folded= (pos, AST.Assignment (fst <$> folded (syn lhs)) (foldedExp $ syn rhs))},
-       AST.Assignment (Inherited inheritance) (Inherited inheritance))
-
 instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Inherited ConstantFold) (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
           Atts (Synthesized ConstantFold) (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold))
