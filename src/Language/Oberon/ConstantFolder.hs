@@ -236,53 +236,6 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
                             moduleFolded= (pos, AST.ForwardDeclaration namedef (folded . syn <$> signature))},
        AST.ForwardDeclaration namedef (Just (Inherited inheritance)))
 
-instance (Ord (Abstract.QualIdent l),
-          Atts (Inherited ConstantFold) (Abstract.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCFMod' l (Abstract.Declaration l l),
-          Atts (Synthesized ConstantFold) (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.StatementSequence l l)) =>
-         Attribution ConstantFold (AST.Block l l) (Int, AST.Block l l (Semantics ConstantFold) (Semantics ConstantFold)) where
-   attribution ConstantFold (pos, AST.Block{}) (Inherited inheritance, AST.Block declarations statements) =
-      (Synthesized SynCF{folded= (pos, AST.Block (moduleFolded . syn <$> declarations) (folded . syn <$> statements))},
-       AST.Block (pure $ Inherited localInherited) (pure $ Inherited localInherited))
-      where localInherited = InhCF (foldMap (moduleEnv . syn) declarations <> env inheritance)
-                                   (currentModule inheritance)
-            
-instance (Ord (Abstract.QualIdent l),
-          Atts (Inherited ConstantFold) (Abstract.FPSection l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.FPSection l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.FPSection l l)) =>
-         Attribution ConstantFold (AST.FormalParameters l l)
-         (Int, AST.FormalParameters l l (Semantics ConstantFold) (Semantics ConstantFold)) where
-   attribution ConstantFold (pos, AST.FormalParameters _sections returnType)
-               (Inherited inheritance, AST.FormalParameters sections _returnType) =
-      (Synthesized SynCF{folded= (pos, AST.FormalParameters (folded . syn <$> sections) returnType)},
-       AST.FormalParameters (pure $ Inherited inheritance) returnType)
-
-instance (Abstract.Wirthy l, Ord (Abstract.QualIdent l),
-          Atts (Inherited ConstantFold) (Abstract.Type l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.Type l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.Type l l)) =>
-         Attribution ConstantFold (AST.FPSection l l) (Int, AST.FPSection l l (Semantics ConstantFold) (Semantics ConstantFold)) where
-   attribution ConstantFold (pos, AST.FPSection var names _typeDef) (Inherited inheritance, AST.FPSection _var _names typeDef) =
-      (Synthesized SynCF{folded= (pos, AST.FPSection var names (folded $ syn typeDef))},
-       AST.FPSection var names (Inherited inheritance))
-
-instance (Abstract.Nameable l,
-          Atts (Inherited ConstantFold) (Abstract.Type l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.Type l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.Type l l)) =>
-         Attribution ConstantFold (AST.FieldList l l)
-                     (Int, AST.FieldList l l (Semantics ConstantFold) (Semantics ConstantFold)) where
-   attribution ConstantFold (pos, AST.FieldList names _declaredType) (Inherited inheritance, AST.FieldList _names declaredType) =
-      (Synthesized SynCF{folded= (pos, AST.FieldList names (folded $ syn declaredType))},
-       AST.FieldList names (Inherited inheritance))
-   attribution ConstantFold (pos, _self) (Inherited inheritance, AST.EmptyFieldList) =
-      (Synthesized SynCF{folded= (pos, AST.EmptyFieldList)}, AST.EmptyFieldList)
-
 instance (Abstract.Nameable l, Abstract.Expression l ~ AST.Expression l) =>
          Attribution ConstantFold (Deep.Product (AST.Expression l l) (AST.StatementSequence l l))
                      (Int, Deep.Product (AST.Expression l l) (AST.StatementSequence l l)
@@ -764,30 +717,6 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
          => Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
                             (AST.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    (<$>) = AG.mapDefault id snd
-instance (Ord (Abstract.QualIdent l),
-          Atts (Inherited ConstantFold) (Abstract.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCFMod' l (Abstract.Declaration l l),
-          Atts (Synthesized ConstantFold) (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.StatementSequence l l)) =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-                         (AST.Block l l (Semantics ConstantFold) (Semantics ConstantFold)) where
-   (<$>) = AG.mapDefault id snd
-instance (Ord (Abstract.QualIdent l),
-          Atts (Inherited ConstantFold) (Abstract.FPSection l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.FPSection l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.FPSection l l)) =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-         (AST.FormalParameters l l (Semantics ConstantFold) (Semantics ConstantFold)) where
-   (<$>) = AG.mapDefault id snd
-instance (Abstract.Wirthy l, Ord (Abstract.QualIdent l),
-          Atts (Inherited ConstantFold) (Abstract.Type l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.Type l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.Type l l)) =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-                         (AST.FPSection l l (Semantics ConstantFold) (Semantics ConstantFold)) where
-   (<$>) = AG.mapDefault id snd
 instance (Abstract.Nameable l, Abstract.Expression l ~ AST.Expression l) =>
          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
                          (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)
@@ -856,13 +785,6 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Abstract.Oberon l, Ord (Abst
           ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Value l l ((,) Int) ((,) Int)))) =>
          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
                          (AST.Designator l l (Semantics ConstantFold) (Semantics ConstantFold)) where
-   (<$>) = AG.mapDefault id snd
-instance (Abstract.Nameable l,
-          Atts (Inherited ConstantFold) (Abstract.Type l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.Type l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.Type l l)) =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-                         (AST.FieldList l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    (<$>) = AG.mapDefault id snd
 
 instance (Deep.Functor ConstantFold (AST.Declaration l l) Placed (Semantics ConstantFold),
@@ -979,6 +901,31 @@ instance Full.Functor (ConstantFoldSyn l) (Abstract.FormalParameters l l) (Seman
    ConstantFold <$> (pos, proc) = Rank2.Arrow sem
      where sem inherited = Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> proc))
 
+instance Full.Functor (ConstantFoldSyn l) (Abstract.FPSection l l) (Semantics ConstantFold) Placed =>
+         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+                         (AST.FormalParameters l l (Semantics ConstantFold) (Semantics ConstantFold)) where
+   ConstantFold <$> (pos, params) = Rank2.Arrow sem
+     where sem inherited = Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> params))
+
+instance Full.Functor (ConstantFoldSyn l) (Abstract.Type l l) (Semantics ConstantFold) Placed =>
+         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+                         (AST.FPSection l l (Semantics ConstantFold) (Semantics ConstantFold)) where
+   ConstantFold <$> (pos, params) = Rank2.Arrow sem
+     where sem inherited = Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> params))
+
+instance Full.Functor (ConstantFoldSyn l) (Abstract.Type l l) (Semantics ConstantFold) Placed =>
+         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+                         (AST.FieldList l l (Semantics ConstantFold) (Semantics ConstantFold)) where
+   ConstantFold <$> (pos, fields) = Rank2.Arrow sem
+     where sem inherited = Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> fields))
+
+instance (Full.Functor (ConstantFoldSyn l) (Abstract.Declaration l l) (Semantics ConstantFold) Placed,
+          Full.Functor (ConstantFoldSyn l) (Abstract.StatementSequence l l) (Semantics ConstantFold) Placed) =>
+         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+                         (AST.Block l l (Semantics ConstantFold) (Semantics ConstantFold)) where
+   ConstantFold <$> (pos, block) = Rank2.Arrow sem
+     where sem inherited = Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> block))
+
 instance (Full.Functor (ConstantFoldSyn l) (Abstract.Designator l l) (Semantics ConstantFold) Placed,
           Full.Functor (ConstantFoldSyn l) (Abstract.Expression l l) (Semantics ConstantFold) Placed,
           Full.Functor (ConstantFoldSyn l) (Abstract.Case l l) (Semantics ConstantFold) Placed,
@@ -994,10 +941,16 @@ instance Full.Functor ConstantFold (AST.Value l l) Placed (Semantics ConstantFol
    ConstantFold <$> (pos, val) = Rank2.Arrow sem
      where sem _inherited = Synthesized (SynCF (pos, val))
 
+instance Full.Functor (ConstantFoldSyn l) (AST.Declaration l l) (Semantics ConstantFold) Placed where
+  ConstantFoldSyn inh <$> sem = moduleFolded (syn $ Rank2.apply sem $ Inherited inh)
+
 instance Full.Functor (ConstantFoldSyn l) (AST.Type l l) (Semantics ConstantFold) Placed where
   ConstantFoldSyn inh <$> sem = folded (syn $ Rank2.apply sem $ Inherited inh)
 
 instance Full.Functor (ConstantFoldSyn l) (AST.FormalParameters l l) (Semantics ConstantFold) Placed where
+  ConstantFoldSyn inh <$> sem = folded (syn $ Rank2.apply sem $ Inherited inh)
+
+instance Full.Functor (ConstantFoldSyn l) (AST.FPSection l l) (Semantics ConstantFold) Placed where
   ConstantFoldSyn inh <$> sem = folded (syn $ Rank2.apply sem $ Inherited inh)
 
 instance Full.Functor (ConstantFoldSyn l) (AST.FieldList l l) (Semantics ConstantFold) Placed where
