@@ -23,15 +23,13 @@ import Data.Either.Validation (Validation(..), validationToEither)
 import Data.Functor.Identity (Identity(Identity))
 import Data.Functor.Compose (Compose, getCompose)
 import Data.List.NonEmpty (NonEmpty((:|)))
-import qualified Data.Map.Lazy as Map
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text, unpack)
 import Data.Text.IO (getLine, readFile, getContents)
 import qualified Data.Text.IO as Text
-import Data.Typeable (Typeable)
 import Options.Applicative
-import Text.Grampa (Ambiguous, Grammar, ParseResults, parseComplete, failureDescription, offsetContext)
+import Text.Grampa (Ambiguous, Grammar, parseComplete, failureDescription, offsetContext)
 import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
 import ReprTree
 import System.FilePath (FilePath, addExtension, combine, takeDirectory)
@@ -115,6 +113,12 @@ main' Opts{..} =
             forever $
             getLine >>=
             case optsMode of
+                ModuleWithImportsMode ->
+                    let dir = fromMaybe "." optsInclude
+                    in \source-> parseAndResolveModule Options{checkTypes= optsCheckTypes,
+                                                               foldConstants= optsFoldConstants,
+                                                               version= optsVersion} dir source
+                                 >>= succeed optsOutput (reportTypeErrorIn dir) id
                 ModuleMode          -> go (Resolver.resolveModule predefined mempty) Grammar.module_prod
                                           chosenGrammar "<stdin>"
                 AmbiguousModuleMode -> go pure Grammar.module_prod chosenGrammar "<stdin>"

@@ -8,7 +8,7 @@ module Language.Oberon.Pretty (Precedence(Precedence)) where
 import Data.Char (toUpper)
 import Data.Functor.Identity (Identity(..))
 import Data.List (intersperse)
-import Data.List.NonEmpty (NonEmpty((:|)), fromList, toList)
+import Data.List.NonEmpty (NonEmpty((:|)), toList)
 import qualified Data.Text as Text
 import Data.Text.Prettyprint.Doc
 import Numeric (showHex)

@@ -10,7 +10,7 @@ import Control.Applicative
 import Control.Monad (guard)
 import Data.Char
 import Data.Functor.Compose (Compose(..))
-import Data.List.NonEmpty (NonEmpty((:|)), fromList, toList)
+import Data.List.NonEmpty (NonEmpty)
 import Data.Monoid ((<>), Endo(Endo, appEndo))
 import Numeric (readDec, readHex, readFloat)
 import Data.Text (Text, unpack)
@@ -20,7 +20,6 @@ import Text.Parser.Combinators (sepBy, sepBy1, sepByNonEmpty, try)
 import Text.Parser.Token (braces, brackets, parens)
 
 import Transformation.Deep as Deep (Product(Pair))
-import qualified Rank2
 import qualified Rank2.TH
 
 import qualified Language.Oberon.Abstract as Abstract
@@ -345,8 +344,9 @@ wrapAmbiguous = (Compose <$>) . ((,) <$> getSourcePos <*>) . ambiguous
 wrap = wrapAmbiguous
 
 wrapBinary :: (NodeWrap a -> NodeWrap a -> a) -> (NodeWrap a -> NodeWrap a -> NodeWrap a)
-wrapBinary op a@(Compose (pos, a')) b = Compose (pos, pure (op a b))
+wrapBinary op a@(Compose (pos, _)) b = Compose (pos, pure (op a b))
 
+moptional :: (Alternative f, Monoid (f a)) => f a -> f a
 moptional p = p <|> mempty
 
 delimiter, operator :: Abstract.Oberon l => Text -> Parser (OberonGrammar l f) Text Text

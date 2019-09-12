@@ -9,8 +9,6 @@
 module Language.Oberon.Resolver (Error(..),
                                  Predefined, predefined, predefined2, resolveModule, resolveModules) where
 
-import Control.Applicative (Alternative)
-import Control.Monad ((>=>))
 import Control.Monad.Trans.State (StateT(..), evalStateT, execStateT, get, put)
 import Data.Either (partitionEithers)
 import Data.Either.Validation (Validation(..), validationToEither)
@@ -19,7 +17,6 @@ import Data.Functor.Compose (Compose(..))
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.List as List
-import Data.Monoid (Alt(..))
 import Data.Map.Lazy (Map, traverseWithKey)
 import qualified Data.Map.Lazy as Map
 import Data.Semigroup (Semigroup(..), sconcat)
@@ -30,8 +27,7 @@ import qualified Transformation as Shallow
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Deep.TH
 import qualified Transformation.Full as Full
-import qualified Transformation.Rank2 as Rank2
-import Text.Grampa (Ambiguous(..), Position(..), ParseFailure)
+import Text.Grampa (Ambiguous(..))
 
 import qualified Language.Oberon.Abstract as Abstract
 import Language.Oberon.AST
@@ -138,19 +134,19 @@ instance {-# overlaps #-}
           resolveExpression e@(FunctionCall functions parameters) =
              case evalStateT (Shallow.traverse res functions) s
              of Failure errors -> Failure errors
-                Success (pos, d)
+                Success (_pos, d)
                    | Just q <- getVariableName d, Success (DeclaredProcedure True _) <- resolveName res scope q
                      -> pure (e, ExpressionOrTypeState)
                    | Success{} <- evalStateT (traverse (Shallow.traverse res) parameters) (scope, ExpressionState)
                      -> pure (e, ExpressionState)
                    | otherwise -> Failure (pure $ InvalidFunctionParameters parameters)
-          resolveExpression e@(IsA lefts q) =
+          resolveExpression e@(IsA _lefts q) =
             case resolveName res scope q
             of Failure err ->  Failure err
                Success DeclaredType{} -> pure (e, ExpressionState)
                Success _ -> Failure (NotAType q :| [])
           resolveExpression e = pure (e, state)
-      in (\(pos, (r, s))-> ((pos, r), (scope, s)))
+      in (\(pos, (r, s'))-> ((pos, r), (scope, s')))
          <$> unique InvalidExpression (AmbiguousExpression . (fst <$>)) (resolveExpression <$> expressions)
 
 instance {-# overlaps #-}
@@ -174,7 +170,7 @@ instance {-# overlaps #-}
              innerScope = localScope res "" (getLocalDeclarations body') (headingScope `Map.union` scope)
          put (innerScope, state)
          return (pos, proc)
-   traverse res (Compose (pos, Ambiguous (dec :| []))) = pure (pos, dec)
+   traverse _ (Compose (pos, Ambiguous (dec :| []))) = pure (pos, dec)
    traverse _ declarations = StateT (const $ Failure $ pure $ AmbiguousDeclaration $ toList declarations)
 
 class CoFormalParameters l where
@@ -206,7 +202,7 @@ instance {-# overlaps #-}
              binding (Compose (_, Ambiguous (section :| []))) = evalFPSection section $ \ _ names types->
                 [(v, evalStateT (Deep.traverse res $ DeclaredVariable types) s) | v <- names]
          in Success ((pos, proc), (innerScope, state))
-   traverse res (Compose (pos, Ambiguous (proc@(TypeBoundHeading var receiverName receiverType _ _ parameters) :| []))) =
+   traverse res (Compose (pos, Ambiguous (proc@(TypeBoundHeading _var receiverName receiverType _ _ parameters) :| []))) =
       StateT $ \s@(scope, state)->
          let innerScope = parameterScope `Map.union` receiverBinding `Map.union` scope
              receiverBinding :: Map Ident (Validation e (DeclarationRHS l f' Placed))
@@ -229,23 +225,23 @@ instance {-# overlaps #-}
     Deep.Traversable (Resolution l) (Abstract.FormalParameters l l) NodeWrap Placed (Resolved l),
     Deep.Traversable (Resolution l) (Abstract.ConstExpression l l) NodeWrap Placed (Resolved l)) =>
    Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Block l l NodeWrap NodeWrap) where
-   traverse res (Compose (pos, Ambiguous (body@(Block declarations statements) :| []))) =
+   traverse res (Compose (pos, Ambiguous (body@(Block declarations _statements) :| []))) =
      StateT $ \(scope, state)-> Success ((pos, body), (localScope res "" declarations scope, state))
-   traverse _ b = StateT (const $ Failure $ pure AmbiguousParses)
+   traverse _ _ = StateT (const $ Failure $ pure AmbiguousParses)
 
 instance {-# overlaps #-}
     (Deep.Traversable (Resolution l) (Abstract.Designator l l) NodeWrap Placed (Resolved l),
      Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Abstract.Designator l l NodeWrap NodeWrap)) =>
     Shallow.Traversable (Resolution l) NodeWrap Placed (Resolved l) (Statement l l NodeWrap NodeWrap) where
-   traverse res statements = StateT $ \s@(scope, state)->
+   traverse res statements = StateT $ \s@(scope, _state)->
       let resolveStatement :: Statement l l NodeWrap NodeWrap
                             -> Validation (NonEmpty (Error l)) (Statement l l NodeWrap NodeWrap, ResolutionState)
-          resolveStatement p@(ProcedureCall procedures parameters) =
+          resolveStatement p@(ProcedureCall procedures _parameters) =
              case evalStateT (Shallow.traverse res procedures) s
              of Failure errors -> Failure errors
                 Success{} -> pure (p, StatementState)
           resolveStatement stat = pure (stat, StatementState)
-      in (\(pos, (r, s))-> ((pos, r), (scope, s)))
+      in (\(pos, (r, s'))-> ((pos, r), (scope, s')))
          <$> unique InvalidStatement (AmbiguousStatement . (fst <$>)) (resolveStatement <$> statements)
 
 mapResolveDefault :: Resolution l -> NodeWrap (g (Resolved l) (Resolved l)) -> Resolved l (g (Resolved l) (Resolved l))
@@ -287,7 +283,7 @@ instance Resolvable Language where
       of Failure err -> Failure err
          Success DeclaredType{} -> Failure (NotAValue q :| [])
          Success DeclaredProcedure{} -> Failure (NotARecord q :| [])
-         Success (DeclaredVariable t) -> resolveDesignator res scope state d
+         Success DeclaredVariable{} -> resolveDesignator res scope state d
    resolveRecord res scope state d = resolveDesignator res scope state d
 
 resolveTypeName res scope q =

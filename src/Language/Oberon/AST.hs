@@ -124,6 +124,7 @@ instance Abstract.CoWirthy Language where
    coDeclaration (TypeDeclaration name ty) = Just (Abstract.typeDeclaration name ty)
    coDeclaration (VariableDeclaration name ty) = Just (Abstract.variableDeclaration name ty)
 --   coDeclaration (ProcedureDeclaration name ty) = Abstract.procedureDeclaration <$> Abstract.coIdentDef name <*> traverse Abstract.coType ty
+   coDeclaration (ProcedureDeclaration name ty) = Nothing
    coDeclaration ForwardDeclaration{} = Nothing
    
 --   coType (TypeReference q) = Just (Abstract.typeReference q)
@@ -134,18 +135,19 @@ instance Abstract.CoWirthy Language where
    coStatement EmptyStatement = Just Abstract.emptyStatement
    coStatement (Assignment destination expression) = Just (Abstract.assignment destination expression)
    coStatement (ProcedureCall procedure parameters) = Just (Abstract.procedureCall procedure parameters)
---   coStatement (If branches fallback) = Just (Abstract.ifStatement branches fallback)
+   coStatement (If branches fallback) = Just (Abstract.ifStatement branches fallback)
 --   coStatement (CaseStatement scrutinee cases fallback) = Just (Abstract.caseStatement scrutinee cases fallback)
+   coStatement (CaseStatement scrutinee cases fallback) = Nothing
    coStatement (While condition body) = Just (Abstract.whileStatement condition body)
    coStatement (Repeat body condition) = Just (Abstract.repeatStatement body condition)
-   coStatement (For index from to by body) = Nothing
+   coStatement (For _index _from _to _by _body) = Nothing
    coStatement (Loop body) = Just (Abstract.loopStatement body)
-   coStatement (With alternatives fallback) = Nothing
+   coStatement (With _alternatives _fallback) = Nothing
    coStatement Exit = Just Abstract.exitStatement
    coStatement (Return result) = Just (Abstract.returnStatement result)
    
    coExpression (Relation op left right) = Just (Abstract.relation op left right)
-   coExpression (IsA left right) = Nothing
+   coExpression (IsA _left _right) = Nothing
    coExpression (Positive e) = Just (Abstract.positive e)
    coExpression (Negative e) = Just (Abstract.negative e)
    coExpression (Add left right) = Just (Abstract.add left right)
@@ -156,7 +158,7 @@ instance Abstract.CoWirthy Language where
    coExpression (IntegerDivide left right) = Just (Abstract.integerDivide left right)
    coExpression (Modulo left right) = Just (Abstract.modulo left right)
    coExpression (And left right) = Just (Abstract.and left right)
-   coExpression (Set elements) = Nothing
+   coExpression (Set _elements) = Nothing
    coExpression (Read var) = Just (Abstract.read var)
    coExpression (FunctionCall function parameters) = Just (Abstract.functionCall function parameters)
    coExpression (Not e) = Just (Abstract.not e)
@@ -173,7 +175,7 @@ instance Abstract.CoWirthy Language where
    coDesignator (Variable q) = Just (Abstract.variable q)
    coDesignator (Field record name) = Just (Abstract.field record name)
    coDesignator (Index array indexes) = Just (Abstract.index array indexes)
-   coDesignator (TypeGuard scrutinee typeName) = Nothing
+   coDesignator (TypeGuard _scrutinee _typeName) = Nothing
    coDesignator (Dereference pointer) = Just (Abstract.dereference pointer)
 
 instance Abstract.Nameable Language where

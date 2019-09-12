@@ -3,38 +3,28 @@
 
 module Language.Oberon.ConstantFolder where
 
-import Control.Applicative (liftA2, (<|>))
+import Control.Applicative (liftA2)
 import Control.Arrow (first)
 import Control.Monad (join)
-import Data.Coerce (coerce)
 import Data.Bits (shift)
 import Data.Char (chr, ord, toUpper)
-import Data.Foldable (toList)
 import Data.Functor.Identity (Identity(..))
 import Data.Int (Int32)
-import Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.List.NonEmpty as NonEmpty
-import qualified Data.List as List
-import Data.Maybe (fromMaybe)
 import Data.Map.Lazy (Map)
 import qualified Data.Map.Lazy as Map
-import Data.Semigroup (Semigroup(..), sconcat)
+import Data.Semigroup (Semigroup(..))
 import qualified Data.Text as Text
 import Foreign.Storable (sizeOf)
 
 import qualified Rank2
-import qualified Rank2.TH
 import qualified Transformation as Shallow
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 import qualified Transformation.AG as AG
-import qualified Transformation.Rank2
 import Transformation.AG (Attribution(..), Atts, Inherited(..), Synthesized(..), Semantics)
 
 import qualified Language.Oberon.Abstract as Abstract
 import qualified Language.Oberon.AST as AST
-
-import Debug.Trace
 
 foldConstants :: (Abstract.Oberon l, Abstract.Nameable l,
                   Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
@@ -76,7 +66,7 @@ instance (Atts (Synthesized ConstantFold) (f ((,) Int) ((,) Int)) ~ SynCF' f,
           Atts (Inherited ConstantFold) (f ((,) Int) ((,) Int)) ~ InhCF l) =>
          Shallow.Functor (ConstantFoldSyn l) (Semantics ConstantFold) ((,) Int)
                          (f ((,) Int) ((,) Int)) where
-   ConstantFoldSyn inh <$> f = folded (syn $ Rank2.apply f $ Inherited inh)
+   ConstantFoldSyn inheritance <$> f = folded (syn $ Rank2.apply f $ Inherited inheritance)
 
 data InhCFRoot l = InhCFRoot{rootEnv :: Environment l}
 
@@ -170,13 +160,13 @@ instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Sh
           Atts (Synthesized ConstantFold) (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold))
           ~ SynCF' (Abstract.StatementSequence l l)) =>
          Attribution ConstantFold (AST.Module l l) (Int, AST.Module l l (Semantics ConstantFold) (Semantics ConstantFold)) where
-   attribution ConstantFold (_, AST.Module moduleName imports decls body) 
-               (Inherited inheritance, AST.Module _ _ decls' body') =
+   attribution ConstantFold (_, AST.Module moduleName imports _decls _body)
+               (Inherited inheritance, AST.Module _ _ decls body) =
       (Synthesized SynCFMod{moduleEnv= exportedEnv,
-                            moduleFolded= (0, AST.Module moduleName imports (moduleFolded . syn <$> decls') (folded . syn <$> body'))},
+                            moduleFolded= (0, AST.Module moduleName imports (moduleFolded . syn <$> decls) (folded . syn <$> body))},
        AST.Module moduleName imports (pure $ Inherited localEnv) (pure $ Inherited localEnv))
       where exportedEnv = Map.mapKeysMonotonic export newEnv
-            newEnv = Map.unions (moduleEnv . syn <$> decls')
+            newEnv = Map.unions (moduleEnv . syn <$> decls)
             localEnv = InhCF (newEnv `Map.union` env inheritance) (currentModule inheritance)
             export q
                | Just name <- Abstract.getNonQualIdentName q = Abstract.qualIdent moduleName name
@@ -264,8 +254,7 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
                         Nothing -> SynCFExp{foldedExp= (pos, AST.Relation op (foldedExp $ syn left) (foldedExp $ syn right)),
                                             foldedValue= Nothing},
        AST.Relation op (Inherited inheritance) (Inherited inheritance))
-      where (leftPos, leftExp) = foldedExp (syn left)
-            compareValues (AST.Boolean l) (AST.Boolean r)   = relate op (compare l r)
+      where compareValues (AST.Boolean l) (AST.Boolean r)   = relate op (compare l r)
             compareValues (AST.Integer l) (AST.Integer r)   = relate op (compare l r)
             compareValues (AST.Real l) (AST.Real r)         = relate op (compare l r)
             compareValues (AST.Integer l) (AST.Real r)      = relate op (compare (fromIntegral l) r)
@@ -336,8 +325,8 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
                                                             foldedValue= Just Abstract.false}
                         Just (AST.Boolean False) -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.true)),
                                                              foldedValue= Just Abstract.true}
-                        Nothing -> SynCFExp{foldedExp= (pos, AST.Not $ foldedExp $ syn expr),
-                                            foldedValue= Nothing},
+                        _ -> SynCFExp{foldedExp= (pos, AST.Not $ foldedExp $ syn expr),
+                                      foldedValue= Nothing},
        AST.Not (Inherited inheritance))
    attribution ConstantFold (pos, AST.IsA _ right) (Inherited inheritance, AST.IsA left _) =
       (Synthesized SynCFExp{foldedExp= (pos, AST.IsA (foldedExp $ syn left) right),
@@ -349,8 +338,8 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
        AST.Set [Inherited inheritance])
    attribution ConstantFold (pos, _) (Inherited inheritance, AST.Read des) =
       (Synthesized $ case folded (syn des)
-                     of (pos', (des', Just val)) -> SynCFExp{foldedExp= (pos, Abstract.literal (pos', val)),
-                                                             foldedValue= Just val}
+                     of (pos', (_, Just val)) -> SynCFExp{foldedExp= (pos, Abstract.literal (pos', val)),
+                                                          foldedValue= Just val}
                         (pos', (des', Nothing)) -> SynCFExp{foldedExp= (pos, AST.Read (pos', des')),
                                                             foldedValue= Nothing},
        AST.Read (Inherited inheritance))
@@ -841,57 +830,57 @@ instance Full.Functor (ConstantFoldSyn l) (Abstract.StatementSequence l l) (Sema
 instance Full.Functor (ConstantFoldSyn l) (Abstract.Expression l l) (Semantics ConstantFold) Placed =>
          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
                          (AST.Element l l (Semantics ConstantFold) (Semantics ConstantFold)) where
-   ConstantFold <$> (pos, elem) = Rank2.Arrow sem
-     where sem inherited = Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> elem))
+   ConstantFold <$> (pos, el) = Rank2.Arrow sem
+     where sem inherited = Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> el))
 
 instance Full.Functor ConstantFold (AST.Value l l) Placed (Semantics ConstantFold) where
    ConstantFold <$> (pos, val) = Rank2.Arrow sem
      where sem _inherited = Synthesized (SynCF (pos, val))
 
 instance Full.Functor (ConstantFoldSyn l) (AST.Declaration l l) (Semantics ConstantFold) Placed where
-  ConstantFoldSyn inh <$> sem = moduleFolded (syn $ Rank2.apply sem $ Inherited inh)
+  ConstantFoldSyn inheritance <$> sem = moduleFolded (syn $ Rank2.apply sem $ Inherited inheritance)
 
 instance Full.Functor (ConstantFoldSyn l) (AST.Type l l) (Semantics ConstantFold) Placed where
-  ConstantFoldSyn inh <$> sem = folded (syn $ Rank2.apply sem $ Inherited inh)
+  ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
 instance Full.Functor (ConstantFoldSyn l) (AST.FormalParameters l l) (Semantics ConstantFold) Placed where
-  ConstantFoldSyn inh <$> sem = folded (syn $ Rank2.apply sem $ Inherited inh)
+  ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
 instance Full.Functor (ConstantFoldSyn l) (AST.FPSection l l) (Semantics ConstantFold) Placed where
-  ConstantFoldSyn inh <$> sem = folded (syn $ Rank2.apply sem $ Inherited inh)
+  ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
 instance Full.Functor (ConstantFoldSyn l) (AST.FieldList l l) (Semantics ConstantFold) Placed where
-  ConstantFoldSyn inh <$> sem = folded (syn $ Rank2.apply sem $ Inherited inh)
+  ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
 instance Full.Functor (ConstantFoldSyn l) (AST.Expression l l) (Semantics ConstantFold) Placed where
-  ConstantFoldSyn inh <$> sem = foldedExp (syn $ Rank2.apply sem $ Inherited inh)
+  ConstantFoldSyn inheritance <$> sem = foldedExp (syn $ Rank2.apply sem $ Inherited inheritance)
 
 instance Full.Functor (ConstantFoldSyn l) (AST.Designator l l) (Semantics ConstantFold) Placed where
-  ConstantFoldSyn inh <$> sem = fst <$> folded (syn $ Rank2.apply sem $ Inherited inh)
+  ConstantFoldSyn inheritance <$> sem = fst <$> folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
 instance Full.Functor (ConstantFoldSyn l) (AST.StatementSequence l l) (Semantics ConstantFold) Placed where
-  ConstantFoldSyn inh <$> sem = folded (syn $ Rank2.apply sem $ Inherited inh)
+  ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
 instance Full.Functor (ConstantFoldSyn l) (AST.Statement l l) (Semantics ConstantFold) Placed where
-  ConstantFoldSyn inh <$> sem = folded (syn $ Rank2.apply sem $ Inherited inh)
+  ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
 instance Full.Functor (ConstantFoldSyn l) (AST.Case l l) (Semantics ConstantFold) Placed where
-  ConstantFoldSyn inh <$> sem = folded (syn $ Rank2.apply sem $ Inherited inh)
+  ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
 instance Full.Functor (ConstantFoldSyn l) (AST.CaseLabels l l) (Semantics ConstantFold) Placed where
-  ConstantFoldSyn inh <$> sem = folded (syn $ Rank2.apply sem $ Inherited inh)
+  ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
 instance Full.Functor (ConstantFoldSyn l) (AST.WithAlternative l l) (Semantics ConstantFold) Placed where
-  ConstantFoldSyn inh <$> sem = folded (syn $ Rank2.apply sem $ Inherited inh)
+  ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
 instance Full.Functor (ConstantFoldSyn l) (Deep.Product (AST.Expression l l) (AST.StatementSequence l l))
                       (Semantics ConstantFold) Placed where
-  ConstantFoldSyn inh <$> sem = folded (syn $ Rank2.apply sem $ Inherited inh)
+  ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
 -- * Unsafe Rank2 AST instances
 
 instance Rank2.Apply (AST.Module l l f') where
-   AST.Module name1 imports1 decls1 body1 <*> ~(AST.Module name2 imports2 decls2 body2) =
+   AST.Module name1 imports1 decls1 body1 <*> ~(AST.Module _name _imports decls2 body2) =
       AST.Module name1 imports1 (liftA2 Rank2.apply decls1 decls2) (liftA2 Rank2.apply body1 body2)
 
 type Placed = ((,) Int)

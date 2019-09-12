@@ -1,37 +1,26 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
              TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
-module Language.Oberon.TypeChecker (Error(..), errorMessage, checkModules, predefined, predefined2) where
+module Language.Oberon.TypeChecker (Error, errorMessage, checkModules, predefined, predefined2) where
 
 import Control.Applicative (liftA2, (<|>))
 import Control.Arrow (first)
-import Data.Coerce (coerce)
-import Data.Either (partitionEithers)
-import Data.Either.Validation (Validation(..), validationToEither)
-import Data.Foldable (toList)
-import Data.Functor.Identity (Identity(..))
-import Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.List as List
 import Data.Maybe (fromMaybe)
 import Data.Map.Lazy (Map)
 import qualified Data.Map.Lazy as Map
-import Data.Semigroup (Semigroup(..), sconcat)
+import Data.Semigroup (Semigroup(..))
 import qualified Data.Text as Text
 
 import qualified Rank2
-import qualified Rank2.TH
 import qualified Transformation as Shallow
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 import qualified Transformation.AG as AG
-import qualified Transformation.Rank2
 import Transformation.AG (Attribution(..), Atts, Inherited(..), Synthesized(..), Semantics)
 
 import qualified Language.Oberon.Abstract as Abstract
 import qualified Language.Oberon.AST as AST
-
-import Debug.Trace
 
 data Type l = NominalType (Abstract.QualIdent l) (Maybe (Type l))
             | RecordType{ancestry :: [Abstract.QualIdent l],

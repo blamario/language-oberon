@@ -5,7 +5,7 @@
 
 module Language.Oberon.Abstract where
 
-import Data.Data (Data, Typeable)
+import Data.Data (Data)
 import Data.List.NonEmpty
 import Data.Text (Text)
 
