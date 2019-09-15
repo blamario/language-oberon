@@ -124,7 +124,6 @@ class Wirthy l => Nameable l where
    getProcedureName :: Nameable l' => ProcedureHeading l l' f' f -> Ident
    getIdentDefName :: IdentDef l -> Ident
    getNonQualIdentName :: QualIdent l -> Maybe Ident
-   toBool :: (Traversable f, Traversable f', CoWirthy l', Nameable l') => Expression l l' f' f -> Maybe Bool
 
 class Wirthy l => Oberon l where
    type WithAlternative l = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l

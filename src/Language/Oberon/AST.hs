@@ -185,11 +185,6 @@ instance Abstract.Nameable Language where
    getNonQualIdentName (NonQualIdent name) = Just name
    getNonQualIdentName _ = Nothing
 
-   toBool (Read des)
-      | any (isNamedVar "TRUE" . Abstract.coDesignator) des = Just True
-      | any (isNamedVar "FALSE" . Abstract.coDesignator) des = Just False
-   toBool _ = Nothing
-
 isNamedVar :: Abstract.Nameable l => Ident -> Maybe (Designator Language l f f) -> Bool
 isNamedVar name (Just (Variable q)) | Abstract.getNonQualIdentName q == Just name = True
 isNamedVar _ _ = False
