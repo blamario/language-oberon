@@ -39,7 +39,7 @@ data Options = Options{
    checkTypes :: Bool,
    version :: LanguageVersion}
 
-resolvePositions :: (p ~ Grammar.NodeWrap, q ~ NodeWrap, Deep.Functor (Rank2.Map p q) g p q)
+resolvePositions :: (p ~ Grammar.NodeWrap, q ~ NodeWrap, Deep.Functor (Rank2.Map p q) g)
                  => Text -> g p p -> g q q
 resolvePositions src t = resolvePosition src Rank2.<$> t
 

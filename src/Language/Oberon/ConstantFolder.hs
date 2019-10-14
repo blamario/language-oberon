@@ -40,10 +40,10 @@ foldConstants :: (Abstract.Oberon l, Abstract.Nameable l,
                   Atts (Synthesized ConstantFold)
                        (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold))
                   ~ SynCF' (Abstract.StatementSequence l l),
-                  Full.Functor ConstantFold (Abstract.Declaration l l) Placed (Semantics ConstantFold),
-                  Full.Functor ConstantFold (Abstract.StatementSequence l l) Placed (Semantics ConstantFold),
-                  Deep.Functor ConstantFold (Abstract.Declaration l l) Placed (Semantics ConstantFold),
-                  Deep.Functor ConstantFold (Abstract.StatementSequence l l) Placed (Semantics ConstantFold))
+                  Full.Functor ConstantFold (Abstract.Declaration l l),
+                  Full.Functor ConstantFold (Abstract.StatementSequence l l),
+                  Deep.Functor ConstantFold (Abstract.Declaration l l),
+                  Deep.Functor ConstantFold (Abstract.StatementSequence l l))
               => Environment l -> Map AST.Ident (AST.Module l l Placed Placed)
               -> Map AST.Ident (AST.Module l l Placed Placed)
 foldConstants predef modules =
@@ -62,10 +62,17 @@ data ConstantFold = ConstantFold
 
 data ConstantFoldSyn l = ConstantFoldSyn (InhCF l)
 
+instance Shallow.Transformation ConstantFold where
+   type Domain ConstantFold = Placed
+   type Codomain ConstantFold = Semantics ConstantFold
+
+instance Shallow.Transformation (ConstantFoldSyn l) where
+   type Domain (ConstantFoldSyn l) = Semantics ConstantFold
+   type Codomain (ConstantFoldSyn l) = Placed
+
 instance (Atts (Synthesized ConstantFold) (f ((,) Int) ((,) Int)) ~ SynCF' f,
           Atts (Inherited ConstantFold) (f ((,) Int) ((,) Int)) ~ InhCF l) =>
-         Shallow.Functor (ConstantFoldSyn l) (Semantics ConstantFold) ((,) Int)
-                         (f ((,) Int) ((,) Int)) where
+         Shallow.Functor (ConstantFoldSyn l) (f ((,) Int) ((,) Int)) where
    ConstantFoldSyn inheritance <$> f = folded (syn $ Rank2.apply f $ Inherited inheritance)
 
 data InhCFRoot l = InhCFRoot{rootEnv :: Environment l}
@@ -84,8 +91,9 @@ data SynCFExp l = SynCFExp{foldedExp   :: (Int, AST.Expression l l ((,) Int) ((,
 data SynCFRoot a = SynCFRoot{modulesFolded :: a}
 
 -- * Modules instances, TH candidates
-instance (Functor p, Deep.Functor t (AST.Module l l) p q, Shallow.Functor t p q (AST.Module l l q q)) =>
-         Deep.Functor t (Modules l) p q where
+instance (Shallow.Transformation t, Functor (Shallow.Domain t), Deep.Functor t (AST.Module l l),
+          Shallow.Functor t (AST.Module l l (Shallow.Codomain t) (Shallow.Codomain t))) =>
+         Deep.Functor t (Modules l) where
    t <$> ~(Modules ms) = Modules (mapModule <$> ms)
       where mapModule m = t Shallow.<$> ((t Deep.<$>) <$> m)
 
@@ -577,8 +585,7 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Abstract.Oberon l, Ord (Abst
 
 -- * More boring Shallow.Functor instances, TH candidates
 instance Ord (Abstract.QualIdent l) =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-                         (Modules l (Semantics ConstantFold) (Semantics ConstantFold)) where
+         Shallow.Functor ConstantFold (Modules l (Semantics ConstantFold) (Semantics ConstantFold)) where
    (<$>) = AG.mapDefault id snd
 instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
           Atts (Inherited ConstantFold) (Abstract.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))
@@ -589,8 +596,7 @@ instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Sh
           ~ SynCFMod' l (Abstract.Declaration l l),
           Atts (Synthesized ConstantFold) (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold))
           ~ SynCF' (Abstract.StatementSequence l l)) =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-                         (AST.Module l l (Semantics ConstantFold) (Semantics ConstantFold)) where
+         Shallow.Functor ConstantFold (AST.Module l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    (<$>) = AG.mapDefault id snd
 instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Abstract.Expression l ~ AST.Expression l,  Abstract.Value l ~ AST.Value l,
@@ -617,11 +623,10 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           ~ SynCF' (Abstract.FormalParameters l l),
           Atts (Synthesized ConstantFold) (Abstract.ConstExpression l l (Semantics ConstantFold) (Semantics ConstantFold))
           ~ SynCFExp l)
-         => Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-                            (AST.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold)) where
+         => Shallow.Functor ConstantFold (AST.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    (<$>) = AG.mapDefault id snd
 instance (Abstract.Nameable l, Abstract.Expression l ~ AST.Expression l) =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+         Shallow.Functor ConstantFold
                          (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)
                                        (Semantics ConstantFold) (Semantics ConstantFold)) where
    (<$>) = AG.mapDefault id snd
@@ -636,7 +641,7 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
           ~ SynCF' (Abstract.Element l l),
           Atts (Synthesized ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold))
           ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Value l l ((,) Int) ((,) Int)))) =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+         Shallow.Functor ConstantFold
                          (AST.Expression l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    (<$>) = AG.mapDefault id snd
 instance (Abstract.CoWirthy l, Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
@@ -648,233 +653,205 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Abstract.Oberon l, Ord (Abst
           ~ SynCFExp l,
           Atts (Synthesized ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold))
           ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Value l l ((,) Int) ((,) Int)))) =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+         Shallow.Functor ConstantFold
                          (AST.Designator l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    (<$>) = AG.mapDefault id snd
 
-instance (Deep.Functor ConstantFold (AST.Declaration l l) Placed (Semantics ConstantFold),
-          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-          (AST.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.Declaration l l) Placed (Semantics ConstantFold) where
+instance (Deep.Functor ConstantFold (AST.Declaration l l),
+          Shallow.Functor ConstantFold (AST.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.Declaration l l) where
    (<$>) = Full.mapUpDefault
 
-instance (Deep.Functor ConstantFold (AST.Type l l) Placed (Semantics ConstantFold),
-          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-          (AST.Type l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.Type l l) Placed (Semantics ConstantFold) where
+instance (Deep.Functor ConstantFold (AST.Type l l),
+          Shallow.Functor ConstantFold (AST.Type l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.Type l l) where
    (<$>) = Full.mapUpDefault
 
-instance (Deep.Functor ConstantFold (AST.FieldList l l) Placed (Semantics ConstantFold),
-          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-          (AST.FieldList l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.FieldList l l) Placed (Semantics ConstantFold) where
+instance (Deep.Functor ConstantFold (AST.FieldList l l),
+          Shallow.Functor ConstantFold (AST.FieldList l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.FieldList l l) where
    (<$>) = Full.mapUpDefault
 
-instance (Deep.Functor ConstantFold (AST.ProcedureHeading l l) Placed (Semantics ConstantFold),
-          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-          (AST.ProcedureHeading l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.ProcedureHeading l l) Placed (Semantics ConstantFold) where
+instance (Deep.Functor ConstantFold (AST.ProcedureHeading l l),
+          Shallow.Functor ConstantFold (AST.ProcedureHeading l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.ProcedureHeading l l) where
    (<$>) = Full.mapUpDefault
 
-instance (Deep.Functor ConstantFold (AST.FormalParameters l l) Placed (Semantics ConstantFold),
-          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-          (AST.FormalParameters l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.FormalParameters l l) Placed (Semantics ConstantFold) where
+instance (Deep.Functor ConstantFold (AST.FormalParameters l l),
+          Shallow.Functor ConstantFold (AST.FormalParameters l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.FormalParameters l l) where
    (<$>) = Full.mapUpDefault
 
-instance (Deep.Functor ConstantFold (AST.FPSection l l) Placed (Semantics ConstantFold),
-          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-          (AST.FPSection l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.FPSection l l) Placed (Semantics ConstantFold) where
+instance (Deep.Functor ConstantFold (AST.FPSection l l),
+          Shallow.Functor ConstantFold (AST.FPSection l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.FPSection l l) where
    (<$>) = Full.mapUpDefault
 
-instance (Deep.Functor ConstantFold (AST.Expression l l) Placed (Semantics ConstantFold),
-          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-          (AST.Expression l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.Expression l l) Placed (Semantics ConstantFold) where
+instance (Deep.Functor ConstantFold (AST.Expression l l),
+          Shallow.Functor ConstantFold (AST.Expression l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.Expression l l) where
    (<$>) = Full.mapUpDefault
 
-instance (Deep.Functor ConstantFold (AST.Element l l) Placed (Semantics ConstantFold),
-          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-          (AST.Element l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.Element l l) Placed (Semantics ConstantFold) where
+instance (Deep.Functor ConstantFold (AST.Element l l),
+          Shallow.Functor ConstantFold (AST.Element l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.Element l l) where
    (<$>) = Full.mapUpDefault
 
-instance (Deep.Functor ConstantFold (AST.Designator l l) Placed (Semantics ConstantFold),
-          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-          (AST.Designator l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.Designator l l) Placed (Semantics ConstantFold) where
+instance (Deep.Functor ConstantFold (AST.Designator l l),
+          Shallow.Functor ConstantFold (AST.Designator l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.Designator l l) where
    (<$>) = Full.mapUpDefault
 
-instance (Deep.Functor ConstantFold (AST.Block l l) Placed (Semantics ConstantFold),
-          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-          (AST.Block l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.Block l l) Placed (Semantics ConstantFold) where
+instance (Deep.Functor ConstantFold (AST.Block l l),
+          Shallow.Functor ConstantFold (AST.Block l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.Block l l) where
    (<$>) = Full.mapUpDefault
 
-instance (Deep.Functor ConstantFold (AST.StatementSequence l l) Placed (Semantics ConstantFold),
-          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-          (AST.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.StatementSequence l l) Placed (Semantics ConstantFold) where
+instance (Deep.Functor ConstantFold (AST.StatementSequence l l),
+          Shallow.Functor ConstantFold (AST.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.StatementSequence l l) where
    (<$>) = Full.mapUpDefault
 
-instance (Deep.Functor ConstantFold (AST.Statement l l) Placed (Semantics ConstantFold),
-          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-          (AST.Statement l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.Statement l l) Placed (Semantics ConstantFold) where
+instance (Deep.Functor ConstantFold (AST.Statement l l),
+          Shallow.Functor ConstantFold (AST.Statement l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.Statement l l) where
    (<$>) = Full.mapUpDefault
 
-instance (Deep.Functor ConstantFold (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)) Placed (Semantics ConstantFold),
-          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-          (Deep.Product (AST.Expression l l) (AST.StatementSequence l l) (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (Deep.Product (AST.Expression l l) (AST.StatementSequence l l))
-                      Placed (Semantics ConstantFold) where
+instance (Deep.Functor ConstantFold (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)),
+          Shallow.Functor ConstantFold (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)
+                                        (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)) where
    (<$>) = Full.mapUpDefault
 
-instance (Deep.Functor ConstantFold (AST.Case l l) Placed (Semantics ConstantFold),
-          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-          (AST.Case l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.Case l l) Placed (Semantics ConstantFold) where
+instance (Deep.Functor ConstantFold (AST.Case l l),
+          Shallow.Functor ConstantFold (AST.Case l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.Case l l) where
    (<$>) = Full.mapUpDefault
 
-instance (Deep.Functor ConstantFold (AST.CaseLabels l l) Placed (Semantics ConstantFold),
-          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-          (AST.CaseLabels l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.CaseLabels l l) Placed (Semantics ConstantFold) where
+instance (Deep.Functor ConstantFold (AST.CaseLabels l l),
+          Shallow.Functor ConstantFold (AST.CaseLabels l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.CaseLabels l l) where
    (<$>) = Full.mapUpDefault
 
-instance (Deep.Functor ConstantFold (AST.WithAlternative l l) Placed (Semantics ConstantFold),
-          Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-          (AST.WithAlternative l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.WithAlternative l l) Placed (Semantics ConstantFold) where
+instance (Deep.Functor ConstantFold (AST.WithAlternative l l),
+          Shallow.Functor ConstantFold (AST.WithAlternative l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (AST.WithAlternative l l) where
    (<$>) = Full.mapUpDefault
 
 -- * Shortcuts
 
-instance (Full.Functor (ConstantFoldSyn l) (Abstract.Expression l l) (Semantics ConstantFold) Placed,
-          Full.Functor (ConstantFoldSyn l) (Abstract.Type l l) (Semantics ConstantFold) Placed,
-          Full.Functor (ConstantFoldSyn l) (Abstract.FormalParameters l l) (Semantics ConstantFold) Placed,
-          Full.Functor (ConstantFoldSyn l) (Abstract.FieldList l l) (Semantics ConstantFold) Placed) =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-                         (AST.Type l l (Semantics ConstantFold) (Semantics ConstantFold)) where
+instance (Full.Functor (ConstantFoldSyn l) (Abstract.Expression l l),
+          Full.Functor (ConstantFoldSyn l) (Abstract.Type l l),
+          Full.Functor (ConstantFoldSyn l) (Abstract.FormalParameters l l),
+          Full.Functor (ConstantFoldSyn l) (Abstract.FieldList l l)) =>
+         Shallow.Functor ConstantFold (AST.Type l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    ConstantFold <$> (pos, t) = Rank2.Arrow sem
      where sem inherited = Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> t))
 
-instance Full.Functor (ConstantFoldSyn l) (Abstract.FormalParameters l l) (Semantics ConstantFold) Placed =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-                         (AST.ProcedureHeading l l (Semantics ConstantFold) (Semantics ConstantFold)) where
+instance Full.Functor (ConstantFoldSyn l) (Abstract.FormalParameters l l) =>
+         Shallow.Functor ConstantFold (AST.ProcedureHeading l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    ConstantFold <$> (pos, proc) = Rank2.Arrow sem
      where sem inherited = Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> proc))
 
-instance Full.Functor (ConstantFoldSyn l) (Abstract.FPSection l l) (Semantics ConstantFold) Placed =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-                         (AST.FormalParameters l l (Semantics ConstantFold) (Semantics ConstantFold)) where
+instance Full.Functor (ConstantFoldSyn l) (Abstract.FPSection l l) =>
+         Shallow.Functor ConstantFold (AST.FormalParameters l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    ConstantFold <$> (pos, params) = Rank2.Arrow sem
      where sem inherited = Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> params))
 
-instance Full.Functor (ConstantFoldSyn l) (Abstract.Type l l) (Semantics ConstantFold) Placed =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-                         (AST.FPSection l l (Semantics ConstantFold) (Semantics ConstantFold)) where
+instance Full.Functor (ConstantFoldSyn l) (Abstract.Type l l) =>
+         Shallow.Functor ConstantFold (AST.FPSection l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    ConstantFold <$> (pos, params) = Rank2.Arrow sem
      where sem inherited = Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> params))
 
-instance Full.Functor (ConstantFoldSyn l) (Abstract.Type l l) (Semantics ConstantFold) Placed =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-                         (AST.FieldList l l (Semantics ConstantFold) (Semantics ConstantFold)) where
+instance Full.Functor (ConstantFoldSyn l) (Abstract.Type l l) =>
+         Shallow.Functor ConstantFold (AST.FieldList l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    ConstantFold <$> (pos, fields) = Rank2.Arrow sem
      where sem inherited = Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> fields))
 
-instance (Full.Functor (ConstantFoldSyn l) (Abstract.Declaration l l) (Semantics ConstantFold) Placed,
-          Full.Functor (ConstantFoldSyn l) (Abstract.StatementSequence l l) (Semantics ConstantFold) Placed) =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-                         (AST.Block l l (Semantics ConstantFold) (Semantics ConstantFold)) where
+instance (Full.Functor (ConstantFoldSyn l) (Abstract.Declaration l l),
+          Full.Functor (ConstantFoldSyn l) (Abstract.StatementSequence l l)) =>
+         Shallow.Functor ConstantFold (AST.Block l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    ConstantFold <$> (pos, block) = Rank2.Arrow sem
      where sem inherited = Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> block))
 
-instance Full.Functor (ConstantFoldSyn l) (Abstract.Statement l l) (Semantics ConstantFold) Placed =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
+instance Full.Functor (ConstantFoldSyn l) (Abstract.Statement l l) =>
+         Shallow.Functor ConstantFold
                          (AST.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    ConstantFold <$> (pos, block) = Rank2.Arrow sem
      where sem inherited = Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> block))
 
-instance (Full.Functor (ConstantFoldSyn l) (Abstract.Designator l l) (Semantics ConstantFold) Placed,
-          Full.Functor (ConstantFoldSyn l) (Abstract.Expression l l) (Semantics ConstantFold) Placed,
-          Full.Functor (ConstantFoldSyn l) (Abstract.Case l l) (Semantics ConstantFold) Placed,
-          Full.Functor (ConstantFoldSyn l) (Abstract.WithAlternative l l) (Semantics ConstantFold) Placed,
-          Full.Functor (ConstantFoldSyn l) (Deep.Product (Abstract.Expression l l) (Abstract.StatementSequence l l)) (Semantics ConstantFold) Placed,
-          Full.Functor (ConstantFoldSyn l) (Abstract.StatementSequence l l) (Semantics ConstantFold) Placed) =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-                         (AST.Statement l l (Semantics ConstantFold) (Semantics ConstantFold)) where
+instance (Full.Functor (ConstantFoldSyn l) (Abstract.Designator l l),
+          Full.Functor (ConstantFoldSyn l) (Abstract.Expression l l),
+          Full.Functor (ConstantFoldSyn l) (Abstract.Case l l),
+          Full.Functor (ConstantFoldSyn l) (Abstract.WithAlternative l l),
+          Full.Functor (ConstantFoldSyn l) (Deep.Product (Abstract.Expression l l) (Abstract.StatementSequence l l)),
+          Full.Functor (ConstantFoldSyn l) (Abstract.StatementSequence l l)) =>
+         Shallow.Functor ConstantFold (AST.Statement l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    ConstantFold <$> (pos, stat) = Rank2.Arrow sem
      where sem inherited = Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> stat))
 
-instance (Full.Functor (ConstantFoldSyn l) (Abstract.CaseLabels l l) (Semantics ConstantFold) Placed,
-          Full.Functor (ConstantFoldSyn l) (Abstract.StatementSequence l l) (Semantics ConstantFold) Placed) =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-                         (AST.Case l l (Semantics ConstantFold) (Semantics ConstantFold)) where
+instance (Full.Functor (ConstantFoldSyn l) (Abstract.CaseLabels l l),
+          Full.Functor (ConstantFoldSyn l) (Abstract.StatementSequence l l)) =>
+         Shallow.Functor ConstantFold (AST.Case l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    ConstantFold <$> (pos, c) = Rank2.Arrow sem
      where sem inherited = Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> c))
 
-instance Full.Functor (ConstantFoldSyn l) (Abstract.Expression l l) (Semantics ConstantFold) Placed =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-                         (AST.CaseLabels l l (Semantics ConstantFold) (Semantics ConstantFold)) where
+instance Full.Functor (ConstantFoldSyn l) (Abstract.Expression l l) =>
+         Shallow.Functor ConstantFold (AST.CaseLabels l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    ConstantFold <$> (pos, labels) = Rank2.Arrow sem
      where sem inherited = Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> labels))
 
-instance Full.Functor (ConstantFoldSyn l) (Abstract.StatementSequence l l) (Semantics ConstantFold) Placed =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-                         (AST.WithAlternative l l (Semantics ConstantFold) (Semantics ConstantFold)) where
+instance Full.Functor (ConstantFoldSyn l) (Abstract.StatementSequence l l) =>
+         Shallow.Functor ConstantFold (AST.WithAlternative l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    ConstantFold <$> (pos, alt) = Rank2.Arrow sem
      where sem inherited = Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> alt))
 
-instance Full.Functor (ConstantFoldSyn l) (Abstract.Expression l l) (Semantics ConstantFold) Placed =>
-         Shallow.Functor ConstantFold Placed (Semantics ConstantFold)
-                         (AST.Element l l (Semantics ConstantFold) (Semantics ConstantFold)) where
+instance Full.Functor (ConstantFoldSyn l) (Abstract.Expression l l) =>
+         Shallow.Functor ConstantFold (AST.Element l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    ConstantFold <$> (pos, el) = Rank2.Arrow sem
      where sem inherited = Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> el))
 
-instance Full.Functor ConstantFold (AST.Value l l) Placed (Semantics ConstantFold) where
+instance Full.Functor ConstantFold (AST.Value l l) where
    ConstantFold <$> (pos, val) = Rank2.Arrow sem
      where sem _inherited = Synthesized (SynCF (pos, val))
 
-instance Full.Functor (ConstantFoldSyn l) (AST.Declaration l l) (Semantics ConstantFold) Placed where
+instance Full.Functor (ConstantFoldSyn l) (AST.Declaration l l) where
   ConstantFoldSyn inheritance <$> sem = moduleFolded (syn $ Rank2.apply sem $ Inherited inheritance)
 
-instance Full.Functor (ConstantFoldSyn l) (AST.Type l l) (Semantics ConstantFold) Placed where
+instance Full.Functor (ConstantFoldSyn l) (AST.Type l l) where
   ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
-instance Full.Functor (ConstantFoldSyn l) (AST.FormalParameters l l) (Semantics ConstantFold) Placed where
+instance Full.Functor (ConstantFoldSyn l) (AST.FormalParameters l l) where
   ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
-instance Full.Functor (ConstantFoldSyn l) (AST.FPSection l l) (Semantics ConstantFold) Placed where
+instance Full.Functor (ConstantFoldSyn l) (AST.FPSection l l) where
   ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
-instance Full.Functor (ConstantFoldSyn l) (AST.FieldList l l) (Semantics ConstantFold) Placed where
+instance Full.Functor (ConstantFoldSyn l) (AST.FieldList l l) where
   ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
-instance Full.Functor (ConstantFoldSyn l) (AST.Expression l l) (Semantics ConstantFold) Placed where
+instance Full.Functor (ConstantFoldSyn l) (AST.Expression l l) where
   ConstantFoldSyn inheritance <$> sem = foldedExp (syn $ Rank2.apply sem $ Inherited inheritance)
 
-instance Full.Functor (ConstantFoldSyn l) (AST.Designator l l) (Semantics ConstantFold) Placed where
+instance Full.Functor (ConstantFoldSyn l) (AST.Designator l l) where
   ConstantFoldSyn inheritance <$> sem = fst <$> folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
-instance Full.Functor (ConstantFoldSyn l) (AST.StatementSequence l l) (Semantics ConstantFold) Placed where
+instance Full.Functor (ConstantFoldSyn l) (AST.StatementSequence l l) where
   ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
-instance Full.Functor (ConstantFoldSyn l) (AST.Statement l l) (Semantics ConstantFold) Placed where
+instance Full.Functor (ConstantFoldSyn l) (AST.Statement l l) where
   ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
-instance Full.Functor (ConstantFoldSyn l) (AST.Case l l) (Semantics ConstantFold) Placed where
+instance Full.Functor (ConstantFoldSyn l) (AST.Case l l) where
   ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
-instance Full.Functor (ConstantFoldSyn l) (AST.CaseLabels l l) (Semantics ConstantFold) Placed where
+instance Full.Functor (ConstantFoldSyn l) (AST.CaseLabels l l) where
   ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
-instance Full.Functor (ConstantFoldSyn l) (AST.WithAlternative l l) (Semantics ConstantFold) Placed where
+instance Full.Functor (ConstantFoldSyn l) (AST.WithAlternative l l) where
   ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
-instance Full.Functor (ConstantFoldSyn l) (Deep.Product (AST.Expression l l) (AST.StatementSequence l l))
-                      (Semantics ConstantFold) Placed where
+instance Full.Functor (ConstantFoldSyn l) (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)) where
   ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
 -- * Unsafe Rank2 AST instances

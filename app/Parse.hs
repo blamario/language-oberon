@@ -142,10 +142,10 @@ main' Opts{..} =
     predefined = case optsVersion 
                  of Oberon1 -> Resolver.predefined
                     Oberon2 -> Resolver.predefined2
-    go :: (Show a, Data a, Pretty a, a ~ t f f,
-           Deep.Functor (Rank2.Map Grammar.NodeWrap NodeWrap) t Grammar.NodeWrap NodeWrap) =>
-          (t NodeWrap NodeWrap -> Validation (NonEmpty (Resolver.Error Language)) a)
-       -> (forall p. Grammar.OberonGrammar AST.Language Grammar.NodeWrap p -> p (t Grammar.NodeWrap Grammar.NodeWrap))
+    go :: (Show a, Data a, Pretty a, a ~ g f f,
+           Deep.Functor (Rank2.Map Grammar.NodeWrap NodeWrap) g) =>
+          (g NodeWrap NodeWrap -> Validation (NonEmpty (Resolver.Error Language)) a)
+       -> (forall p. Grammar.OberonGrammar AST.Language Grammar.NodeWrap p -> p (g Grammar.NodeWrap Grammar.NodeWrap))
        -> (Grammar (Grammar.OberonGrammar AST.Language Grammar.NodeWrap) LeftRecursive.Parser Text)
        -> String -> Text -> IO ()
     go resolve production grammar filename contents =
