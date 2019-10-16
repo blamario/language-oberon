@@ -94,17 +94,20 @@ instance Shallow.Transformation (Resolution l) where
     type Domain (Resolution l) = NodeWrap
     type Codomain (Resolution l) = Placed
 
+instance Shallow.TraversableTransformation (Resolution l) where
+    type Algebra (Resolution l) = Resolved l
+
 instance {-# overlappable #-} --Show (g Placed Placed) =>
-                              Shallow.Traversable (Resolution l) (Resolved l) (g Placed Placed) where
+                              Shallow.Traversable (Resolution l) (g Placed Placed) where
    traverse = traverseResolveDefault
 
 instance {-# overlappable #-} --Show (g NodeWrap NodeWrap) =>
-                              Shallow.Traversable (Resolution l) (Resolved l) (g NodeWrap NodeWrap) where
+                              Shallow.Traversable (Resolution l) (g NodeWrap NodeWrap) where
    traverse = traverseResolveDefault
 
 instance {-# overlaps #-}
    Resolvable l =>
-   Shallow.Traversable (Resolution l) (Resolved l) (Designator l l NodeWrap NodeWrap) where
+   Shallow.Traversable (Resolution l) (Designator l l NodeWrap NodeWrap) where
    traverse res (Compose (pos, Ambiguous designators)) = StateT $ \s@(scope, state)->
       case partitionEithers (NonEmpty.toList (validationToEither . resolveDesignator res scope state <$> designators))
       of (_, [x]) -> Success ((pos, x), s)
@@ -120,11 +123,11 @@ instance Readable Language where
 
 instance {-# overlaps #-}
    (Readable l, Abstract.Nameable l, Abstract.Oberon l,
-    Deep.Traversable (Resolution l) (Abstract.Expression l l) (Resolved l),
-    Deep.Traversable (Resolution l) (Abstract.Designator l l) (Resolved l),
-    Shallow.Traversable (Resolution l) (Resolved l) (Abstract.Expression l l NodeWrap NodeWrap),
-    Shallow.Traversable (Resolution l) (Resolved l) (Abstract.Designator l l NodeWrap NodeWrap)) =>
-   Shallow.Traversable (Resolution l) (Resolved l) (Expression l l NodeWrap NodeWrap) where
+    Deep.Traversable (Resolution l) (Abstract.Expression l l),
+    Deep.Traversable (Resolution l) (Abstract.Designator l l),
+    Shallow.Traversable (Resolution l) (Abstract.Expression l l NodeWrap NodeWrap),
+    Shallow.Traversable (Resolution l) (Abstract.Designator l l NodeWrap NodeWrap)) =>
+   Shallow.Traversable (Resolution l) (Expression l l NodeWrap NodeWrap) where
    traverse res expressions = StateT $ \s@(scope, state)->
       let resolveExpression :: Expression l l NodeWrap NodeWrap
                             -> Validation (NonEmpty (Error l)) (Expression l l NodeWrap NodeWrap, ResolutionState)
@@ -152,16 +155,16 @@ instance {-# overlaps #-}
 
 instance {-# overlaps #-}
    (BindableDeclaration l, CoFormalParameters l, Abstract.Wirthy l,
-    Full.Traversable (Resolution l) (Abstract.Type l l) (Resolved l),
-    Full.Traversable (Resolution l) (Abstract.FormalParameters l l) (Resolved l),
-    Full.Traversable (Resolution l) (Abstract.ConstExpression l l) (Resolved l),
-    Deep.Traversable (Resolution l) (Abstract.Type l l) (Resolved l),
-    Deep.Traversable (Resolution l) (Abstract.ProcedureHeading l l) (Resolved l),
-    Deep.Traversable (Resolution l) (Abstract.FormalParameters l l) (Resolved l),
-    Deep.Traversable (Resolution l) (Abstract.ConstExpression l l) (Resolved l),
-    Shallow.Traversable (Resolution l) (Resolved l) (Abstract.ProcedureHeading l l NodeWrap NodeWrap),
-    Shallow.Traversable (Resolution l) (Resolved l) (Abstract.Block l l NodeWrap NodeWrap)) =>
-   Shallow.Traversable (Resolution l) (Resolved l) (Declaration l l NodeWrap NodeWrap) where
+    Full.Traversable (Resolution l) (Abstract.Type l l),
+    Full.Traversable (Resolution l) (Abstract.FormalParameters l l),
+    Full.Traversable (Resolution l) (Abstract.ConstExpression l l),
+    Deep.Traversable (Resolution l) (Abstract.Type l l),
+    Deep.Traversable (Resolution l) (Abstract.ProcedureHeading l l),
+    Deep.Traversable (Resolution l) (Abstract.FormalParameters l l),
+    Deep.Traversable (Resolution l) (Abstract.ConstExpression l l),
+    Shallow.Traversable (Resolution l) (Abstract.ProcedureHeading l l NodeWrap NodeWrap),
+    Shallow.Traversable (Resolution l) (Abstract.Block l l NodeWrap NodeWrap)) =>
+   Shallow.Traversable (Resolution l) (Declaration l l NodeWrap NodeWrap) where
    traverse res (Compose (pos, Ambiguous (proc@(ProcedureDeclaration heading body) :| []))) =
       do s@(scope, state) <- get
          let Success (headingScope, _) = execStateT (Shallow.traverse res heading) s
@@ -184,13 +187,13 @@ instance CoFormalParameters Language where
 
 instance {-# overlaps #-}
    (Abstract.Wirthy l, CoFormalParameters l,
-    Full.Traversable (Resolution l) (Abstract.Type l l) (Resolved l),
-    Full.Traversable (Resolution l) (Abstract.FormalParameters l l) (Resolved l),
-    Full.Traversable (Resolution l) (Abstract.ConstExpression l l) (Resolved l),
-    Deep.Traversable (Resolution l) (Abstract.Type l l) (Resolved l),
-    Deep.Traversable (Resolution l) (Abstract.FormalParameters l l) (Resolved l),
-    Deep.Traversable (Resolution l) (Abstract.ConstExpression l l) (Resolved l)) =>
-   Shallow.Traversable (Resolution l) (Resolved l) (ProcedureHeading l l NodeWrap NodeWrap) where
+    Full.Traversable (Resolution l) (Abstract.Type l l),
+    Full.Traversable (Resolution l) (Abstract.FormalParameters l l),
+    Full.Traversable (Resolution l) (Abstract.ConstExpression l l),
+    Deep.Traversable (Resolution l) (Abstract.Type l l),
+    Deep.Traversable (Resolution l) (Abstract.FormalParameters l l),
+    Deep.Traversable (Resolution l) (Abstract.ConstExpression l l)) =>
+   Shallow.Traversable (Resolution l) (ProcedureHeading l l NodeWrap NodeWrap) where
    traverse res (Compose (pos, Ambiguous (proc@(ProcedureHeading _ _ parameters) :| []))) =
       StateT $ \s@(scope, state)->
          let innerScope = parameterScope `Map.union` scope
@@ -217,21 +220,21 @@ instance {-# overlaps #-}
 
 instance {-# overlaps #-}
    (BindableDeclaration l,
-    Full.Traversable (Resolution l) (Abstract.Type l l) (Resolved l),
-    Full.Traversable (Resolution l) (Abstract.FormalParameters l l) (Resolved l),
-    Full.Traversable (Resolution l) (Abstract.ConstExpression l l) (Resolved l),
-    Deep.Traversable (Resolution l) (Abstract.Type l l) (Resolved l),
-    Deep.Traversable (Resolution l) (Abstract.FormalParameters l l) (Resolved l),
-    Deep.Traversable (Resolution l) (Abstract.ConstExpression l l) (Resolved l)) =>
-   Shallow.Traversable (Resolution l) (Resolved l) (Block l l NodeWrap NodeWrap) where
+    Full.Traversable (Resolution l) (Abstract.Type l l),
+    Full.Traversable (Resolution l) (Abstract.FormalParameters l l),
+    Full.Traversable (Resolution l) (Abstract.ConstExpression l l),
+    Deep.Traversable (Resolution l) (Abstract.Type l l),
+    Deep.Traversable (Resolution l) (Abstract.FormalParameters l l),
+    Deep.Traversable (Resolution l) (Abstract.ConstExpression l l)) =>
+   Shallow.Traversable (Resolution l) (Block l l NodeWrap NodeWrap) where
    traverse res (Compose (pos, Ambiguous (body@(Block declarations _statements) :| []))) =
      StateT $ \(scope, state)-> Success ((pos, body), (localScope res "" declarations scope, state))
    traverse _ _ = StateT (const $ Failure $ pure AmbiguousParses)
 
 instance {-# overlaps #-}
-    (Deep.Traversable (Resolution l) (Abstract.Designator l l) (Resolved l),
-     Shallow.Traversable (Resolution l) (Resolved l) (Abstract.Designator l l NodeWrap NodeWrap)) =>
-    Shallow.Traversable (Resolution l) (Resolved l) (Statement l l NodeWrap NodeWrap) where
+    (Deep.Traversable (Resolution l) (Abstract.Designator l l),
+     Shallow.Traversable (Resolution l) (Abstract.Designator l l NodeWrap NodeWrap)) =>
+    Shallow.Traversable (Resolution l) (Statement l l NodeWrap NodeWrap) where
    traverse res statements = StateT $ \s@(scope, _state)->
       let resolveStatement :: Statement l l NodeWrap NodeWrap
                             -> Validation (NonEmpty (Error l)) (Statement l l NodeWrap NodeWrap, ResolutionState)
@@ -303,20 +306,20 @@ resolveName res scope q
         _ -> Failure (UnknownLocal name :| [])
 
 resolveModules :: forall l. (BindableDeclaration l, CoFormalParameters l, Abstract.Wirthy l,
-                             Deep.Traversable (Resolution l) (Abstract.Declaration l l) (Resolved l),
-                             Deep.Traversable (Resolution l) (Abstract.Type l l) (Resolved l),
-                             Deep.Traversable (Resolution l) (Abstract.ProcedureHeading l l) (Resolved l),
-                             Deep.Traversable (Resolution l) (Abstract.FormalParameters l l) (Resolved l),
-                             Deep.Traversable (Resolution l) (Abstract.Expression l l) (Resolved l),
-                             Deep.Traversable (Resolution l) (Abstract.Block l l) (Resolved l),
-                             Deep.Traversable (Resolution l) (Abstract.StatementSequence l l) (Resolved l),
-                             Full.Traversable (Resolution l) (Abstract.Declaration l l) (Resolved l),
-                             Full.Traversable (Resolution l) (Abstract.Type l l) (Resolved l),
-                             Full.Traversable (Resolution l) (Abstract.ProcedureHeading l l) (Resolved l),
-                             Full.Traversable (Resolution l) (Abstract.FormalParameters l l) (Resolved l),
-                             Full.Traversable (Resolution l) (Abstract.Expression l l) (Resolved l),
-                             Full.Traversable (Resolution l) (Abstract.Block l l) (Resolved l),
-                             Full.Traversable (Resolution l) (Abstract.StatementSequence l l) (Resolved l)) =>
+                             Deep.Traversable (Resolution l) (Abstract.Declaration l l),
+                             Deep.Traversable (Resolution l) (Abstract.Type l l),
+                             Deep.Traversable (Resolution l) (Abstract.ProcedureHeading l l),
+                             Deep.Traversable (Resolution l) (Abstract.FormalParameters l l),
+                             Deep.Traversable (Resolution l) (Abstract.Expression l l),
+                             Deep.Traversable (Resolution l) (Abstract.Block l l),
+                             Deep.Traversable (Resolution l) (Abstract.StatementSequence l l),
+                             Full.Traversable (Resolution l) (Abstract.Declaration l l),
+                             Full.Traversable (Resolution l) (Abstract.Type l l),
+                             Full.Traversable (Resolution l) (Abstract.ProcedureHeading l l),
+                             Full.Traversable (Resolution l) (Abstract.FormalParameters l l),
+                             Full.Traversable (Resolution l) (Abstract.Expression l l),
+                             Full.Traversable (Resolution l) (Abstract.Block l l),
+                             Full.Traversable (Resolution l) (Abstract.StatementSequence l l)) =>
                   Predefined l -> Map Ident (Module l l NodeWrap NodeWrap)
                 -> Validation (NonEmpty (Ident, NonEmpty (Error l))) (Map Ident (Module l l Placed Placed))
 resolveModules predefinedScope modules = traverseWithKey extractErrors modules'
@@ -325,17 +328,17 @@ resolveModules predefinedScope modules = traverseWithKey extractErrors modules'
          extractErrors _         (Success mod) = Success mod
 
 resolveModule :: forall l. (BindableDeclaration l,
-                            Full.Traversable (Resolution l) (Abstract.Declaration l l) (Resolved l),
-                            Full.Traversable (Resolution l) (Abstract.Type l l) (Resolved l),
-                            Full.Traversable (Resolution l) (Abstract.FormalParameters l l) (Resolved l),
-                            Full.Traversable (Resolution l) (Abstract.ConstExpression l l) (Resolved l),
-                            Full.Traversable (Resolution l) (Abstract.StatementSequence l l) (Resolved l),
-                            Deep.Traversable (Resolution l) (Declaration l l) (Resolved l),
-                            Deep.Traversable (Resolution l) (Abstract.Declaration l l) (Resolved l),
-                            Deep.Traversable (Resolution l) (Abstract.StatementSequence l l) (Resolved l),
-                            Deep.Traversable (Resolution l) (Abstract.Type l l) (Resolved l),
-                            Deep.Traversable (Resolution l) (Abstract.FormalParameters l l) (Resolved l),
-                            Deep.Traversable (Resolution l) (Abstract.ConstExpression l l) (Resolved l)) =>
+                            Full.Traversable (Resolution l) (Abstract.Declaration l l),
+                            Full.Traversable (Resolution l) (Abstract.Type l l),
+                            Full.Traversable (Resolution l) (Abstract.FormalParameters l l),
+                            Full.Traversable (Resolution l) (Abstract.ConstExpression l l),
+                            Full.Traversable (Resolution l) (Abstract.StatementSequence l l),
+                            Deep.Traversable (Resolution l) (Declaration l l),
+                            Deep.Traversable (Resolution l) (Abstract.Declaration l l),
+                            Deep.Traversable (Resolution l) (Abstract.StatementSequence l l),
+                            Deep.Traversable (Resolution l) (Abstract.Type l l),
+                            Deep.Traversable (Resolution l) (Abstract.FormalParameters l l),
+                            Deep.Traversable (Resolution l) (Abstract.ConstExpression l l)) =>
                  Scope l -> Map Ident (Validation (NonEmpty (Error l)) (Module l l Placed Placed))
               -> Module l l NodeWrap NodeWrap -> Validation (NonEmpty (Error l)) (Module l l Placed Placed)
 resolveModule predefined modules m@(Module moduleName imports declarations body) =
@@ -353,9 +356,9 @@ resolveModule predefined modules m@(Module moduleName imports declarations body)
          moduleGlobalScope = localScope res moduleName declarations predefined
 
 localScope :: forall l. (BindableDeclaration l,
-                         Full.Traversable (Resolution l) (Abstract.Type l l) (Resolved l),
-                         Full.Traversable (Resolution l) (Abstract.FormalParameters l l) (Resolved l),
-                         Full.Traversable (Resolution l) (Abstract.ConstExpression l l) (Resolved l)) =>
+                         Full.Traversable (Resolution l) (Abstract.Type l l),
+                         Full.Traversable (Resolution l) (Abstract.FormalParameters l l),
+                         Full.Traversable (Resolution l) (Abstract.ConstExpression l l)) =>
               Resolution l -> Ident -> [NodeWrap (Abstract.Declaration l l NodeWrap NodeWrap)] -> Scope l -> Scope l
 localScope res qual declarations outerScope = innerScope
    where innerScope = Map.union (snd <$> scopeAdditions) outerScope
@@ -509,75 +512,75 @@ $(Rank2.TH.deriveFoldable ''DeclarationRHS)
 $(Rank2.TH.deriveTraversable ''DeclarationRHS)
 $(Transformation.Deep.TH.deriveTraversable ''DeclarationRHS)
 
-instance (Deep.Traversable (Resolution l) (Declaration l l) (Resolved l),
-          Shallow.Traversable (Resolution l) (Resolved l) (Declaration l l NodeWrap NodeWrap)) =>
-         Full.Traversable (Resolution l) (Declaration l l) (Resolved l) where
+instance (Deep.Traversable (Resolution l) (Declaration l l),
+          Shallow.Traversable (Resolution l) (Declaration l l NodeWrap NodeWrap)) =>
+         Full.Traversable (Resolution l) (Declaration l l) where
   traverse = Full.traverseDownDefault
 
-instance Deep.Traversable (Resolution l) (Type l l) (Resolved l) =>
-         Full.Traversable (Resolution l) (Type l l) (Resolved l) where
+instance Deep.Traversable (Resolution l) (Type l l) =>
+         Full.Traversable (Resolution l) (Type l l) where
   traverse = Full.traverseDownDefault
 
-instance Deep.Traversable (Resolution l) (FieldList l l) (Resolved l) =>
-         Full.Traversable (Resolution l) (FieldList l l) (Resolved l) where
+instance Deep.Traversable (Resolution l) (FieldList l l) =>
+         Full.Traversable (Resolution l) (FieldList l l) where
   traverse = Full.traverseDownDefault
 
-instance (Deep.Traversable (Resolution l) (ProcedureHeading l l) (Resolved l),
-          Shallow.Traversable (Resolution l) (Resolved l) (ProcedureHeading l l NodeWrap NodeWrap)) =>
-         Full.Traversable (Resolution l) (ProcedureHeading l l) (Resolved l) where
+instance (Deep.Traversable (Resolution l) (ProcedureHeading l l),
+          Shallow.Traversable (Resolution l) (ProcedureHeading l l NodeWrap NodeWrap)) =>
+         Full.Traversable (Resolution l) (ProcedureHeading l l) where
   traverse = Full.traverseDownDefault
 
-instance Deep.Traversable (Resolution l) (FormalParameters l l) (Resolved l) =>
-         Full.Traversable (Resolution l) (FormalParameters l l) (Resolved l) where
+instance Deep.Traversable (Resolution l) (FormalParameters l l) =>
+         Full.Traversable (Resolution l) (FormalParameters l l) where
   traverse = Full.traverseDownDefault
 
-instance Deep.Traversable (Resolution l) (FPSection l l) (Resolved l) =>
-         Full.Traversable (Resolution l) (FPSection l l) (Resolved l) where
+instance Deep.Traversable (Resolution l) (FPSection l l) =>
+         Full.Traversable (Resolution l) (FPSection l l) where
   traverse = Full.traverseDownDefault
 
-instance (Deep.Traversable (Resolution l) (Expression l l) (Resolved l),
-          Shallow.Traversable (Resolution l) (Resolved l) (Expression l l NodeWrap NodeWrap)) =>
-         Full.Traversable (Resolution l) (Expression l l) (Resolved l) where
+instance (Deep.Traversable (Resolution l) (Expression l l),
+          Shallow.Traversable (Resolution l) (Expression l l NodeWrap NodeWrap)) =>
+         Full.Traversable (Resolution l) (Expression l l) where
   traverse = Full.traverseDownDefault
 
-instance (Deep.Traversable (Resolution l) (Block l l) (Resolved l),
-          Shallow.Traversable (Resolution l) (Resolved l) (Block l l NodeWrap NodeWrap)) =>
-         Full.Traversable (Resolution l) (Block l l) (Resolved l) where
+instance (Deep.Traversable (Resolution l) (Block l l),
+          Shallow.Traversable (Resolution l) (Block l l NodeWrap NodeWrap)) =>
+         Full.Traversable (Resolution l) (Block l l) where
   traverse = Full.traverseDownDefault
 
-instance Deep.Traversable (Resolution l) (StatementSequence l l) (Resolved l) =>
-         Full.Traversable (Resolution l) (StatementSequence l l) (Resolved l) where
+instance Deep.Traversable (Resolution l) (StatementSequence l l) =>
+         Full.Traversable (Resolution l) (StatementSequence l l) where
   traverse = Full.traverseDownDefault
 
-instance (Deep.Traversable (Resolution l) (Statement l l) (Resolved l),
-          Shallow.Traversable (Resolution l) (Resolved l) (Statement l l NodeWrap NodeWrap)) =>
-         Full.Traversable (Resolution l) (Statement l l) (Resolved l) where
+instance (Deep.Traversable (Resolution l) (Statement l l),
+          Shallow.Traversable (Resolution l) (Statement l l NodeWrap NodeWrap)) =>
+         Full.Traversable (Resolution l) (Statement l l) where
   traverse = Full.traverseDownDefault
 
-instance Deep.Traversable (Resolution l) (Deep.Product (Expression l l) (StatementSequence l l)) (Resolved l) =>
-         Full.Traversable (Resolution l) (Deep.Product (Expression l l) (StatementSequence l l)) (Resolved l) where
+instance Deep.Traversable (Resolution l) (Deep.Product (Expression l l) (StatementSequence l l)) =>
+         Full.Traversable (Resolution l) (Deep.Product (Expression l l) (StatementSequence l l)) where
   traverse = Full.traverseDownDefault
 
-instance Deep.Traversable (Resolution l) (Case l l) (Resolved l) =>
-         Full.Traversable (Resolution l) (Case l l) (Resolved l) where
+instance Deep.Traversable (Resolution l) (Case l l) =>
+         Full.Traversable (Resolution l) (Case l l) where
   traverse = Full.traverseDownDefault
 
-instance Deep.Traversable (Resolution l) (CaseLabels l l) (Resolved l) =>
-         Full.Traversable (Resolution l) (CaseLabels l l) (Resolved l) where
+instance Deep.Traversable (Resolution l) (CaseLabels l l) =>
+         Full.Traversable (Resolution l) (CaseLabels l l) where
   traverse = Full.traverseDownDefault
 
-instance Deep.Traversable (Resolution l) (WithAlternative l l) (Resolved l) =>
-         Full.Traversable (Resolution l) (WithAlternative l l) (Resolved l) where
+instance Deep.Traversable (Resolution l) (WithAlternative l l) =>
+         Full.Traversable (Resolution l) (WithAlternative l l) where
   traverse = Full.traverseDownDefault
 
-instance (Deep.Traversable (Resolution l) (Designator l l) (Resolved l), Resolvable l) =>
-         Full.Traversable (Resolution l) (Designator l l) (Resolved l) where
+instance (Deep.Traversable (Resolution l) (Designator l l), Resolvable l) =>
+         Full.Traversable (Resolution l) (Designator l l) where
   traverse = Full.traverseDownDefault
 
-instance Deep.Traversable (Resolution l) (Element l l) (Resolved l) =>
-         Full.Traversable (Resolution l) (Element l l) (Resolved l) where
+instance Deep.Traversable (Resolution l) (Element l l) =>
+         Full.Traversable (Resolution l) (Element l l) where
   traverse = Full.traverseDownDefault
 
-instance Deep.Traversable (Resolution l) (Value l l) (Resolved l) =>
-         Full.Traversable (Resolution l) (Value l l) (Resolved l) where
+instance Deep.Traversable (Resolution l) (Value l l) =>
+         Full.Traversable (Resolution l) (Value l l) where
   traverse = Full.traverseDownDefault
