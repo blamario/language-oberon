@@ -11,11 +11,13 @@ import Data.Map.Lazy (Map)
 import qualified Data.Map.Lazy as Map
 import Data.Semigroup (Semigroup(..))
 import qualified Data.Text as Text
+import Language.Haskell.TH (appT, conT, varT, newName)
 
 import qualified Rank2
 import qualified Transformation as Shallow
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
+import qualified Transformation.Full.TH
 import qualified Transformation.AG as AG
 import Transformation.AG (Attribution(..), Atts, Inherited(..), Synthesized(..), Semantics)
 
@@ -1287,91 +1289,6 @@ instance (Abstract.Nameable l,
          Shallow.Functor TypeCheck (AST.FieldList l l (Semantics TypeCheck) (Semantics TypeCheck)) where
    (<$>) = AG.mapDefault id snd
 
-instance (Deep.Functor TypeCheck (AST.Declaration l l),
-          Shallow.Functor TypeCheck (AST.Declaration l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
-         Full.Functor TypeCheck (AST.Declaration l l) where
-  (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor TypeCheck (AST.FieldList l l),
-          Shallow.Functor TypeCheck (AST.FieldList l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
-         Full.Functor TypeCheck (AST.FieldList l l) where
-  (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor TypeCheck (AST.ProcedureHeading l l),
-          Shallow.Functor TypeCheck (AST.ProcedureHeading l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
-         Full.Functor TypeCheck (AST.ProcedureHeading l l) where
-  (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor TypeCheck (AST.FormalParameters l l),
-          Shallow.Functor TypeCheck (AST.FormalParameters l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
-         Full.Functor TypeCheck (AST.FormalParameters l l) where
-  (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor TypeCheck (AST.FPSection l l),
-          Shallow.Functor TypeCheck (AST.FPSection l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
-         Full.Functor TypeCheck (AST.FPSection l l) where
-  (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor TypeCheck (AST.Type l l),
-          Shallow.Functor TypeCheck (AST.Type l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
-         Full.Functor TypeCheck (AST.Type l l) where
-  (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor TypeCheck (AST.Block l l),
-          Shallow.Functor TypeCheck (AST.Block l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
-         Full.Functor TypeCheck (AST.Block l l) where
-  (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor TypeCheck (AST.StatementSequence l l),
-          Shallow.Functor TypeCheck (AST.StatementSequence l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
-         Full.Functor TypeCheck (AST.StatementSequence l l) where
-  (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor TypeCheck (AST.Statement l l),
-          Shallow.Functor TypeCheck (AST.Statement l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
-         Full.Functor TypeCheck (AST.Statement l l) where
-  (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor TypeCheck (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)),
-          Shallow.Functor TypeCheck (Deep.Product (AST.Expression l l) (AST.StatementSequence l l) (Semantics TypeCheck) (Semantics TypeCheck))) =>
-         Full.Functor TypeCheck (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)) where
-  (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor TypeCheck (AST.Case l l),
-          Shallow.Functor TypeCheck (AST.Case l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
-         Full.Functor TypeCheck (AST.Case l l) where
-  (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor TypeCheck (AST.CaseLabels l l),
-          Shallow.Functor TypeCheck (AST.CaseLabels l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
-         Full.Functor TypeCheck (AST.CaseLabels l l) where
-  (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor TypeCheck (AST.WithAlternative l l),
-          Shallow.Functor TypeCheck (AST.WithAlternative l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
-         Full.Functor TypeCheck (AST.WithAlternative l l) where
-  (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor TypeCheck (AST.Expression l l),
-          Shallow.Functor TypeCheck (AST.Expression l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
-         Full.Functor TypeCheck (AST.Expression l l) where
-  (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor TypeCheck (AST.Element l l),
-          Shallow.Functor TypeCheck (AST.Element l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
-         Full.Functor TypeCheck (AST.Element l l) where
-  (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor TypeCheck (AST.Designator l l),
-          Shallow.Functor TypeCheck (AST.Designator l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
-         Full.Functor TypeCheck (AST.Designator l l) where
-  (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor TypeCheck (AST.Value l l),
-          Shallow.Functor TypeCheck (AST.Value l l (Semantics TypeCheck) (Semantics TypeCheck))) =>
-         Full.Functor TypeCheck (AST.Value l l) where
-  (<$>) = Full.mapUpDefault
-
 -- * Unsafe Rank2 AST instances
 
 instance Rank2.Apply (AST.Module l l f') where
@@ -1452,3 +1369,16 @@ predefined2 = predefined <>
    Map.fromList (first Abstract.nonQualIdent <$>
                  [("ASSERT", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing),
                                                   (False, NominalType (Abstract.nonQualIdent "INTEGER") Nothing)] Nothing)])
+
+instance (Deep.Functor TypeCheck (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)),
+          Shallow.Functor TypeCheck (Deep.Product (AST.Expression l l) (AST.StatementSequence l l) (Semantics TypeCheck) (Semantics TypeCheck))) =>
+         Full.Functor TypeCheck (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)) where
+  (<$>) = Full.mapUpDefault
+
+$(do l <- varT <$> newName "l"
+     mconcat <$> mapM (\t-> Transformation.Full.TH.deriveUpFunctor (conT ''TypeCheck) $ conT t `appT` l `appT` l)
+        [''AST.Declaration, ''AST.Type, ''AST.FieldList,
+         ''AST.ProcedureHeading, ''AST.FormalParameters, ''AST.FPSection,
+         ''AST.Expression, ''AST.Element, ''AST.Designator,
+         ''AST.Block, ''AST.StatementSequence, ''AST.Statement,
+         ''AST.Case, ''AST.CaseLabels, ''AST.Value, ''AST.WithAlternative])

@@ -21,12 +21,14 @@ import Data.Map.Lazy (Map, traverseWithKey)
 import qualified Data.Map.Lazy as Map
 import Data.Semigroup (Semigroup(..), sconcat)
 import Data.Text (Text)
+import Language.Haskell.TH (appT, conT, varT, newName)
 
 import qualified Rank2.TH
 import qualified Transformation as Shallow
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Deep.TH
 import qualified Transformation.Full as Full
+import qualified Transformation.Full.TH
 import Text.Grampa (Ambiguous(..))
 
 import qualified Language.Oberon.Abstract as Abstract
@@ -512,75 +514,15 @@ $(Rank2.TH.deriveFoldable ''DeclarationRHS)
 $(Rank2.TH.deriveTraversable ''DeclarationRHS)
 $(Transformation.Deep.TH.deriveTraversable ''DeclarationRHS)
 
-instance (Deep.Traversable (Resolution l) (Declaration l l),
-          Shallow.Traversable (Resolution l) (Declaration l l NodeWrap NodeWrap)) =>
-         Full.Traversable (Resolution l) (Declaration l l) where
-  traverse = Full.traverseDownDefault
-
-instance Deep.Traversable (Resolution l) (Type l l) =>
-         Full.Traversable (Resolution l) (Type l l) where
-  traverse = Full.traverseDownDefault
-
-instance Deep.Traversable (Resolution l) (FieldList l l) =>
-         Full.Traversable (Resolution l) (FieldList l l) where
-  traverse = Full.traverseDownDefault
-
-instance (Deep.Traversable (Resolution l) (ProcedureHeading l l),
-          Shallow.Traversable (Resolution l) (ProcedureHeading l l NodeWrap NodeWrap)) =>
-         Full.Traversable (Resolution l) (ProcedureHeading l l) where
-  traverse = Full.traverseDownDefault
-
-instance Deep.Traversable (Resolution l) (FormalParameters l l) =>
-         Full.Traversable (Resolution l) (FormalParameters l l) where
-  traverse = Full.traverseDownDefault
-
-instance Deep.Traversable (Resolution l) (FPSection l l) =>
-         Full.Traversable (Resolution l) (FPSection l l) where
-  traverse = Full.traverseDownDefault
-
-instance (Deep.Traversable (Resolution l) (Expression l l),
-          Shallow.Traversable (Resolution l) (Expression l l NodeWrap NodeWrap)) =>
-         Full.Traversable (Resolution l) (Expression l l) where
-  traverse = Full.traverseDownDefault
-
-instance (Deep.Traversable (Resolution l) (Block l l),
-          Shallow.Traversable (Resolution l) (Block l l NodeWrap NodeWrap)) =>
-         Full.Traversable (Resolution l) (Block l l) where
-  traverse = Full.traverseDownDefault
-
-instance Deep.Traversable (Resolution l) (StatementSequence l l) =>
-         Full.Traversable (Resolution l) (StatementSequence l l) where
-  traverse = Full.traverseDownDefault
-
-instance (Deep.Traversable (Resolution l) (Statement l l),
-          Shallow.Traversable (Resolution l) (Statement l l NodeWrap NodeWrap)) =>
-         Full.Traversable (Resolution l) (Statement l l) where
-  traverse = Full.traverseDownDefault
-
 instance Deep.Traversable (Resolution l) (Deep.Product (Expression l l) (StatementSequence l l)) =>
          Full.Traversable (Resolution l) (Deep.Product (Expression l l) (StatementSequence l l)) where
   traverse = Full.traverseDownDefault
 
-instance Deep.Traversable (Resolution l) (Case l l) =>
-         Full.Traversable (Resolution l) (Case l l) where
-  traverse = Full.traverseDownDefault
-
-instance Deep.Traversable (Resolution l) (CaseLabels l l) =>
-         Full.Traversable (Resolution l) (CaseLabels l l) where
-  traverse = Full.traverseDownDefault
-
-instance Deep.Traversable (Resolution l) (WithAlternative l l) =>
-         Full.Traversable (Resolution l) (WithAlternative l l) where
-  traverse = Full.traverseDownDefault
-
-instance (Deep.Traversable (Resolution l) (Designator l l), Resolvable l) =>
-         Full.Traversable (Resolution l) (Designator l l) where
-  traverse = Full.traverseDownDefault
-
-instance Deep.Traversable (Resolution l) (Element l l) =>
-         Full.Traversable (Resolution l) (Element l l) where
-  traverse = Full.traverseDownDefault
-
-instance Deep.Traversable (Resolution l) (Value l l) =>
-         Full.Traversable (Resolution l) (Value l l) where
-  traverse = Full.traverseDownDefault
+$(do l <- varT <$> newName "l"
+     mconcat <$> mapM (\t-> Transformation.Full.TH.deriveDownTraversable (conT ''Resolution `appT` l)
+                            $ conT t `appT` l `appT` l)
+        [''Declaration, ''Type, ''FieldList,
+         ''ProcedureHeading, ''FormalParameters, ''FPSection,
+         ''Expression, ''Element, ''Designator,
+         ''Block, ''StatementSequence, ''Statement,
+         ''Case, ''CaseLabels, ''Value, ''WithAlternative])

@@ -15,11 +15,13 @@ import qualified Data.Map.Lazy as Map
 import Data.Semigroup (Semigroup(..))
 import qualified Data.Text as Text
 import Foreign.Storable (sizeOf)
+import Language.Haskell.TH (appT, conT, varT, newName)
 
 import qualified Rank2
 import qualified Transformation as Shallow
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
+import qualified Transformation.Full.TH
 import qualified Transformation.AG as AG
 import Transformation.AG (Attribution(..), Atts, Inherited(..), Synthesized(..), Semantics)
 
@@ -657,87 +659,6 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Abstract.Oberon l, Ord (Abst
                          (AST.Designator l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    (<$>) = AG.mapDefault id snd
 
-instance (Deep.Functor ConstantFold (AST.Declaration l l),
-          Shallow.Functor ConstantFold (AST.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.Declaration l l) where
-   (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor ConstantFold (AST.Type l l),
-          Shallow.Functor ConstantFold (AST.Type l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.Type l l) where
-   (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor ConstantFold (AST.FieldList l l),
-          Shallow.Functor ConstantFold (AST.FieldList l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.FieldList l l) where
-   (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor ConstantFold (AST.ProcedureHeading l l),
-          Shallow.Functor ConstantFold (AST.ProcedureHeading l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.ProcedureHeading l l) where
-   (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor ConstantFold (AST.FormalParameters l l),
-          Shallow.Functor ConstantFold (AST.FormalParameters l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.FormalParameters l l) where
-   (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor ConstantFold (AST.FPSection l l),
-          Shallow.Functor ConstantFold (AST.FPSection l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.FPSection l l) where
-   (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor ConstantFold (AST.Expression l l),
-          Shallow.Functor ConstantFold (AST.Expression l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.Expression l l) where
-   (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor ConstantFold (AST.Element l l),
-          Shallow.Functor ConstantFold (AST.Element l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.Element l l) where
-   (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor ConstantFold (AST.Designator l l),
-          Shallow.Functor ConstantFold (AST.Designator l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.Designator l l) where
-   (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor ConstantFold (AST.Block l l),
-          Shallow.Functor ConstantFold (AST.Block l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.Block l l) where
-   (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor ConstantFold (AST.StatementSequence l l),
-          Shallow.Functor ConstantFold (AST.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.StatementSequence l l) where
-   (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor ConstantFold (AST.Statement l l),
-          Shallow.Functor ConstantFold (AST.Statement l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.Statement l l) where
-   (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor ConstantFold (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)),
-          Shallow.Functor ConstantFold (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)
-                                        (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)) where
-   (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor ConstantFold (AST.Case l l),
-          Shallow.Functor ConstantFold (AST.Case l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.Case l l) where
-   (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor ConstantFold (AST.CaseLabels l l),
-          Shallow.Functor ConstantFold (AST.CaseLabels l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.CaseLabels l l) where
-   (<$>) = Full.mapUpDefault
-
-instance (Deep.Functor ConstantFold (AST.WithAlternative l l),
-          Shallow.Functor ConstantFold (AST.WithAlternative l l (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (AST.WithAlternative l l) where
-   (<$>) = Full.mapUpDefault
-
 -- * Shortcuts
 
 instance (Full.Functor (ConstantFoldSyn l) (Abstract.Expression l l),
@@ -872,3 +793,17 @@ predefined = Map.fromList $ map (first Abstract.nonQualIdent) $
                    "ODD", "SIZE", "ORD", "CHR", "SHORT", "LONG", "ENTIER"]
    where builtin name = (name, Just $ Abstract.builtin name)
 predefined2 = predefined
+
+instance (Deep.Functor ConstantFold (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)),
+          Shallow.Functor ConstantFold (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)
+                                        (Semantics ConstantFold) (Semantics ConstantFold))) =>
+         Full.Functor ConstantFold (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)) where
+   (<$>) = Full.mapUpDefault
+
+$(do l <- varT  <$> newName "l"
+     mconcat <$> mapM (\t-> Transformation.Full.TH.deriveUpFunctor (conT ''ConstantFold) $ conT t `appT` l `appT` l)
+        [''AST.Declaration, ''AST.Type, ''AST.FieldList,
+         ''AST.ProcedureHeading, ''AST.FormalParameters, ''AST.FPSection,
+         ''AST.Expression, ''AST.Element, ''AST.Designator,
+         ''AST.Block, ''AST.StatementSequence, ''AST.Statement,
+         ''AST.Case, ''AST.CaseLabels, ''AST.WithAlternative])
