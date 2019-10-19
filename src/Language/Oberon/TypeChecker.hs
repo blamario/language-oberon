@@ -1128,165 +1128,9 @@ instance Shallow.Transformation TypeCheck where
 instance Ord (Abstract.QualIdent l) =>
          Shallow.Functor TypeCheck (Modules l (Semantics TypeCheck) (Semantics TypeCheck)) where
    (<$>) = AG.mapDefault id snd
-instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
-          Atts (Inherited TypeCheck) (Abstract.Declaration l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ (InhTC l, Map AST.Ident AST.Ident),
-          Atts (Inherited TypeCheck) (Abstract.StatementSequence l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Synthesized TypeCheck) (Abstract.Declaration l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTCMod l,
-          Atts (Synthesized TypeCheck) (Abstract.StatementSequence l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTC l) =>
-         Shallow.Functor TypeCheck (AST.Module l l (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault id snd
-instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Rank2.Apply (Abstract.Block l l (Semantics TypeCheck)),
-          Atts (Inherited TypeCheck) (Abstract.Declaration l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ (InhTC l, Map AST.Ident AST.Ident),
-          Atts (Inherited TypeCheck) (Abstract.Type l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Inherited TypeCheck) (Abstract.ProcedureHeading l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ (InhTC l, Map AST.Ident AST.Ident),
-          Atts (Inherited TypeCheck) (Abstract.Block l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Inherited TypeCheck) (Abstract.FormalParameters l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Inherited TypeCheck) (Abstract.ConstExpression l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Synthesized TypeCheck) (Abstract.Declaration l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ SynTCMod l,
-          Atts (Synthesized TypeCheck) (Abstract.Type l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ SynTCType l,
-          Atts (Synthesized TypeCheck) (Abstract.ProcedureHeading l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTCHead l,
-          Atts (Synthesized TypeCheck) (Abstract.Block l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ SynTC l,
-          Atts (Synthesized TypeCheck) (Abstract.FormalParameters l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTCSig l,
-          Atts (Synthesized TypeCheck) (Abstract.ConstExpression l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTCExp l)
-         => Shallow.Functor TypeCheck (AST.Declaration l l (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault id snd
-instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Atts (Inherited TypeCheck) (Abstract.FormalParameters l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ InhTC l,
-          Atts (Synthesized TypeCheck) (Abstract.FormalParameters l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTCSig l) =>
-         Shallow.Functor TypeCheck (AST.ProcedureHeading l l (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault id snd
-instance (Ord (Abstract.QualIdent l),
-          Atts (Inherited TypeCheck) (Abstract.Declaration l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ (InhTC l, Map AST.Ident AST.Ident),
-          Atts (Inherited TypeCheck) (Abstract.StatementSequence l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Synthesized TypeCheck) (Abstract.Declaration l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ SynTCMod l,
-          Atts (Synthesized TypeCheck) (Abstract.StatementSequence l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTC l) =>
-         Shallow.Functor TypeCheck (AST.Block l l (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault id snd
-instance (Ord (Abstract.QualIdent l),
-          Atts (Inherited TypeCheck) (Abstract.FPSection l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Synthesized TypeCheck) (Abstract.FPSection l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ SynTCSec l) =>
-         Shallow.Functor TypeCheck (AST.FormalParameters l l (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault id snd
-instance (Abstract.Wirthy l, Ord (Abstract.QualIdent l),
-          Atts (Inherited TypeCheck) (Abstract.Type l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Synthesized TypeCheck) (Abstract.Type l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ SynTCType l) =>
-         Shallow.Functor TypeCheck (AST.FPSection l l (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault id snd
 instance Abstract.Nameable l =>
          Shallow.Functor TypeCheck (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)
                                        (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault id snd
-instance (Atts (Inherited TypeCheck) (Abstract.Statement l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Synthesized TypeCheck) (Abstract.Statement l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ SynTC l) =>
-         Shallow.Functor TypeCheck (AST.StatementSequence l l (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault id snd
-instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Atts (Inherited TypeCheck) (Abstract.StatementSequence l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Inherited TypeCheck) (Deep.Product (Abstract.Expression l l) (Abstract.StatementSequence l l)
-                                      (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Inherited TypeCheck) (Abstract.Case l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ (InhTC l, Type l),
-          Atts (Inherited TypeCheck) (Abstract.WithAlternative l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Inherited TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Inherited TypeCheck) (Abstract.Designator l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Synthesized TypeCheck) (Abstract.StatementSequence l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTC l,
-          Atts (Synthesized TypeCheck) (Deep.Product (Abstract.Expression l l) (Abstract.StatementSequence l l)
-                                        (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTC l,
-          Atts (Synthesized TypeCheck) (Abstract.Case l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ SynTC l,
-          Atts (Synthesized TypeCheck) (Abstract.WithAlternative l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ SynTC l,
-          Atts (Synthesized TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTCExp l,
-          Atts (Synthesized TypeCheck) (Abstract.Designator l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTCDes l) =>
-         Shallow.Functor TypeCheck (AST.Statement l l (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault id snd
-instance (Atts (Inherited TypeCheck) (Abstract.CaseLabels l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ (InhTC l, Type l),
-          Atts (Inherited TypeCheck) (Abstract.StatementSequence l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Synthesized TypeCheck) (Abstract.CaseLabels l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTC l,
-          Atts (Synthesized TypeCheck) (Abstract.StatementSequence l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTC l) =>
-         Shallow.Functor TypeCheck (AST.Case l l (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault id snd
-instance (Abstract.Nameable l, Eq (Abstract.QualIdent l),
-          Atts (Inherited TypeCheck) (Abstract.ConstExpression l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Synthesized TypeCheck) (Abstract.ConstExpression l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTCExp l) =>
-         Shallow.Functor TypeCheck (AST.CaseLabels l l (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault id snd
-instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Atts (Inherited TypeCheck) (Abstract.StatementSequence l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Synthesized TypeCheck) (Abstract.StatementSequence l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTC l) =>
-         Shallow.Functor TypeCheck (AST.WithAlternative l l (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault id snd
-instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Atts (Inherited TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Inherited TypeCheck) (Abstract.Element l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Inherited TypeCheck) (Abstract.Designator l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Inherited TypeCheck) (Abstract.Value l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Synthesized TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTCExp l,
-          Atts (Synthesized TypeCheck) (Abstract.Element l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTCExp l,
-          Atts (Synthesized TypeCheck) (Abstract.Value l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ SynTCExp l,
-          Atts (Synthesized TypeCheck) (Abstract.Designator l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTCDes l) =>
-         Shallow.Functor TypeCheck (AST.Expression l l (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault id snd
-instance (Abstract.Wirthy l, Abstract.Nameable l,
-          Atts (Inherited TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Synthesized TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTCExp l) =>
-         Shallow.Functor TypeCheck (AST.Element l l (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault id snd
-instance (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
-          Atts (Inherited TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Inherited TypeCheck) (Abstract.Designator l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Synthesized TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTCExp l,
-          Atts (Synthesized TypeCheck) (Abstract.Designator l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTCDes l) =>
-         Shallow.Functor TypeCheck (AST.Designator l l (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault id snd
-instance (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
-          Atts (Inherited TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Synthesized TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTCExp l) =>
-         Shallow.Functor TypeCheck (AST.Value l l (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault id snd
-instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Atts (Inherited TypeCheck) (Abstract.Type l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Inherited TypeCheck) (Abstract.FieldList l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Inherited TypeCheck) (Abstract.FormalParameters l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Inherited TypeCheck) (Abstract.ConstExpression l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Synthesized TypeCheck) (Abstract.Type l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ SynTCType l,
-          Atts (Synthesized TypeCheck) (Abstract.FieldList l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ SynTCFields l,
-          Atts (Synthesized TypeCheck) (Abstract.FormalParameters l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTCSig l,
-          Atts (Synthesized TypeCheck) (Abstract.ConstExpression l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTCExp l) =>
-         Shallow.Functor TypeCheck (AST.Type l l (Semantics TypeCheck) (Semantics TypeCheck)) where
-   (<$>) = AG.mapDefault id snd
-instance (Abstract.Nameable l,
-          Atts (Inherited TypeCheck) (Abstract.Type l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Synthesized TypeCheck) (Abstract.Type l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ SynTCType l) =>
-         Shallow.Functor TypeCheck (AST.FieldList l l (Semantics TypeCheck) (Semantics TypeCheck)) where
    (<$>) = AG.mapDefault id snd
 
 -- * Unsafe Rank2 AST instances
@@ -1382,3 +1226,14 @@ $(do l <- varT <$> newName "l"
          ''AST.Expression, ''AST.Element, ''AST.Designator,
          ''AST.Block, ''AST.StatementSequence, ''AST.Statement,
          ''AST.Case, ''AST.CaseLabels, ''AST.Value, ''AST.WithAlternative])
+
+$(do let sem = [t|Semantics TypeCheck|]
+     let inst g = [d| instance Attribution TypeCheck ($g l l) (Int, $g l l $sem $sem) =>
+                               Shallow.Functor TypeCheck ($g l l $sem $sem)
+                         where (<$>) = AG.mapDefault id snd |]
+     mconcat <$> mapM (inst . conT)
+        [''AST.Module, ''AST.Declaration, ''AST.Type, ''AST.FieldList,
+         ''AST.ProcedureHeading, ''AST.FormalParameters, ''AST.FPSection,
+         ''AST.Block, ''AST.StatementSequence, ''AST.Statement,
+         ''AST.Case, ''AST.CaseLabels, ''AST.WithAlternative,
+         ''AST.Expression, ''AST.Element, ''AST.Designator, ''AST.Value])

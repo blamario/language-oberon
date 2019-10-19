@@ -15,7 +15,7 @@ import qualified Data.Map.Lazy as Map
 import Data.Semigroup (Semigroup(..))
 import qualified Data.Text as Text
 import Foreign.Storable (sizeOf)
-import Language.Haskell.TH (appT, conT, varT, newName)
+import Language.Haskell.TH (appT, conT, varT, varE, newName)
 
 import qualified Rank2
 import qualified Transformation as Shallow
@@ -589,74 +589,10 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Abstract.Oberon l, Ord (Abst
 instance Ord (Abstract.QualIdent l) =>
          Shallow.Functor ConstantFold (Modules l (Semantics ConstantFold) (Semantics ConstantFold)) where
    (<$>) = AG.mapDefault id snd
-instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
-          Atts (Inherited ConstantFold) (Abstract.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCFMod' l (Abstract.Declaration l l),
-          Atts (Synthesized ConstantFold) (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.StatementSequence l l)) =>
-         Shallow.Functor ConstantFold (AST.Module l l (Semantics ConstantFold) (Semantics ConstantFold)) where
-   (<$>) = AG.mapDefault id snd
-instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Abstract.Expression l ~ AST.Expression l,  Abstract.Value l ~ AST.Value l,
-          Rank2.Apply (Abstract.Block l l (Semantics ConstantFold)),
-          Atts (Inherited ConstantFold) (Abstract.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Type l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.ProcedureHeading l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Block l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.FormalParameters l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.ConstExpression l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCFMod' l (Abstract.Declaration l l),
-          Atts (Synthesized ConstantFold) (Abstract.Type l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.Type l l),
-          Atts (Synthesized ConstantFold) (Abstract.ProcedureHeading l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.ProcedureHeading l l),
-          Atts (Synthesized ConstantFold) (Abstract.Block l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.Block l l),
-          Atts (Synthesized ConstantFold) (Abstract.FormalParameters l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.FormalParameters l l),
-          Atts (Synthesized ConstantFold) (Abstract.ConstExpression l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCFExp l)
-         => Shallow.Functor ConstantFold (AST.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold)) where
-   (<$>) = AG.mapDefault id snd
 instance (Abstract.Nameable l, Abstract.Expression l ~ AST.Expression l) =>
          Shallow.Functor ConstantFold
                          (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)
                                        (Semantics ConstantFold) (Semantics ConstantFold)) where
-   (<$>) = AG.mapDefault id snd
-instance (Abstract.CoWirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Abstract.Expression l ~ AST.Expression l, Abstract.Designator l ~ AST.Designator l, Abstract.Value l ~ AST.Value l,
-          Atts (Inherited ConstantFold) (Abstract.Expression l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Element l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.Expression l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCFExp l,
-          Atts (Synthesized ConstantFold) (Abstract.Element l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.Element l l),
-          Atts (Synthesized ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Value l l ((,) Int) ((,) Int)))) =>
-         Shallow.Functor ConstantFold
-                         (AST.Expression l l (Semantics ConstantFold) (Semantics ConstantFold)) where
-   (<$>) = AG.mapDefault id snd
-instance (Abstract.CoWirthy l, Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
-          Abstract.Expression l l ((,) Int) ((,) Int) ~ AST.Expression l l ((,) Int) ((,) Int),
-          Abstract.Value l ~ AST.Value l,
-          Atts (Inherited ConstantFold) (Abstract.Expression l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.Expression l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCFExp l,
-          Atts (Synthesized ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Value l l ((,) Int) ((,) Int)))) =>
-         Shallow.Functor ConstantFold
-                         (AST.Designator l l (Semantics ConstantFold) (Semantics ConstantFold)) where
    (<$>) = AG.mapDefault id snd
 
 -- * Shortcuts
@@ -801,9 +737,16 @@ instance (Deep.Functor ConstantFold (Deep.Product (AST.Expression l l) (AST.Stat
    (<$>) = Full.mapUpDefault
 
 $(do l <- varT  <$> newName "l"
-     mconcat <$> mapM (\t-> Transformation.Full.TH.deriveUpFunctor (conT ''ConstantFold) $ conT t `appT` l `appT` l)
+     mconcat <$> mapM (\g-> Transformation.Full.TH.deriveUpFunctor (conT ''ConstantFold) $ conT g `appT` l `appT` l)
         [''AST.Declaration, ''AST.Type, ''AST.FieldList,
          ''AST.ProcedureHeading, ''AST.FormalParameters, ''AST.FPSection,
          ''AST.Expression, ''AST.Element, ''AST.Designator,
          ''AST.Block, ''AST.StatementSequence, ''AST.Statement,
          ''AST.Case, ''AST.CaseLabels, ''AST.WithAlternative])
+
+$(do let sem = [t|Semantics ConstantFold|]
+     let inst g = [d| instance Attribution ConstantFold ($g l l) (Int, $g l l $sem $sem) =>
+                               Shallow.Functor ConstantFold ($g l l $sem $sem)
+                         where (<$>) = AG.mapDefault id snd |]
+     mconcat <$> mapM (inst . conT)
+        [''AST.Module, ''AST.Declaration, ''AST.Expression, ''AST.Designator])
