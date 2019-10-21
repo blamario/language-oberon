@@ -10,7 +10,6 @@ import Data.Data (Data, Typeable)
 import Data.List.NonEmpty
 import Data.Text (Text)
 
-import Transformation.Deep (Product)
 import qualified Transformation.Deep.TH
 import qualified Rank2.TH
 
@@ -37,6 +36,7 @@ instance Abstract.Wirthy Language where
    type StatementSequence Language = StatementSequence Language
    type Case Language = Case Language
    type CaseLabels Language = CaseLabels Language
+   type ConditionalBranch Language = ConditionalBranch Language
    type Element Language = Element Language
 
    type IdentDef Language = IdentDef Language
@@ -72,6 +72,7 @@ instance Abstract.Wirthy Language where
    returnStatement = Return
    whileStatement = While
 
+   conditionalBranch = ConditionalBranch
    caseAlternative = Case
    emptyCase = EmptyCase
    labelRange = LabelRange
@@ -381,7 +382,7 @@ deriving instance Show (f (Abstract.Statement l l f' f')) => Show (StatementSequ
 data Statement λ l f' f = EmptyStatement
                         | Assignment (f (Abstract.Designator l l f' f')) (f (Abstract.Expression l l f' f'))
                         | ProcedureCall (f (Abstract.Designator l l f' f')) (Maybe [f (Abstract.Expression l l f' f')])
-                        | If (NonEmpty (f (Product (Abstract.Expression l l) (Abstract.StatementSequence l l) f' f')))
+                        | If (NonEmpty (f (Abstract.ConditionalBranch l l f' f')))
                              (Maybe (f (Abstract.StatementSequence l l f' f')))
                         | CaseStatement (f (Abstract.Expression l l f' f')) 
                                         (NonEmpty (f (Abstract.Case l l f' f'))) 
@@ -398,12 +399,12 @@ data Statement λ l f' f = EmptyStatement
 
 deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f',
                    Data (f (Abstract.Designator l l f' f')), Data (f (Abstract.Expression l l f' f')),
-                   Data (f (Product (Abstract.Expression l l) (Abstract.StatementSequence l l) f' f')),
                    Data (f (Abstract.Case l l f' f')), Data (f (Abstract.WithAlternative l l f' f')),
+                   Data (f (Abstract.ConditionalBranch l l f' f')),
                    Data (f (Abstract.StatementSequence l l f' f'))) => Data (Statement λ l f' f)
 deriving instance (Show (f (Abstract.Designator l l f' f')), Show (f (Abstract.Expression l l f' f')),
-                   Show (f (Product (Abstract.Expression l l) (Abstract.StatementSequence l l) f' f')),
                    Show (f (Abstract.Case l l f' f')), Show (f (Abstract.WithAlternative l l f' f')),
+                   Show (f (Abstract.ConditionalBranch l l f' f')),
                    Show (f (Abstract.StatementSequence l l f' f'))) => Show (Statement λ l f' f)
 
 data WithAlternative λ l f' f = WithAlternative (Abstract.QualIdent l) (Abstract.QualIdent l)
@@ -415,17 +416,26 @@ data Case λ l f' f = Case (NonEmpty (f (Abstract.CaseLabels l l f' f'))) (f (Ab
 data CaseLabels λ l f' f = SingleLabel (f (Abstract.ConstExpression l l f' f'))
                          | LabelRange (f (Abstract.ConstExpression l l f' f')) (f (Abstract.ConstExpression l l f' f'))
 
+data ConditionalBranch λ l f' f =
+   ConditionalBranch (f (Abstract.Expression l l f' f')) (f (Abstract.StatementSequence l l f' f'))
+
 deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f', Data (Abstract.QualIdent l),
                    Data (f (Abstract.Designator l l f' f')), Data (f (Abstract.StatementSequence l l f' f'))) =>
                   Data (WithAlternative λ l f' f)
 deriving instance (Show (Abstract.QualIdent l), Show (f (Abstract.StatementSequence l l f' f'))) =>
                   Show (WithAlternative λ l f' f)
 
-deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f', Show (Abstract.QualIdent l),
+deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f',
                    Data (f (Abstract.CaseLabels l l f' f')), Data (f (Abstract.StatementSequence l l f' f'))) =>
                   Data (Case λ l f' f)
 deriving instance (Show (f (Abstract.CaseLabels l l f' f')), Show (f (Abstract.StatementSequence l l f' f'))) =>
                   Show (Case λ l f' f)
+
+deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f',
+                   Data (f (Abstract.Expression l l f' f')), Data (f (Abstract.StatementSequence l l f' f'))) =>
+                  Data (ConditionalBranch λ l f' f)
+deriving instance (Show (f (Abstract.Expression l l f' f')), Show (f (Abstract.StatementSequence l l f' f'))) =>
+                  Show (ConditionalBranch λ l f' f)
 
 deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f', Data (f (Abstract.ConstExpression l l f' f'))) =>
                   Data (CaseLabels λ l f' f)
@@ -435,10 +445,12 @@ $(mconcat <$> mapM Rank2.TH.unsafeDeriveApply
   [''Declaration, ''Type, ''Expression, ''Value,
    ''Element, ''Designator, ''FieldList,
    ''ProcedureHeading, ''FormalParameters, ''FPSection, ''Block,
-   ''Statement, ''StatementSequence, ''WithAlternative, ''Case, ''CaseLabels])
+   ''Statement, ''StatementSequence,
+   ''Case, ''CaseLabels, ''ConditionalBranch, ''WithAlternative])
 
 $(mconcat <$> mapM Transformation.Deep.TH.deriveAll
   [''Module, ''Declaration, ''Type, ''Expression, ''Value,
    ''Element, ''Designator, ''FieldList,
    ''ProcedureHeading, ''FormalParameters, ''FPSection, ''Block,
-   ''Statement, ''StatementSequence, ''WithAlternative, ''Case, ''CaseLabels])
+   ''Statement, ''StatementSequence,
+   ''Case, ''CaseLabels, ''ConditionalBranch, ''WithAlternative])

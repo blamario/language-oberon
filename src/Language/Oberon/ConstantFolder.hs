@@ -121,11 +121,10 @@ type instance Atts (Synthesized ConstantFold) (AST.Element l l f' f) = SynCF' (A
 type instance Atts (Synthesized ConstantFold) (AST.Value l l f' f) = SynCF' (AST.Value l l)
 type instance Atts (Synthesized ConstantFold) (AST.Designator l l f' f) =
    SynCF (AST.Designator l l ((,) Int) ((,) Int), Maybe (AST.Value l l ((,) Int) ((,) Int)))
-type instance Atts (Synthesized ConstantFold) (Deep.Product (AST.Expression l l) (AST.StatementSequence l l) f' f) =
-   SynCF' (Deep.Product (AST.Expression l l) (AST.StatementSequence l l))
 type instance Atts (Synthesized ConstantFold) (AST.Statement l l f' f) = SynCF' (AST.Statement l l)
 type instance Atts (Synthesized ConstantFold) (AST.Case l l f' f) = SynCF' (AST.Case l l)
 type instance Atts (Synthesized ConstantFold) (AST.CaseLabels l l f' f) = SynCF' (AST.CaseLabels l l)
+type instance Atts (Synthesized ConstantFold) (AST.ConditionalBranch l l f' f) = SynCF' (AST.ConditionalBranch l l)
 type instance Atts (Synthesized ConstantFold) (AST.WithAlternative l l f' f) = SynCF' (AST.WithAlternative l l)
 
 type instance Atts (Inherited ConstantFold) (Modules l f' f) = InhCFRoot l
@@ -142,10 +141,10 @@ type instance Atts (Inherited ConstantFold) (AST.Expression l l f' f) = InhCF l
 type instance Atts (Inherited ConstantFold) (AST.Element l l f' f) = InhCF l
 type instance Atts (Inherited ConstantFold) (AST.Value l l f' f) = InhCF l
 type instance Atts (Inherited ConstantFold) (AST.Designator l l f' f) = InhCF l
-type instance Atts (Inherited ConstantFold) (Deep.Product (AST.Expression l l) (AST.StatementSequence l l) f' f) = InhCF l
 type instance Atts (Inherited ConstantFold) (AST.Statement l l f' f) = InhCF l
 type instance Atts (Inherited ConstantFold) (AST.Case l l f' f) = InhCF l
 type instance Atts (Inherited ConstantFold) (AST.CaseLabels l l f' f) = InhCF l
+type instance Atts (Inherited ConstantFold) (AST.ConditionalBranch l l f' f) = InhCF l
 type instance Atts (Inherited ConstantFold) (AST.WithAlternative l l f' f) = InhCF l
 
 type SynCF' node = SynCF (node ((,) Int) ((,) Int))
@@ -233,12 +232,6 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
       (Synthesized SynCFMod{moduleEnv= mempty,
                             moduleFolded= (pos, AST.ForwardDeclaration namedef (folded . syn <$> signature))},
        AST.ForwardDeclaration namedef (Just (Inherited inheritance)))
-
-instance (Abstract.Nameable l, Abstract.Expression l ~ AST.Expression l) =>
-         Attribution ConstantFold (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)) ((,) Int) where
-   attribution ConstantFold (pos, _) (Inherited inheritance, Deep.Pair condition statements) =
-      (Synthesized SynCF{folded= (pos, Deep.Pair (foldedExp $ syn condition) (folded $ syn statements))},
-       Deep.Pair (Inherited inheritance) (Inherited inheritance))
 
 instance (Abstract.CoWirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Abstract.Expression l ~ AST.Expression l, Abstract.Value l ~ AST.Value l,
@@ -584,11 +577,6 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Abstract.Oberon l, Ord (Abst
 instance Ord (Abstract.QualIdent l) =>
          Shallow.Functor ConstantFold (Modules l (Semantics ConstantFold) (Semantics ConstantFold)) where
    (<$>) = AG.mapDefault snd
-instance (Abstract.Nameable l, Abstract.Expression l ~ AST.Expression l) =>
-         Shallow.Functor ConstantFold
-                         (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)
-                                       (Semantics ConstantFold) (Semantics ConstantFold)) where
-   (<$>) = AG.mapDefault snd
 
 -- * Shortcuts
 
@@ -604,9 +592,6 @@ instance Full.Functor (ConstantFoldSyn l) (AST.Expression l l) where
 
 instance Full.Functor (ConstantFoldSyn l) (AST.Designator l l) where
   ConstantFoldSyn inheritance <$> sem = fst <$> folded (syn $ Rank2.apply sem $ Inherited inheritance)
-
-instance Full.Functor (ConstantFoldSyn l) (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)) where
-  ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance)
 
 -- * Unsafe Rank2 AST instances
 
@@ -627,19 +612,13 @@ predefined = Map.fromList $ map (first Abstract.nonQualIdent) $
    where builtin name = (name, Just $ Abstract.builtin name)
 predefined2 = predefined
 
-instance (Deep.Functor ConstantFold (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)),
-          Shallow.Functor ConstantFold (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)
-                                        (Semantics ConstantFold) (Semantics ConstantFold))) =>
-         Full.Functor ConstantFold (Deep.Product (AST.Expression l l) (AST.StatementSequence l l)) where
-   (<$>) = Full.mapUpDefault
-
 $(do l <- varT  <$> newName "l"
      mconcat <$> mapM (\g-> Transformation.Full.TH.deriveUpFunctor (conT ''ConstantFold) $ conT g `appT` l `appT` l)
         [''AST.Declaration, ''AST.Type, ''AST.FieldList,
          ''AST.ProcedureHeading, ''AST.FormalParameters, ''AST.FPSection,
          ''AST.Expression, ''AST.Element, ''AST.Designator,
          ''AST.Block, ''AST.StatementSequence, ''AST.Statement,
-         ''AST.Case, ''AST.CaseLabels, ''AST.WithAlternative])
+         ''AST.Case, ''AST.CaseLabels, ''AST.ConditionalBranch, ''AST.WithAlternative])
 
 $(do let sem = [t|Semantics ConstantFold|]
      let inst g = [d| instance Attribution ConstantFold ($g l l) ((,) Int) =>
@@ -653,7 +632,7 @@ $(do let inst g = [d| instance Full.Functor (ConstantFoldSyn l) ($g l l)
      mconcat <$> mapM (inst . conT)
         [''AST.Type, ''AST.FieldList, ''AST.FormalParameters, ''AST.FPSection,
          ''AST.StatementSequence, ''AST.Statement,
-         ''AST.Case, ''AST.CaseLabels, ''AST.WithAlternative])
+         ''AST.Case, ''AST.CaseLabels, ''AST.ConditionalBranch, ''AST.WithAlternative])
 
 $(do let sem = [t|Semantics ConstantFold|]
      let inst g = [d| instance Deep.Functor (ConstantFoldSyn l) ($g l l) =>
@@ -665,5 +644,5 @@ $(do let sem = [t|Semantics ConstantFold|]
         [''AST.Type, ''AST.FieldList,
          ''AST.ProcedureHeading, ''AST.FormalParameters, ''AST.FPSection,
          ''AST.Block, ''AST.StatementSequence, ''AST.Statement,
-         ''AST.Case, ''AST.CaseLabels, ''AST.WithAlternative,
+         ''AST.Case, ''AST.CaseLabels, ''AST.ConditionalBranch, ''AST.WithAlternative,
          ''AST.Element])

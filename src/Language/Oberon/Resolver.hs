@@ -514,10 +514,6 @@ $(Rank2.TH.deriveFoldable ''DeclarationRHS)
 $(Rank2.TH.deriveTraversable ''DeclarationRHS)
 $(Transformation.Deep.TH.deriveTraversable ''DeclarationRHS)
 
-instance Deep.Traversable (Resolution l) (Deep.Product (Expression l l) (StatementSequence l l)) =>
-         Full.Traversable (Resolution l) (Deep.Product (Expression l l) (StatementSequence l l)) where
-  traverse = Full.traverseDownDefault
-
 $(do l <- varT <$> newName "l"
      mconcat <$> mapM (\t-> Transformation.Full.TH.deriveDownTraversable (conT ''Resolution `appT` l)
                             $ conT t `appT` l `appT` l)
@@ -525,4 +521,4 @@ $(do l <- varT <$> newName "l"
          ''ProcedureHeading, ''FormalParameters, ''FPSection,
          ''Expression, ''Element, ''Designator,
          ''Block, ''StatementSequence, ''Statement,
-         ''Case, ''CaseLabels, ''Value, ''WithAlternative])
+         ''Case, ''CaseLabels, ''ConditionalBranch, ''Value, ''WithAlternative])

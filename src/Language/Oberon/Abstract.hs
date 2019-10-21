@@ -9,8 +9,6 @@ import Data.Data (Data)
 import Data.List.NonEmpty
 import Data.Text (Text)
 
-import Transformation.Deep (Product)
-
 type Ident = Text
 
 data RelOp = Equal | Unequal | Less | LessOrEqual | Greater | GreaterOrEqual | In
@@ -33,6 +31,7 @@ class Wirthy l where
    type StatementSequence l = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
    type Case l              = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
    type CaseLabels l        = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
+   type ConditionalBranch l = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
    type Element l           = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
    
    type Import l  = x | x -> l
@@ -63,7 +62,7 @@ class Wirthy l where
                  -> Statement l l' f' f
    emptyStatement :: Statement l l' f' f
    exitStatement :: Statement l l' f' f
-   ifStatement :: NonEmpty (f (Product (Expression l' l') (StatementSequence l' l') f' f')) 
+   ifStatement :: NonEmpty (f (ConditionalBranch l' l' f' f'))
                -> Maybe (f (StatementSequence l' l' f' f')) 
                -> Statement l l' f' f
    loopStatement :: f (StatementSequence l' l' f' f') -> Statement l l' f' f
@@ -72,6 +71,7 @@ class Wirthy l where
    returnStatement :: Maybe (f (Expression l' l' f' f')) -> Statement l l' f' f
    whileStatement :: f (Expression l' l' f' f') -> f (StatementSequence l' l' f' f') -> Statement l l' f' f
 
+   conditionalBranch :: f (Expression l' l' f' f') -> f (StatementSequence l' l' f' f') -> ConditionalBranch l l' f' f
    caseAlternative :: NonEmpty (f (CaseLabels l' l' f' f')) -> f (StatementSequence l' l' f' f') -> Case l l' f' f
    emptyCase :: Case l l' f' f
 

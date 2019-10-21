@@ -12,7 +12,6 @@ import Data.List.NonEmpty (NonEmpty((:|)), toList)
 import qualified Data.Text as Text
 import Data.Text.Prettyprint.Doc
 import Numeric (showHex)
-import Transformation.Deep as Deep (Product(Pair))
 
 import qualified Language.Oberon.Abstract as Abstract
 import Language.Oberon.AST
@@ -177,6 +176,7 @@ instance Pretty (Abstract.Statement l l Identity Identity) => Pretty (StatementS
 instance (Pretty (Abstract.ConstExpression l l Identity Identity),
           Pretty (Abstract.Designator l l Identity Identity),
           Pretty (Abstract.Case l l Identity Identity),
+          Pretty (Abstract.ConditionalBranch l l Identity Identity),
           Pretty (Abstract.WithAlternative l l Identity Identity),
           Pretty (Abstract.StatementSequence l l Identity Identity)) => Pretty (Statement λ l Identity Identity) where
    prettyList l = vsep (dropEmptyTail $ punctuate semi $ pretty <$> l)
@@ -187,13 +187,10 @@ instance (Pretty (Abstract.ConstExpression l l Identity Identity),
    pretty (Assignment (Identity destination) expression) = pretty destination <+> ":=" <+> pretty expression
    pretty (ProcedureCall (Identity procedure) parameters) =
       pretty procedure <> foldMap (parens . hsep . punctuate comma . (pretty <$>)) parameters
-   pretty (If (ifThen :| elsifs) fallback) = vsep (branch "IF" ifThen
-                                                   : (branch "ELSIF" <$> elsifs)
+   pretty (If (ifThen :| elsifs) fallback) = vsep ("IF" <+> pretty ifThen
+                                                   : ((("ELSIF" <+>) . pretty) <$> elsifs)
                                                     ++ foldMap (\x-> ["ELSE", prettyBlock x]) fallback
                                                     ++ ["END"])
-      where branch kwd (Identity (Deep.Pair (Identity condition) (Identity body))) =
-               vsep [kwd <+> pretty condition <+> "THEN",
-                     prettyBlock (Identity body)]
    pretty (CaseStatement scrutinee cases fallback) = vsep ["CASE" <+> pretty scrutinee <+> "OF",
                                                            align (encloseSep mempty mempty "| "
                                                                   $ pretty <$> toList cases),
@@ -219,6 +216,12 @@ instance (Pretty (Abstract.ConstExpression l l Identity Identity),
             ["END"])
    pretty Exit = "EXIT"
    pretty (Return result) = "RETURN" <+> foldMap pretty result
+
+instance (Pretty (Abstract.Expression l l Identity Identity),
+          Pretty (Abstract.StatementSequence l l Identity Identity)) =>
+         Pretty (ConditionalBranch λ l Identity Identity) where
+   pretty (ConditionalBranch condition body) = vsep [pretty condition <+> "THEN",
+                                                     prettyBlock body]
    
 instance (Pretty (Abstract.CaseLabels l l Identity Identity),
           Pretty (Abstract.ConstExpression l l Identity Identity),

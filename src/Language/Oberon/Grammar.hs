@@ -19,7 +19,6 @@ import Text.Grampa.ContextFree.LeftRecursive (Parser)
 import Text.Parser.Combinators (sepBy, sepBy1, sepByNonEmpty, try)
 import Text.Parser.Token (braces, brackets, parens)
 
-import Transformation.Deep as Deep (Product(Pair))
 import qualified Rank2.TH
 
 import qualified Language.Oberon.Abstract as Abstract
@@ -315,7 +314,7 @@ grammar OberonGrammar{..} = OberonGrammar{
    assignment  =  Abstract.assignment <$> designator <* delimiter ":=" <*> expression,
    procedureCall = Abstract.procedureCall <$> designator <*> optional actualParameters,
    ifStatement = Abstract.ifStatement <$ keyword "IF"
-       <*> sepByNonEmpty (wrap $ Deep.Pair <$> expression <* keyword "THEN" <*> wrap statementSequence)
+       <*> sepByNonEmpty (wrap $ Abstract.conditionalBranch <$> expression <* keyword "THEN" <*> wrap statementSequence)
                          (keyword "ELSIF")
        <*> optional (keyword "ELSE" *> wrap statementSequence) <* keyword "END",
    caseStatement = Abstract.caseStatement <$ keyword "CASE" <*> expression
