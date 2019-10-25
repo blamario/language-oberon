@@ -414,6 +414,9 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
                         (Just (AST.Builtin "SIZE"), [Just (AST.Builtin "SHORTREAL")])
                            -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer floatSize)),
                                        foldedValue= Just (Abstract.integer floatSize)}
+                        (Just (AST.Builtin "MAX"), [Just (AST.Builtin "CHAR")])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.charCode 0xff)),
+                                       foldedValue= Just (Abstract.integer minInteger)}
                         (Just (AST.Builtin "MAX"), [Just (AST.Builtin "INTEGER")])
                            -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer maxInteger)),
                                        foldedValue= Just (Abstract.integer maxInteger)}
@@ -432,6 +435,9 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
                         (Just (AST.Builtin "MAX"), [Just (AST.Builtin "LONGREAL")])
                            -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.real maxReal)),
                                        foldedValue= Just (Abstract.real maxReal)}
+                        (Just (AST.Builtin "MIN"), [Just (AST.Builtin "CHAR")])
+                           -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.charCode 0)),
+                                       foldedValue= Just (Abstract.integer minInteger)}
                         (Just (AST.Builtin "MIN"), [Just (AST.Builtin "INTEGER")])
                            -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.integer minInteger)),
                                        foldedValue= Just (Abstract.integer minInteger)}

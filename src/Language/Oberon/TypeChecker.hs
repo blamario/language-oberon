@@ -798,29 +798,10 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
                                 of SynTCDes{designatorName= Just (Just "SYSTEM", name)}
                                      | Just t <- systemCallType name (inferredType . syn <$> parameters') -> t
                                    SynTCDes{designatorName= d, designatorType= t}
-                                     | ProcedureType _ _ (Just returnType) <- ultimate t ->
-                                         case returnType
-                                         of UnknownType | Just (Nothing, name) <- d
-                                                          -> builtinType name (inferredType . syn <$> parameters')
-                                            _ -> returnType
+                                     | ProcedureType _ _ (Just returnType) <- ultimate t -> returnType
                                    _ -> UnknownType},
        AST.FunctionCall (Inherited inheritance) [Inherited inheritance])
-     where builtinType :: Abstract.Nameable l => Abstract.Ident -> [Type l] -> Type l
-           builtinType "MAX" [t@(NominalType q Nothing)] =
-                case Abstract.getNonQualIdentName q
-                of Just "SET" -> IntegerType 63
-                   Just "SHORTINT" -> IntegerType (2^15-1)
-                   Just "INTEGER" -> IntegerType (2^31-1)
-                   Just "LONGINT" -> IntegerType (2^63-1)
-                   _ -> t
-           builtinType "MIN" [t@(NominalType q Nothing)] =
-                case Abstract.getNonQualIdentName q
-                of Just "SET" -> IntegerType 0
-                   Just "SHORTINT" -> IntegerType (-2^15)
-                   Just "INTEGER" -> IntegerType (-2^31)
-                   Just "LONGINT" -> IntegerType (-2^63)
-                   _ -> t
-           systemCallType "VAL" [t1, t2] = Just t1
+     where systemCallType "VAL" [t1, t2] = Just t1
            systemCallType _ _ = Nothing
    attribution TypeCheck (pos, _) (Inherited inheritance, AST.Not expr) =
       (Synthesized SynTCExp{expressionErrors= booleanExpressionErrors inheritance pos (syn expr),
