@@ -11,6 +11,7 @@ import Data.List.NonEmpty
 import Data.Text (Text)
 
 import qualified Transformation.Deep.TH
+import qualified Transformation.AG as AG
 import qualified Rank2.TH
 
 import qualified Language.Oberon.Abstract as Abstract
@@ -454,3 +455,41 @@ $(mconcat <$> mapM Transformation.Deep.TH.deriveAll
    ''ProcedureHeading, ''FormalParameters, ''FPSection, ''Block,
    ''Statement, ''StatementSequence,
    ''Case, ''CaseLabels, ''ConditionalBranch, ''WithAlternative])
+
+instance (AG.Atts (AG.Inherited t) (Abstract.Designator l l (AG.Semantics t) (AG.Semantics t))
+          ~ AG.Atts (AG.Inherited t) (Expression l l (AG.Semantics t) (AG.Semantics t)),
+          AG.Atts (AG.Inherited t) (Abstract.Element l l (AG.Semantics t) (AG.Semantics t))
+          ~ AG.Atts (AG.Inherited t) (Expression l l (AG.Semantics t) (AG.Semantics t)),
+          AG.Atts (AG.Inherited t) (Abstract.Expression l l (AG.Semantics t) (AG.Semantics t))
+          ~ AG.Atts (AG.Inherited t) (Expression l l (AG.Semantics t) (AG.Semantics t)),
+          AG.Atts (AG.Inherited t) (Abstract.Value l l (AG.Semantics t) (AG.Semantics t))
+          ~ AG.Atts (AG.Inherited t) (Expression l l (AG.Semantics t) (AG.Semantics t))) =>
+         AG.Inheritable t (Expression l l) where
+   passOnInheritance (AG.Inherited i) (Relation op _ _) = Relation op (AG.Inherited i) (AG.Inherited i)
+   passOnInheritance (AG.Inherited i) (IsA _ typeName)  = IsA (AG.Inherited i) typeName
+   passOnInheritance (AG.Inherited i) Positive{}        = Positive (AG.Inherited i)
+   passOnInheritance (AG.Inherited i) Negative{}        = Negative (AG.Inherited i)
+   passOnInheritance (AG.Inherited i) Add{}             = Add (AG.Inherited i) (AG.Inherited i)
+   passOnInheritance (AG.Inherited i) Subtract{}        = Subtract (AG.Inherited i) (AG.Inherited i)
+   passOnInheritance (AG.Inherited i) Or{}              = Or (AG.Inherited i) (AG.Inherited i)
+   passOnInheritance (AG.Inherited i) Multiply{}        = Multiply (AG.Inherited i) (AG.Inherited i)
+   passOnInheritance (AG.Inherited i) Divide{}          = Divide (AG.Inherited i) (AG.Inherited i)
+   passOnInheritance (AG.Inherited i) IntegerDivide{}   = IntegerDivide (AG.Inherited i) (AG.Inherited i)
+   passOnInheritance (AG.Inherited i) Modulo{}          = Modulo (AG.Inherited i) (AG.Inherited i)
+   passOnInheritance (AG.Inherited i) And{}             = And (AG.Inherited i) (AG.Inherited i)
+   passOnInheritance (AG.Inherited i) Set{}             = Set [AG.Inherited i]
+   passOnInheritance (AG.Inherited i) Read{}            = Read (AG.Inherited i)
+   passOnInheritance (AG.Inherited i) FunctionCall{}    = FunctionCall (AG.Inherited i) [AG.Inherited i]
+   passOnInheritance (AG.Inherited i) Not{}             = Not (AG.Inherited i)
+   passOnInheritance (AG.Inherited i) Literal{}         = Literal (AG.Inherited i)
+
+instance (AG.Atts (AG.Inherited t) (Abstract.Designator l l (AG.Semantics t) (AG.Semantics t))
+          ~ AG.Atts (AG.Inherited t) (Designator l l (AG.Semantics t) (AG.Semantics t)),
+          AG.Atts (AG.Inherited t) (Abstract.Expression l l (AG.Semantics t) (AG.Semantics t))
+          ~ AG.Atts (AG.Inherited t) (Designator l l (AG.Semantics t) (AG.Semantics t))) =>
+         AG.Inheritable t (Designator l l) where
+   passOnInheritance (AG.Inherited i) (Variable q) = Variable q
+   passOnInheritance (AG.Inherited i) (Field record name) = Field (AG.Inherited i) name
+   passOnInheritance (AG.Inherited i) (Index array indices) = Index (AG.Inherited i) (pure $ AG.Inherited i)
+   passOnInheritance (AG.Inherited i) (TypeGuard expr typeName) = TypeGuard (AG.Inherited i) typeName
+   passOnInheritance (AG.Inherited i) (Dereference pointer) = Dereference (AG.Inherited i)

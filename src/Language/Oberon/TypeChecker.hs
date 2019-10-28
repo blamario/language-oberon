@@ -665,16 +665,16 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Synthesized TypeCheck) (Abstract.Designator l l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ SynTCDes l) =>
          Attribution TypeCheck (AST.Expression l l) ((,) Int) where
-   attribution TypeCheck (pos, AST.Relation op _ _) (Inherited inheritance, AST.Relation _op left right) =
-      (Synthesized SynTCExp{expressionErrors= case expressionErrors (syn left) <> expressionErrors (syn right)
-                                              of [] | t1 == t2 -> []
-                                                    | AST.In <- op -> membershipCompatible (ultimate t1) (ultimate t2)
-                                                    | equality op, [] <- assignmentCompatible inheritance pos t1 t2 -> []
-                                                    | equality op, [] <- assignmentCompatible inheritance pos t2 t1 -> []
-                                                    | otherwise -> comparable (ultimate t1) (ultimate t2)
-                                                 errs -> errs,
-                            inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing},
-       AST.Relation op (Inherited inheritance) (Inherited inheritance))
+   bequest TypeCheck (pos, e) i@(Inherited inheritance) _ = AG.passOnInheritance i e
+   synthesis TypeCheck (pos, AST.Relation op _ _) (Inherited inheritance) (AST.Relation _op left right) =
+      Synthesized SynTCExp{expressionErrors= case expressionErrors (syn left) <> expressionErrors (syn right)
+                                             of [] | t1 == t2 -> []
+                                                   | AST.In <- op -> membershipCompatible (ultimate t1) (ultimate t2)
+                                                   | equality op, [] <- assignmentCompatible inheritance pos t1 t2 -> []
+                                                   | equality op, [] <- assignmentCompatible inheritance pos t2 t1 -> []
+                                                   | otherwise -> comparable (ultimate t1) (ultimate t2)
+                                                errs -> errs,
+                           inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing}
       where t1 = inferredType (syn left)
             t2 = inferredType (syn right)
             equality AST.Equal = True
@@ -708,105 +708,89 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
             membershipCompatible (NominalType q1 Nothing) (NominalType q2 Nothing)
                | Just t1 <- Abstract.getNonQualIdentName q1,
                  Abstract.getNonQualIdentName q2 == Just "SET", isNumerical t1 = []
-   attribution TypeCheck (pos, AST.IsA _ q) (Inherited inheritance, AST.IsA left _) =
-      (Synthesized SynTCExp{expressionErrors= case Map.lookup q (env inheritance)
-                                              of Nothing -> [(currentModule inheritance, pos, UnknownName q)]
-                                                 Just t -> assignmentCompatible inheritance pos (inferredType $ syn left) t,
-                            inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing},
-       AST.IsA (Inherited inheritance) q)
-   attribution TypeCheck (pos, _) (Inherited inheritance, AST.Positive expr) =
-      (Synthesized SynTCExp{expressionErrors= unaryNumericOperatorErrors inheritance pos (syn expr),
-                            inferredType= inferredType (syn expr)},
-       AST.Positive (Inherited inheritance))
-   attribution TypeCheck (pos, _) (Inherited inheritance, AST.Negative expr) =
-      (Synthesized SynTCExp{expressionErrors= unaryNumericOperatorErrors inheritance pos (syn expr),
-                            inferredType= unaryNumericOperatorType negate (syn expr)},
-       AST.Negative (Inherited inheritance))
-   attribution TypeCheck (pos, _) (Inherited inheritance, AST.Add left right) =
-      (Synthesized SynTCExp{expressionErrors= binarySetOrNumericOperatorErrors inheritance pos (syn left) (syn right),
-                            inferredType= binaryNumericOperatorType div (syn left) (syn right)},
-       AST.Add (Inherited inheritance) (Inherited inheritance))
-   attribution TypeCheck (pos, _) (Inherited inheritance, AST.Subtract left right) =
-      (Synthesized SynTCExp{expressionErrors= binarySetOrNumericOperatorErrors inheritance pos (syn left) (syn right),
-                            inferredType= binaryNumericOperatorType div (syn left) (syn right)},
-       AST.Subtract (Inherited inheritance) (Inherited inheritance))
-   attribution TypeCheck (pos, _) (Inherited inheritance, AST.Or left right) =
-      (Synthesized SynTCExp{expressionErrors= binaryBooleanOperatorErrors inheritance pos (syn left) (syn right),
-                            inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing},
-       AST.Or (Inherited inheritance) (Inherited inheritance))
-   attribution TypeCheck (pos, _) (Inherited inheritance, AST.Multiply left right) =
-      (Synthesized SynTCExp{expressionErrors= binarySetOrNumericOperatorErrors inheritance pos (syn left) (syn right),
-                            inferredType= binaryNumericOperatorType div (syn left) (syn right)},
-       AST.Multiply (Inherited inheritance) (Inherited inheritance))
-   attribution TypeCheck (pos, _) (Inherited inheritance, AST.Divide left right) =
-      (Synthesized SynTCExp{expressionErrors=
-                               case (syn left, syn right)
-                               of (SynTCExp{expressionErrors= [], inferredType= NominalType q1 Nothing},
-                                   SynTCExp{expressionErrors= [], inferredType= NominalType q2 Nothing})
-                                     | Abstract.getNonQualIdentName q1 == Just "REAL",
-                                       Abstract.getNonQualIdentName q2 == Just "REAL" -> []
-                                     | Abstract.getNonQualIdentName q1 == Just "SET",
-                                       Abstract.getNonQualIdentName q2 == Just "SET" -> []
-                                  (SynTCExp{expressionErrors= [], inferredType= t1},
-                                   SynTCExp{expressionErrors= [], inferredType= t2})
-                                    | t1 == t2 -> [(currentModule inheritance, pos, UnrealType t1)]
-                                    | otherwise -> [(currentModule inheritance, pos, TypeMismatch t1 t2)],
-                            inferredType= NominalType (Abstract.nonQualIdent "REAL") Nothing},
-       AST.Divide (Inherited inheritance) (Inherited inheritance))
-   attribution TypeCheck (pos, _) (Inherited inheritance, AST.IntegerDivide left right) =
-      (Synthesized SynTCExp{expressionErrors= binaryIntegerOperatorErrors inheritance pos (syn left) (syn right),
-                            inferredType= binaryNumericOperatorType div (syn left) (syn right)},
-       AST.IntegerDivide (Inherited inheritance) (Inherited inheritance))
-   attribution TypeCheck (pos, _) (Inherited inheritance, AST.Modulo left right) =
-      (Synthesized SynTCExp{expressionErrors= binaryIntegerOperatorErrors inheritance pos (syn left) (syn right),
-                            inferredType= binaryNumericOperatorType mod (syn left) (syn right)},
-        AST.Modulo (Inherited inheritance) (Inherited inheritance))
-   attribution TypeCheck (pos, _) (Inherited inheritance, AST.And left right) =
-      (Synthesized SynTCExp{expressionErrors= binaryBooleanOperatorErrors inheritance pos (syn left) (syn right),
-                            inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing},
-       AST.And (Inherited inheritance) (Inherited inheritance))
-   attribution TypeCheck self (Inherited inheritance, AST.Set elements) =
-      (Synthesized SynTCExp{expressionErrors= mempty,
-                            inferredType= NominalType (Abstract.nonQualIdent "SET") Nothing},
-       AST.Set [Inherited inheritance])
-   attribution TypeCheck self (Inherited inheritance, AST.Read designator) =
-      (Synthesized SynTCExp{expressionErrors= designatorErrors (syn designator),
-                            inferredType= designatorType (syn designator)},
-       AST.Read (Inherited inheritance))
-   attribution TypeCheck self (Inherited inheritance, AST.Literal value) =
-      (Synthesized SynTCExp{expressionErrors= expressionErrors (syn value),
-                            inferredType= inferredType (syn value)},
-       AST.Literal (Inherited inheritance))
-   attribution TypeCheck (pos, AST.FunctionCall _designator parameters)
-               (Inherited inheritance, AST.FunctionCall designator parameters') =
-      (Synthesized SynTCExp{expressionErrors=
-                                case {-# SCC "FunctionCall" #-} syn designator
-                                of SynTCDes{designatorErrors= [],
-                                            designatorType= ProcedureType _ formalTypes Just{}}
-                                     | length formalTypes /= length parameters ->
-                                         [(currentModule inheritance, pos,
-                                           ArgumentCountMismatch (length formalTypes)
-                                                                 (length parameters))]
-                                     | otherwise -> concat (zipWith (parameterCompatible inheritance pos) formalTypes
-                                                            $ inferredType . syn <$> parameters')
-                                   SynTCDes{designatorErrors= [],
-                                            designatorType= t} -> [(currentModule inheritance, pos, NonFunctionType t)]
-                                   SynTCDes{designatorErrors= errs} -> errs
-                                <> foldMap (expressionErrors . syn) parameters',
-                            inferredType=
-                                case syn designator
-                                of SynTCDes{designatorName= Just (Just "SYSTEM", name)}
-                                     | Just t <- systemCallType name (inferredType . syn <$> parameters') -> t
-                                   SynTCDes{designatorName= d, designatorType= t}
-                                     | ProcedureType _ _ (Just returnType) <- ultimate t -> returnType
-                                   _ -> UnknownType},
-       AST.FunctionCall (Inherited inheritance) [Inherited inheritance])
+   synthesis TypeCheck (pos, AST.IsA _ q) (Inherited inheritance) (AST.IsA left _) =
+      Synthesized SynTCExp{expressionErrors= case Map.lookup q (env inheritance)
+                                             of Nothing -> [(currentModule inheritance, pos, UnknownName q)]
+                                                Just t -> assignmentCompatible inheritance pos (inferredType $ syn left) t,
+                           inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing}
+   synthesis TypeCheck (pos, _) (Inherited inheritance) (AST.Positive expr) =
+      Synthesized SynTCExp{expressionErrors= unaryNumericOperatorErrors inheritance pos (syn expr),
+                           inferredType= inferredType (syn expr)}
+   synthesis TypeCheck (pos, _) (Inherited inheritance) (AST.Negative expr) =
+      Synthesized SynTCExp{expressionErrors= unaryNumericOperatorErrors inheritance pos (syn expr),
+                           inferredType= unaryNumericOperatorType negate (syn expr)}
+   synthesis TypeCheck (pos, _) (Inherited inheritance) (AST.Add left right) =
+      Synthesized SynTCExp{expressionErrors= binarySetOrNumericOperatorErrors inheritance pos (syn left) (syn right),
+                           inferredType= binaryNumericOperatorType div (syn left) (syn right)}
+   synthesis TypeCheck (pos, _) (Inherited inheritance) (AST.Subtract left right) =
+      Synthesized SynTCExp{expressionErrors= binarySetOrNumericOperatorErrors inheritance pos (syn left) (syn right),
+                           inferredType= binaryNumericOperatorType div (syn left) (syn right)}
+   synthesis TypeCheck (pos, _) (Inherited inheritance) (AST.Or left right) =
+      Synthesized SynTCExp{expressionErrors= binaryBooleanOperatorErrors inheritance pos (syn left) (syn right),
+                           inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing}
+   synthesis TypeCheck (pos, _) (Inherited inheritance) (AST.Multiply left right) =
+      Synthesized SynTCExp{expressionErrors= binarySetOrNumericOperatorErrors inheritance pos (syn left) (syn right),
+                           inferredType= binaryNumericOperatorType div (syn left) (syn right)}
+   synthesis TypeCheck (pos, _) (Inherited inheritance) (AST.Divide left right) =
+      Synthesized SynTCExp{expressionErrors=
+                              case (syn left, syn right)
+                              of (SynTCExp{expressionErrors= [], inferredType= NominalType q1 Nothing},
+                                  SynTCExp{expressionErrors= [], inferredType= NominalType q2 Nothing})
+                                    | Abstract.getNonQualIdentName q1 == Just "REAL",
+                                      Abstract.getNonQualIdentName q2 == Just "REAL" -> []
+                                    | Abstract.getNonQualIdentName q1 == Just "SET",
+                                      Abstract.getNonQualIdentName q2 == Just "SET" -> []
+                                 (SynTCExp{expressionErrors= [], inferredType= t1},
+                                  SynTCExp{expressionErrors= [], inferredType= t2})
+                                   | t1 == t2 -> [(currentModule inheritance, pos, UnrealType t1)]
+                                   | otherwise -> [(currentModule inheritance, pos, TypeMismatch t1 t2)],
+                           inferredType= NominalType (Abstract.nonQualIdent "REAL") Nothing}
+   synthesis TypeCheck (pos, _) (Inherited inheritance) (AST.IntegerDivide left right) =
+      Synthesized SynTCExp{expressionErrors= binaryIntegerOperatorErrors inheritance pos (syn left) (syn right),
+                           inferredType= binaryNumericOperatorType div (syn left) (syn right)}
+   synthesis TypeCheck (pos, _) (Inherited inheritance) (AST.Modulo left right) =
+      Synthesized SynTCExp{expressionErrors= binaryIntegerOperatorErrors inheritance pos (syn left) (syn right),
+                           inferredType= binaryNumericOperatorType mod (syn left) (syn right)}
+   synthesis TypeCheck (pos, _) (Inherited inheritance) (AST.And left right) =
+      Synthesized SynTCExp{expressionErrors= binaryBooleanOperatorErrors inheritance pos (syn left) (syn right),
+                           inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing}
+   synthesis TypeCheck _self _ (AST.Set elements) =
+      Synthesized SynTCExp{expressionErrors= mempty,
+                           inferredType= NominalType (Abstract.nonQualIdent "SET") Nothing}
+   synthesis TypeCheck _self _ (AST.Read designator) =
+      Synthesized SynTCExp{expressionErrors= designatorErrors (syn designator),
+                           inferredType= designatorType (syn designator)}
+   synthesis TypeCheck _self _ (AST.Literal value) =
+      Synthesized SynTCExp{expressionErrors= expressionErrors (syn value),
+                            inferredType= inferredType (syn value)}
+   synthesis TypeCheck (pos, AST.FunctionCall _designator parameters) (Inherited inheritance)
+             (AST.FunctionCall designator parameters') =
+      Synthesized SynTCExp{expressionErrors=
+                               case {-# SCC "FunctionCall" #-} syn designator
+                               of SynTCDes{designatorErrors= [],
+                                           designatorType= ProcedureType _ formalTypes Just{}}
+                                    | length formalTypes /= length parameters ->
+                                        [(currentModule inheritance, pos,
+                                          ArgumentCountMismatch (length formalTypes)
+                                                                (length parameters))]
+                                    | otherwise -> concat (zipWith (parameterCompatible inheritance pos) formalTypes
+                                                           $ inferredType . syn <$> parameters')
+                                  SynTCDes{designatorErrors= [],
+                                           designatorType= t} -> [(currentModule inheritance, pos, NonFunctionType t)]
+                                  SynTCDes{designatorErrors= errs} -> errs
+                               <> foldMap (expressionErrors . syn) parameters',
+                           inferredType=
+                               case syn designator
+                               of SynTCDes{designatorName= Just (Just "SYSTEM", name)}
+                                    | Just t <- systemCallType name (inferredType . syn <$> parameters') -> t
+                                  SynTCDes{designatorName= d, designatorType= t}
+                                    | ProcedureType _ _ (Just returnType) <- ultimate t -> returnType
+                                  _ -> UnknownType}
      where systemCallType "VAL" [t1, t2] = Just t1
            systemCallType _ _ = Nothing
-   attribution TypeCheck (pos, _) (Inherited inheritance, AST.Not expr) =
-      (Synthesized SynTCExp{expressionErrors= booleanExpressionErrors inheritance pos (syn expr),
-                            inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing},
-       AST.Not (Inherited inheritance))
+   synthesis TypeCheck (pos, _) (Inherited inheritance) (AST.Not expr) =
+      Synthesized SynTCExp{expressionErrors= booleanExpressionErrors inheritance pos (syn expr),
+                           inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing}
 
 instance (Abstract.Wirthy l,
           Atts (Inherited TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
@@ -865,27 +849,26 @@ instance (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
           Atts (Synthesized TypeCheck) (Abstract.Designator l l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ SynTCDes l) =>
          Attribution TypeCheck (AST.Designator l l) ((,) Int) where
-   attribution TypeCheck (pos, AST.Variable q) (Inherited inheritance, _) =
-      (Synthesized SynTCDes{designatorErrors= case designatorType
-                                              of Nothing -> [(currentModule inheritance, pos, UnknownName q)]
-                                                 Just{} -> [],
-                            designatorName= (,) Nothing <$> Abstract.getNonQualIdentName q
-                                            <|> first Just <$> Abstract.getQualIdentNames q,
-                            designatorType= fromMaybe UnknownType designatorType},
-       AST.Variable q)
+   bequest TypeCheck (pos, d) i@(Inherited inheritance) _ = AG.passOnInheritance i d
+   synthesis TypeCheck (pos, AST.Variable q) (Inherited inheritance) _ =
+      Synthesized SynTCDes{designatorErrors= case designatorType
+                                             of Nothing -> [(currentModule inheritance, pos, UnknownName q)]
+                                                Just{} -> [],
+                           designatorName= (,) Nothing <$> Abstract.getNonQualIdentName q
+                                           <|> first Just <$> Abstract.getQualIdentNames q,
+                           designatorType= fromMaybe UnknownType designatorType}
       where designatorType = Map.lookup q (env inheritance)
-   attribution TypeCheck (pos, AST.Field _record fieldName) (Inherited inheritance, AST.Field record _fieldName) =
-      (Synthesized SynTCDes{designatorErrors= case syn record
-                                              of SynTCDes{designatorErrors= [],
-                                                          designatorType= t} ->
-                                                   maybe [(currentModule inheritance, pos, NonRecordType t)]
-                                                         (maybe [(currentModule inheritance, pos, UnknownField fieldName t)] $ const [])
-                                                         (access True t)
-                                                 SynTCDes{designatorErrors= errors} -> errors,
-                            designatorName= Nothing,
-                            designatorType= fromMaybe UnknownType (fromMaybe Nothing $ access True
-                                                                   $ designatorType $ syn record)},
-       AST.Field (Inherited inheritance) fieldName)
+   synthesis TypeCheck (pos, AST.Field _record fieldName) (Inherited inheritance) (AST.Field record _fieldName) =
+      Synthesized SynTCDes{designatorErrors= case syn record
+                                             of SynTCDes{designatorErrors= [],
+                                                         designatorType= t} ->
+                                                  maybe [(currentModule inheritance, pos, NonRecordType t)]
+                                                        (maybe [(currentModule inheritance, pos, UnknownField fieldName t)] $ const [])
+                                                        (access True t)
+                                                SynTCDes{designatorErrors= errors} -> errors,
+                           designatorName= Nothing,
+                           designatorType= fromMaybe UnknownType (fromMaybe Nothing $ access True
+                                                                  $ designatorType $ syn record)}
      where access _ (RecordType _ fields) = Just (Map.lookup fieldName fields)
            access True (PointerType t) = access False t
            access allowPtr (NominalType _ (Just t)) = access allowPtr t
@@ -893,14 +876,13 @@ instance (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
            access _ _ = Nothing
            receive (ProcedureType _ params result) = ProcedureType True params result
            receive t = t
-   attribution TypeCheck (pos, AST.Index _array indexes) (Inherited inheritance, AST.Index array _indexes) =
-      (Synthesized SynTCDes{designatorErrors= case syn array
-                                              of SynTCDes{designatorErrors= [],
-                                                          designatorType= t} ->
-                                                   either id (const []) (access True t)
-                                                 SynTCDes{designatorErrors= errors} -> errors,
-                            designatorType= either (const UnknownType) id (access True $ designatorType $ syn array)},
-       AST.Index (Inherited inheritance) (pure $ Inherited inheritance))
+   synthesis TypeCheck (pos, AST.Index _array indexes) (Inherited inheritance) (AST.Index array _indexes) =
+      Synthesized SynTCDes{designatorErrors= case syn array
+                                             of SynTCDes{designatorErrors= [],
+                                                         designatorType= t} ->
+                                                  either id (const []) (access True t)
+                                                SynTCDes{designatorErrors= errors} -> errors,
+                           designatorType= either (const UnknownType) id (access True $ designatorType $ syn array)}
       where access _ (ArrayType dimensions t)
               | length dimensions == length indexes = Right t
               | length dimensions == 0 && length indexes == 1 = Right t
@@ -909,34 +891,32 @@ instance (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
             access allowPtr (ReceiverType t) = access allowPtr t
             access True (PointerType t) = access False t
             access _ t = Left [(currentModule inheritance, pos, NonArrayType t)]
-   attribution TypeCheck (pos, AST.TypeGuard _designator q) (Inherited inheritance, AST.TypeGuard designator _q) =
-      (Synthesized SynTCDes{designatorErrors= case (syn designator, targetType)
-                                              of (SynTCDes{designatorErrors= [],
-                                                           designatorType= t}, 
-                                                  Just t') -> assignmentCompatible inheritance pos t t'
-                                                 (SynTCDes{designatorErrors= errors}, 
-                                                  Nothing) -> (currentModule inheritance, pos, UnknownName q) : errors
-                                                 (SynTCDes{designatorErrors= errors}, _) -> errors,
-                            designatorType= fromMaybe UnknownType targetType},
-       AST.TypeGuard (Inherited inheritance) q)
+   synthesis TypeCheck (pos, AST.TypeGuard _designator q) (Inherited inheritance) (AST.TypeGuard designator _q) =
+      Synthesized SynTCDes{designatorErrors= case (syn designator, targetType)
+                                             of (SynTCDes{designatorErrors= [],
+                                                          designatorType= t}, 
+                                                 Just t') -> assignmentCompatible inheritance pos t t'
+                                                (SynTCDes{designatorErrors= errors}, 
+                                                 Nothing) -> (currentModule inheritance, pos, UnknownName q) : errors
+                                                (SynTCDes{designatorErrors= errors}, _) -> errors,
+                           designatorType= fromMaybe UnknownType targetType}
       where targetType = Map.lookup q (env inheritance)
-   attribution TypeCheck (pos, _) (Inherited inheritance, AST.Dereference pointer) =
-      (Synthesized SynTCDes{designatorErrors= case syn pointer
-                                              of SynTCDes{designatorErrors= [],
-                                                          designatorType= PointerType{}} -> []
-                                                 SynTCDes{designatorErrors= [],
-                                                          designatorType= NominalType _ (Just PointerType{})} -> []
-                                                 SynTCDes{designatorErrors= [],
-                                                          designatorType= ProcedureType True _ _} -> []
-                                                 SynTCDes{designatorErrors= [],
-                                                          designatorType= t} -> [(currentModule inheritance, pos, NonPointerType t)]
-                                                 SynTCDes{designatorErrors= errors} -> errors,
-                            designatorType= case designatorType (syn pointer)
-                                            of NominalType _ (Just (PointerType t)) -> t
-                                               ProcedureType True params result -> ProcedureType False params result
-                                               PointerType t -> t
-                                               _ -> UnknownType},
-       AST.Dereference (Inherited inheritance))
+   synthesis TypeCheck (pos, _) (Inherited inheritance) (AST.Dereference pointer) =
+      Synthesized SynTCDes{designatorErrors= case syn pointer
+                                             of SynTCDes{designatorErrors= [],
+                                                         designatorType= PointerType{}} -> []
+                                                SynTCDes{designatorErrors= [],
+                                                         designatorType= NominalType _ (Just PointerType{})} -> []
+                                                SynTCDes{designatorErrors= [],
+                                                         designatorType= ProcedureType True _ _} -> []
+                                                SynTCDes{designatorErrors= [],
+                                                         designatorType= t} -> [(currentModule inheritance, pos, NonPointerType t)]
+                                                SynTCDes{designatorErrors= errors} -> errors,
+                           designatorType= case designatorType (syn pointer)
+                                           of NominalType _ (Just (PointerType t)) -> t
+                                              ProcedureType True params result -> ProcedureType False params result
+                                              PointerType t -> t
+                                              _ -> UnknownType}
 
 unaryNumericOperatorErrors :: Abstract.Nameable l => InhTC l -> Int -> SynTCExp l -> [Error l]
 unaryNumericOperatorErrors _ _ SynTCExp{expressionErrors= [], inferredType= IntegerType{}} = []
