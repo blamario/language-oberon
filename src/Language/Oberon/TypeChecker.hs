@@ -720,17 +720,12 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
       SynTCExp{expressionErrors= unaryNumericOperatorErrors inheritance pos (syn expr),
                inferredType= unaryNumericOperatorType negate (syn expr)}
    synthesis TypeCheck (pos, _) inheritance (AST.Add left right) =
-      SynTCExp{expressionErrors= binarySetOrNumericOperatorErrors inheritance pos (syn left) (syn right),
-               inferredType= binaryNumericOperatorType div (syn left) (syn right)}
+      binaryNumericOrSetSynthesis inheritance pos left right
    synthesis TypeCheck (pos, _) inheritance (AST.Subtract left right) =
-      SynTCExp{expressionErrors= binarySetOrNumericOperatorErrors inheritance pos (syn left) (syn right),
-               inferredType= binaryNumericOperatorType div (syn left) (syn right)}
-   synthesis TypeCheck (pos, _) inheritance (AST.Or left right) =
-      SynTCExp{expressionErrors= binaryBooleanOperatorErrors inheritance pos (syn left) (syn right),
-               inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing}
+      binaryNumericOrSetSynthesis inheritance pos left right
+   synthesis TypeCheck (pos, _) inheritance (AST.Or left right) = binaryBooleanSynthesis inheritance pos left right
    synthesis TypeCheck (pos, _) inheritance (AST.Multiply left right) =
-      SynTCExp{expressionErrors= binarySetOrNumericOperatorErrors inheritance pos (syn left) (syn right),
-               inferredType= binaryNumericOperatorType div (syn left) (syn right)}
+      binaryNumericOrSetSynthesis inheritance pos left right
    synthesis TypeCheck (pos, _) inheritance (AST.Divide left right) =
       SynTCExp{expressionErrors=
                   case (syn left, syn right)
@@ -746,14 +741,9 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
                        | otherwise -> [(currentModule inheritance, pos, TypeMismatch t1 t2)],
                inferredType= NominalType (Abstract.nonQualIdent "REAL") Nothing}
    synthesis TypeCheck (pos, _) inheritance (AST.IntegerDivide left right) =
-      SynTCExp{expressionErrors= binaryIntegerOperatorErrors inheritance pos (syn left) (syn right),
-               inferredType= binaryNumericOperatorType div (syn left) (syn right)}
-   synthesis TypeCheck (pos, _) inheritance (AST.Modulo left right) =
-      SynTCExp{expressionErrors= binaryIntegerOperatorErrors inheritance pos (syn left) (syn right),
-               inferredType= binaryNumericOperatorType mod (syn left) (syn right)}
-   synthesis TypeCheck (pos, _) inheritance (AST.And left right) =
-      SynTCExp{expressionErrors= binaryBooleanOperatorErrors inheritance pos (syn left) (syn right),
-               inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing}
+      binaryIntegerSynthesis inheritance pos left right
+   synthesis TypeCheck (pos, _) inheritance (AST.Modulo left right) = binaryIntegerSynthesis inheritance pos left right
+   synthesis TypeCheck (pos, _) inheritance (AST.And left right) = binaryBooleanSynthesis inheritance pos left right
    synthesis TypeCheck _self _ (AST.Set elements) =
       SynTCExp{expressionErrors= mempty,
                inferredType= NominalType (Abstract.nonQualIdent "SET") Nothing}
@@ -918,6 +908,18 @@ instance (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
                                   PointerType t -> t
                                   _ -> UnknownType}
 
+binaryNumericOrSetSynthesis inheritance pos left right =
+   SynTCExp{expressionErrors= binarySetOrNumericOperatorErrors inheritance pos (syn left) (syn right),
+            inferredType= binaryNumericOperatorType (syn left) (syn right)}
+
+binaryIntegerSynthesis inheritance pos left right =
+   SynTCExp{expressionErrors= binaryIntegerOperatorErrors inheritance pos (syn left) (syn right),
+            inferredType= binaryNumericOperatorType (syn left) (syn right)}
+
+binaryBooleanSynthesis inheritance pos left right =
+   SynTCExp{expressionErrors= binaryBooleanOperatorErrors inheritance pos (syn left) (syn right),
+            inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing}
+
 unaryNumericOperatorErrors :: Abstract.Nameable l => InhTC l -> Int -> SynTCExp l -> [Error l]
 unaryNumericOperatorErrors _ _ SynTCExp{expressionErrors= [], inferredType= IntegerType{}} = []
 unaryNumericOperatorErrors _ _ SynTCExp{expressionErrors= [],
@@ -955,11 +957,8 @@ binarySetOrNumericOperatorErrors inheritance pos SynTCExp{expressionErrors= [], 
   | otherwise = [(currentModule inheritance, pos, TypeMismatch t1 t2)]
 binarySetOrNumericOperatorErrors _ _ SynTCExp{expressionErrors= errs1} SynTCExp{expressionErrors= errs2} = errs1 <> errs2
 
-binaryNumericOperatorType :: (Abstract.Nameable l, Eq (Abstract.QualIdent l))
-                          => (Int -> Int -> Int) -> SynTCExp l -> SynTCExp l -> Type l
-binaryNumericOperatorType f SynTCExp{inferredType= IntegerType x} SynTCExp{inferredType= IntegerType y} =
-  IntegerType (f x y)
-binaryNumericOperatorType _ SynTCExp{inferredType= t1} SynTCExp{inferredType= t2}
+binaryNumericOperatorType :: (Abstract.Nameable l, Eq (Abstract.QualIdent l)) => SynTCExp l -> SynTCExp l -> Type l
+binaryNumericOperatorType SynTCExp{inferredType= t1} SynTCExp{inferredType= t2}
   | t1 == t2 = t1
   | IntegerType{} <- t1 = t2
   | IntegerType{} <- t2 = t1
