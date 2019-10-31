@@ -5,6 +5,7 @@ module Language.Oberon.TypeChecker (Error, errorMessage, checkModules, predefine
 
 import Control.Applicative (liftA2, (<|>))
 import Control.Arrow (first)
+import Data.Coerce (coerce)
 import qualified Data.List as List
 import Data.Maybe (fromMaybe)
 import Data.Map.Lazy (Map)
@@ -777,39 +778,21 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
       SynTCExp{expressionErrors= booleanExpressionErrors inheritance pos (syn expr),
                inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing}
 
-instance (Abstract.Wirthy l,
-          Atts (Inherited TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
-          Atts (Synthesized TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck))
-          ~ SynTCExp l) =>
-         Attribution TypeCheck (AST.Value l l) ((,) Int) where
-   attribution TypeCheck (pos, AST.Integer x) (Inherited inheritance, _) =
-      (Synthesized SynTCExp{expressionErrors= mempty,
-                            inferredType= IntegerType $ fromIntegral x},
-       AST.Integer x)
-   attribution TypeCheck self (Inherited inheritance, AST.Real x) =
-      (Synthesized SynTCExp{expressionErrors= mempty,
-                            inferredType= NominalType (Abstract.nonQualIdent "REAL") Nothing},
-       AST.Real x)
-   attribution TypeCheck self (Inherited inheritance, AST.Boolean x) =
-      (Synthesized SynTCExp{expressionErrors= mempty,
-                            inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing},
-       AST.Boolean x)
-   attribution TypeCheck self (Inherited inheritance, AST.CharCode x) =
-      (Synthesized SynTCExp{expressionErrors= mempty,
-                            inferredType= NominalType (Abstract.nonQualIdent "CHAR") Nothing},
-       AST.CharCode x)
-   attribution TypeCheck (pos, AST.String x) (Inherited inheritance, _) =
-      (Synthesized SynTCExp{expressionErrors= mempty,
-                            inferredType= StringType (Text.length x)},
-       AST.String x)
-   attribution TypeCheck self (Inherited inheritance, AST.Nil) =
-      (Synthesized SynTCExp{expressionErrors= mempty,
-                            inferredType= NilType},
-       AST.Nil)
-   attribution TypeCheck (pos, AST.Builtin x) (Inherited inheritance, _) =
-      (Synthesized SynTCExp{expressionErrors= mempty,
-                            inferredType= NominalType (Abstract.nonQualIdent x) Nothing},
-       AST.Builtin x)
+instance (Abstract.Wirthy l) => Attribution TypeCheck (AST.Value l l) ((,) Int) where
+   bequest TypeCheck (pos, val) inheritance _ = coerce val
+   synthesis TypeCheck (pos, AST.Integer x) _ _ =
+      SynTCExp{expressionErrors= mempty, inferredType= IntegerType $ fromIntegral x}
+   synthesis TypeCheck (pos, AST.Real x) _ _ =
+      SynTCExp{expressionErrors= mempty, inferredType= NominalType (Abstract.nonQualIdent "REAL") Nothing}
+   synthesis TypeCheck (pos, AST.Boolean x) _ _ =
+      SynTCExp{expressionErrors= mempty, inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing}
+   synthesis TypeCheck (pos, AST.CharCode x) _ _ =
+      SynTCExp{expressionErrors= mempty, inferredType= NominalType (Abstract.nonQualIdent "CHAR") Nothing}
+   synthesis TypeCheck (pos, AST.String x) _ _ =
+      SynTCExp{expressionErrors= mempty, inferredType= StringType (Text.length x)}
+   synthesis TypeCheck (pos, AST.Nil) _ _ = SynTCExp{expressionErrors= mempty, inferredType= NilType}
+   synthesis TypeCheck (pos, AST.Builtin x) _ _ =
+      SynTCExp{expressionErrors= mempty, inferredType= NominalType (Abstract.nonQualIdent x) Nothing}
 
 instance (Abstract.Wirthy l, Abstract.Nameable l,
           Atts (Inherited TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
