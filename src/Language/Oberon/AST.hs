@@ -469,19 +469,19 @@ instance (AG.Atts (AG.Inherited t) (Abstract.Designator l l (AG.Semantics t) (AG
           AG.Atts (AG.Inherited t) (Abstract.WithAlternative l l (AG.Semantics t) (AG.Semantics t))
           ~ AG.Atts (AG.Inherited t) (Statement l l (AG.Semantics t) (AG.Semantics t))) =>
          AG.Inheritable t (Statement l l) where
-   passOnInheritance i EmptyStatement{} = EmptyStatement
-   passOnInheritance i Assignment{}     = Assignment (AG.Inherited i) (AG.Inherited i)
-   passOnInheritance i ProcedureCall{}  = ProcedureCall (AG.Inherited i) (Just [AG.Inherited i])
-   passOnInheritance i If{}             = If (pure $ AG.Inherited i) (Just $ AG.Inherited i)
-   passOnInheritance i CaseStatement{}  = CaseStatement (AG.Inherited i) (pure $ AG.Inherited i) (Just $ AG.Inherited i)
-   passOnInheritance i While{}          = While (AG.Inherited i) (AG.Inherited i)
-   passOnInheritance i Repeat{}         = Repeat (AG.Inherited i) (AG.Inherited i)
-   passOnInheritance i (For name _ _ _ _)
+   passDown i EmptyStatement{} = EmptyStatement
+   passDown i Assignment{}     = Assignment (AG.Inherited i) (AG.Inherited i)
+   passDown i ProcedureCall{}  = ProcedureCall (AG.Inherited i) (Just [AG.Inherited i])
+   passDown i If{}             = If (pure $ AG.Inherited i) (Just $ AG.Inherited i)
+   passDown i CaseStatement{}  = CaseStatement (AG.Inherited i) (pure $ AG.Inherited i) (Just $ AG.Inherited i)
+   passDown i While{}          = While (AG.Inherited i) (AG.Inherited i)
+   passDown i Repeat{}         = Repeat (AG.Inherited i) (AG.Inherited i)
+   passDown i (For name _ _ _ _)
       = For name (AG.Inherited i) (AG.Inherited i) (pure $ AG.Inherited i) (AG.Inherited i)  -- Oberon2
-   passOnInheritance i Loop{}           = Loop (AG.Inherited i)
-   passOnInheritance i With{}           = With (pure $ AG.Inherited i) (Just $ AG.Inherited i)
-   passOnInheritance i Exit{}           = Exit
-   passOnInheritance i Return{}         = Return (Just $ AG.Inherited i)
+   passDown i Loop{}           = Loop (AG.Inherited i)
+   passDown i With{}           = With (pure $ AG.Inherited i) (Just $ AG.Inherited i)
+   passDown i Exit{}           = Exit
+   passDown i Return{}         = Return (Just $ AG.Inherited i)
 
 instance (AG.Atts (AG.Inherited t) (Abstract.Designator l l (AG.Semantics t) (AG.Semantics t))
           ~ AG.Atts (AG.Inherited t) (Expression l l (AG.Semantics t) (AG.Semantics t)),
@@ -492,31 +492,31 @@ instance (AG.Atts (AG.Inherited t) (Abstract.Designator l l (AG.Semantics t) (AG
           AG.Atts (AG.Inherited t) (Abstract.Value l l (AG.Semantics t) (AG.Semantics t))
           ~ AG.Atts (AG.Inherited t) (Expression l l (AG.Semantics t) (AG.Semantics t))) =>
          AG.Inheritable t (Expression l l) where
-   passOnInheritance i (Relation op _ _) = Relation op (AG.Inherited i) (AG.Inherited i)
-   passOnInheritance i (IsA _ typeName)  = IsA (AG.Inherited i) typeName
-   passOnInheritance i Positive{}        = Positive (AG.Inherited i)
-   passOnInheritance i Negative{}        = Negative (AG.Inherited i)
-   passOnInheritance i Add{}             = Add (AG.Inherited i) (AG.Inherited i)
-   passOnInheritance i Subtract{}        = Subtract (AG.Inherited i) (AG.Inherited i)
-   passOnInheritance i Or{}              = Or (AG.Inherited i) (AG.Inherited i)
-   passOnInheritance i Multiply{}        = Multiply (AG.Inherited i) (AG.Inherited i)
-   passOnInheritance i Divide{}          = Divide (AG.Inherited i) (AG.Inherited i)
-   passOnInheritance i IntegerDivide{}   = IntegerDivide (AG.Inherited i) (AG.Inherited i)
-   passOnInheritance i Modulo{}          = Modulo (AG.Inherited i) (AG.Inherited i)
-   passOnInheritance i And{}             = And (AG.Inherited i) (AG.Inherited i)
-   passOnInheritance i Set{}             = Set [AG.Inherited i]
-   passOnInheritance i Read{}            = Read (AG.Inherited i)
-   passOnInheritance i FunctionCall{}    = FunctionCall (AG.Inherited i) [AG.Inherited i]
-   passOnInheritance i Not{}             = Not (AG.Inherited i)
-   passOnInheritance i Literal{}         = Literal (AG.Inherited i)
+   passDown i (Relation op _ _) = Relation op (AG.Inherited i) (AG.Inherited i)
+   passDown i (IsA _ typeName)  = IsA (AG.Inherited i) typeName
+   passDown i Positive{}        = Positive (AG.Inherited i)
+   passDown i Negative{}        = Negative (AG.Inherited i)
+   passDown i Add{}             = Add (AG.Inherited i) (AG.Inherited i)
+   passDown i Subtract{}        = Subtract (AG.Inherited i) (AG.Inherited i)
+   passDown i Or{}              = Or (AG.Inherited i) (AG.Inherited i)
+   passDown i Multiply{}        = Multiply (AG.Inherited i) (AG.Inherited i)
+   passDown i Divide{}          = Divide (AG.Inherited i) (AG.Inherited i)
+   passDown i IntegerDivide{}   = IntegerDivide (AG.Inherited i) (AG.Inherited i)
+   passDown i Modulo{}          = Modulo (AG.Inherited i) (AG.Inherited i)
+   passDown i And{}             = And (AG.Inherited i) (AG.Inherited i)
+   passDown i Set{}             = Set [AG.Inherited i]
+   passDown i Read{}            = Read (AG.Inherited i)
+   passDown i FunctionCall{}    = FunctionCall (AG.Inherited i) [AG.Inherited i]
+   passDown i Not{}             = Not (AG.Inherited i)
+   passDown i Literal{}         = Literal (AG.Inherited i)
 
 instance (AG.Atts (AG.Inherited t) (Abstract.Designator l l (AG.Semantics t) (AG.Semantics t))
           ~ AG.Atts (AG.Inherited t) (Designator l l (AG.Semantics t) (AG.Semantics t)),
           AG.Atts (AG.Inherited t) (Abstract.Expression l l (AG.Semantics t) (AG.Semantics t))
           ~ AG.Atts (AG.Inherited t) (Designator l l (AG.Semantics t) (AG.Semantics t))) =>
          AG.Inheritable t (Designator l l) where
-   passOnInheritance i (Variable q) = Variable q
-   passOnInheritance i (Field record name) = Field (AG.Inherited i) name
-   passOnInheritance i (Index array indices) = Index (AG.Inherited i) (pure $ AG.Inherited i)
-   passOnInheritance i (TypeGuard expr typeName) = TypeGuard (AG.Inherited i) typeName
-   passOnInheritance i (Dereference pointer) = Dereference (AG.Inherited i)
+   passDown i (Variable q) = Variable q
+   passDown i (Field record name) = Field (AG.Inherited i) name
+   passDown i (Index array indices) = Index (AG.Inherited i) (pure $ AG.Inherited i)
+   passDown i (TypeGuard expr typeName) = TypeGuard (AG.Inherited i) typeName
+   passDown i (Dereference pointer) = Dereference (AG.Inherited i)

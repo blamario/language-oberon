@@ -660,7 +660,7 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Synthesized TypeCheck) (Abstract.Designator l l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ SynTCDes l) =>
          Attribution TypeCheck (AST.Expression l l) ((,) Int) where
-   bequest TypeCheck (pos, e) inheritance _ = AG.passOnInheritance inheritance e
+   bequest TypeCheck (pos, e) inheritance _ = AG.passDown inheritance e
    synthesis TypeCheck (pos, AST.Relation op _ _) inheritance (AST.Relation _op left right) =
       SynTCExp{expressionErrors= case expressionErrors (syn left) <> expressionErrors (syn right)
                                  of [] | t1 == t2 -> []
@@ -834,7 +834,7 @@ instance (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
           Atts (Synthesized TypeCheck) (Abstract.Designator l l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ SynTCDes l) =>
          Attribution TypeCheck (AST.Designator l l) ((,) Int) where
-   bequest TypeCheck (pos, d) inheritance _ = AG.passOnInheritance inheritance d
+   bequest TypeCheck (pos, d) inheritance _ = AG.passDown inheritance d
    synthesis TypeCheck (pos, AST.Variable q) inheritance _ =
       SynTCDes{designatorErrors= case designatorType
                                  of Nothing -> [(currentModule inheritance, pos, UnknownName q)]
