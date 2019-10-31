@@ -538,19 +538,30 @@ instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Synthesized TypeCheck) (Abstract.Designator l l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ SynTCDes l) =>
          Attribution TypeCheck (AST.Statement l l) ((,) Int) where
-   attribution TypeCheck _ (Inherited inheritance, AST.EmptyStatement) = (Synthesized SynTC{errors= []}, AST.EmptyStatement)
-   attribution TypeCheck (pos, _) (Inherited inheritance, AST.Assignment var value) = {-# SCC "Assignment" #-}
-      (Synthesized SynTC{errors= assignmentCompatible inheritance pos (designatorType $ syn var) (inferredType $ syn value)},
-       AST.Assignment (Inherited inheritance) (Inherited inheritance))
-   attribution TypeCheck 
-      (pos, AST.ProcedureCall _proc parameters) 
-      (Inherited inheritance, AST.ProcedureCall procedure' parameters') =
-      (Synthesized SynTC{errors= (case syn procedure'
-                                  of SynTCDes{designatorErrors= [],
-                                              designatorType= t} -> procedureErrors t
-                                     SynTCDes{designatorErrors= errs} -> errs)
-                                 <> foldMap (foldMap (expressionErrors . syn)) parameters'},
-       AST.ProcedureCall (Inherited inheritance) (Just [Inherited inheritance]))
+   bequest TypeCheck (_pos, AST.EmptyStatement) i _   = AST.EmptyStatement
+   bequest TypeCheck (_pos, AST.Assignment{}) i _     = AST.Assignment (AG.Inherited i) (AG.Inherited i)
+   bequest TypeCheck (_pos, AST.ProcedureCall{}) i _  = AST.ProcedureCall (AG.Inherited i) (Just [AG.Inherited i])
+   bequest TypeCheck (_pos, AST.If{}) i _             = AST.If (pure $ AG.Inherited i) (Just $ AG.Inherited i)
+   bequest TypeCheck (_pos, AST.CaseStatement{}) i (AST.CaseStatement value _branches _fallback) =
+      AST.CaseStatement (Inherited i) (pure $ Inherited (i, inferredType $ syn value)) (Just $ Inherited i)
+   bequest TypeCheck (_pos, AST.While{}) i _          = AST.While (AG.Inherited i) (AG.Inherited i)
+   bequest TypeCheck (_pos, AST.Repeat{}) i _         = AST.Repeat (AG.Inherited i) (AG.Inherited i)
+   bequest TypeCheck (_pos, AST.For name _ _ _ _) i _ =
+      AST.For name (AG.Inherited i) (AG.Inherited i) (pure $ AG.Inherited i) (AG.Inherited i)  -- Oberon2
+   bequest TypeCheck (_pos, AST.Loop{}) i _           = AST.Loop (AG.Inherited i)
+   bequest TypeCheck (_pos, AST.With{}) i _           = AST.With (pure $ AG.Inherited i) (Just $ AG.Inherited i)
+   bequest TypeCheck (_pos, AST.Exit{}) i _           = AST.Exit
+   bequest TypeCheck (_pos, AST.Return{}) i _         = AST.Return (Just $ AG.Inherited i)
+   synthesis TypeCheck _ _ AST.EmptyStatement = SynTC{errors= []}
+   synthesis TypeCheck (pos, _) inheritance (AST.Assignment var value) = {-# SCC "Assignment" #-}
+      SynTC{errors= assignmentCompatible inheritance pos (designatorType $ syn var) (inferredType $ syn value)}
+   synthesis TypeCheck (pos, AST.ProcedureCall _proc parameters)
+             inheritance (AST.ProcedureCall procedure' parameters') =
+      SynTC{errors= (case syn procedure'
+                     of SynTCDes{designatorErrors= [],
+                                 designatorType= t} -> procedureErrors t
+                        SynTCDes{designatorErrors= errs} -> errs)
+                    <> foldMap (foldMap (expressionErrors . syn)) parameters'}
      where procedureErrors (ProcedureType _ formalTypes Nothing)
              | length formalTypes /= maybe 0 length parameters,
                not (length formalTypes == 2 && (length <$> parameters) == Just 1
@@ -563,40 +574,24 @@ instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
                                    $ maybe [] (inferredType . syn <$>) parameters')
            procedureErrors (NominalType _ (Just t)) = procedureErrors t
            procedureErrors t = [(currentModule inheritance, pos, NonProcedureType t)]
-   attribution TypeCheck self (Inherited inheritance, AST.If branches fallback) =
-      (Synthesized SynTC{errors= foldMap (errors . syn) branches <> foldMap (errors . syn) fallback},
-       AST.If (pure $ Inherited inheritance) (Just $ Inherited inheritance))
-   attribution TypeCheck self (Inherited inheritance, AST.CaseStatement value branches fallback) =
-      (Synthesized SynTC{errors= expressionErrors (syn value) <> foldMap (errors . syn) branches
-                                 <> foldMap (errors . syn) fallback},
-       AST.CaseStatement (Inherited inheritance) (pure $ Inherited (inheritance, inferredType $ syn value))
-                         (Just $ Inherited inheritance))
-   attribution TypeCheck (pos, _) (Inherited inheritance, AST.While condition body) =
-      (Synthesized SynTC{errors= booleanExpressionErrors inheritance pos (syn condition) <> errors (syn body)},
-       AST.While (Inherited inheritance) (Inherited inheritance))
-   attribution TypeCheck (pos, _) (Inherited inheritance, AST.Repeat body condition) =
-      (Synthesized SynTC{errors= booleanExpressionErrors inheritance pos (syn condition) <> errors (syn body)},
-       AST.Repeat (Inherited inheritance) (Inherited inheritance))
-   attribution TypeCheck (pos, AST.For counter _start _end _step _body) 
-                         (Inherited inheritance, AST.For _counter start end step body) =
-      (Synthesized SynTC{errors= integerExpressionErrors inheritance pos (syn start) 
-                                 <> integerExpressionErrors inheritance pos (syn end)
-                                 <> foldMap (integerExpressionErrors inheritance pos . syn) step <> errors (syn body)},
-       AST.For counter (Inherited inheritance) (Inherited inheritance) (Just $ Inherited inheritance)
-                       (Inherited $ 
-                        InhTC (Map.insert (Abstract.nonQualIdent counter)
-                                          (NominalType (Abstract.nonQualIdent "INTEGER") Nothing)
-                               $ env inheritance)
-                              (currentModule inheritance)))
-   attribution TypeCheck self (Inherited inheritance, AST.Loop body) = (Synthesized SynTC{errors= errors (syn body)},
-                                                                        AST.Loop (Inherited inheritance))
-   attribution TypeCheck self (Inherited inheritance, AST.With branches fallback) =
-      (Synthesized SynTC{errors= foldMap (errors . syn) branches <> foldMap (errors . syn) fallback},
-       AST.With (pure $ Inherited inheritance) (Just $ Inherited inheritance))
-   attribution TypeCheck self (Inherited inheritance, AST.Exit) = (Synthesized SynTC{errors= []}, AST.Exit)
-   attribution TypeCheck self (Inherited inheritance, AST.Return value) =
-      (Synthesized SynTC{errors= foldMap (expressionErrors . syn) value}, 
-       AST.Return (Just $ Inherited inheritance))
+   synthesis TypeCheck self _ (AST.If branches fallback) =
+      SynTC{errors= foldMap (errors . syn) branches <> foldMap (errors . syn) fallback}
+   synthesis TypeCheck self _ (AST.CaseStatement value branches fallback) =
+      SynTC{errors= expressionErrors (syn value) <> foldMap (errors . syn) branches
+                    <> foldMap (errors . syn) fallback}
+   synthesis TypeCheck (pos, _) inheritance (AST.While condition body) =
+      SynTC{errors= booleanExpressionErrors inheritance pos (syn condition) <> errors (syn body)}
+   synthesis TypeCheck (pos, _) inheritance (AST.Repeat body condition) =
+      SynTC{errors= booleanExpressionErrors inheritance pos (syn condition) <> errors (syn body)}
+   synthesis TypeCheck (pos, _) inheritance (AST.For _counter start end step body) =
+      SynTC{errors= integerExpressionErrors inheritance pos (syn start) 
+                    <> integerExpressionErrors inheritance pos (syn end)
+                    <> foldMap (integerExpressionErrors inheritance pos . syn) step <> errors (syn body)}
+   synthesis TypeCheck self _ (AST.Loop body) = SynTC{errors= errors (syn body)}
+   synthesis TypeCheck self _ (AST.With branches fallback) =
+      SynTC{errors= foldMap (errors . syn) branches <> foldMap (errors . syn) fallback}
+   synthesis TypeCheck self _ AST.Exit = SynTC{errors= []}
+   synthesis TypeCheck self _ (AST.Return value) = SynTC{errors= foldMap (expressionErrors . syn) value}
 
 instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Inherited TypeCheck) (Abstract.StatementSequence l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,

@@ -457,6 +457,33 @@ $(mconcat <$> mapM Transformation.Deep.TH.deriveAll
    ''Case, ''CaseLabels, ''ConditionalBranch, ''WithAlternative])
 
 instance (AG.Atts (AG.Inherited t) (Abstract.Designator l l (AG.Semantics t) (AG.Semantics t))
+          ~ AG.Atts (AG.Inherited t) (Statement l l (AG.Semantics t) (AG.Semantics t)),
+          AG.Atts (AG.Inherited t) (Abstract.Expression l l (AG.Semantics t) (AG.Semantics t))
+          ~ AG.Atts (AG.Inherited t) (Statement l l (AG.Semantics t) (AG.Semantics t)),
+          AG.Atts (AG.Inherited t) (Abstract.StatementSequence l l (AG.Semantics t) (AG.Semantics t))
+          ~ AG.Atts (AG.Inherited t) (Statement l l (AG.Semantics t) (AG.Semantics t)),
+          AG.Atts (AG.Inherited t) (Abstract.ConditionalBranch l l (AG.Semantics t) (AG.Semantics t))
+          ~ AG.Atts (AG.Inherited t) (Statement l l (AG.Semantics t) (AG.Semantics t)),
+          AG.Atts (AG.Inherited t) (Abstract.Case l l (AG.Semantics t) (AG.Semantics t))
+          ~ AG.Atts (AG.Inherited t) (Statement l l (AG.Semantics t) (AG.Semantics t)),
+          AG.Atts (AG.Inherited t) (Abstract.WithAlternative l l (AG.Semantics t) (AG.Semantics t))
+          ~ AG.Atts (AG.Inherited t) (Statement l l (AG.Semantics t) (AG.Semantics t))) =>
+         AG.Inheritable t (Statement l l) where
+   passOnInheritance i EmptyStatement{} = EmptyStatement
+   passOnInheritance i Assignment{}     = Assignment (AG.Inherited i) (AG.Inherited i)
+   passOnInheritance i ProcedureCall{}  = ProcedureCall (AG.Inherited i) (Just [AG.Inherited i])
+   passOnInheritance i If{}             = If (pure $ AG.Inherited i) (Just $ AG.Inherited i)
+   passOnInheritance i CaseStatement{}  = CaseStatement (AG.Inherited i) (pure $ AG.Inherited i) (Just $ AG.Inherited i)
+   passOnInheritance i While{}          = While (AG.Inherited i) (AG.Inherited i)
+   passOnInheritance i Repeat{}         = Repeat (AG.Inherited i) (AG.Inherited i)
+   passOnInheritance i (For name _ _ _ _)
+      = For name (AG.Inherited i) (AG.Inherited i) (pure $ AG.Inherited i) (AG.Inherited i)  -- Oberon2
+   passOnInheritance i Loop{}           = Loop (AG.Inherited i)
+   passOnInheritance i With{}           = With (pure $ AG.Inherited i) (Just $ AG.Inherited i)
+   passOnInheritance i Exit{}           = Exit
+   passOnInheritance i Return{}         = Return (Just $ AG.Inherited i)
+
+instance (AG.Atts (AG.Inherited t) (Abstract.Designator l l (AG.Semantics t) (AG.Semantics t))
           ~ AG.Atts (AG.Inherited t) (Expression l l (AG.Semantics t) (AG.Semantics t)),
           AG.Atts (AG.Inherited t) (Abstract.Element l l (AG.Semantics t) (AG.Semantics t))
           ~ AG.Atts (AG.Inherited t) (Expression l l (AG.Semantics t) (AG.Semantics t)),
