@@ -245,7 +245,7 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Synthesized ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold))
           ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Value l l ((,) Int) ((,) Int)))) =>
          Attribution ConstantFold (AST.Expression l l) ((,) Int) where
-   bequest ConstantFold (pos, e) inheritance _ = AG.passDown inheritance e
+   bequest ConstantFold (pos, e) inheritance _ = AG.passDown (Inherited inheritance) e
    synthesis ConstantFold (pos, AST.Relation op _ _) _ (AST.Relation _op left right) =
       case join (compareValues <$> foldedValue (syn left) <*> foldedValue (syn right))
       of Just value -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, value)),
@@ -474,7 +474,7 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Abstract.Oberon l, Ord (Abst
           Atts (Synthesized ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold))
           ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Value l l ((,) Int) ((,) Int)))) =>
          Attribution ConstantFold (AST.Designator l l) ((,) Int) where
-   bequest ConstantFold (pos, d) inheritance _ = AG.passDown inheritance d
+   bequest ConstantFold (pos, d) inheritance _ = AG.passDown (Inherited inheritance) d
    synthesis ConstantFold (pos, AST.Variable q) inheritance _ =
       SynCF{folded= (pos, (AST.Variable q, join (Map.lookup q $ env inheritance)))}
 --                                         >>= Abstract.coExpression :: Maybe (AST.Expression l l ((,) Int) ((,) Int))))}

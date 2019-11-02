@@ -10,6 +10,8 @@ import Data.Data (Data, Typeable)
 import Data.List.NonEmpty
 import Data.Text (Text)
 
+import qualified Transformation.Shallow as Shallow
+import qualified Transformation.Shallow.TH
 import qualified Transformation.Deep.TH
 import qualified Transformation.AG as AG
 import qualified Rank2.TH
@@ -456,67 +458,61 @@ $(mconcat <$> mapM Transformation.Deep.TH.deriveAll
    ''Statement, ''StatementSequence,
    ''Case, ''CaseLabels, ''ConditionalBranch, ''WithAlternative])
 
-instance (AG.Atts (AG.Inherited t) (Abstract.Designator l l (AG.Semantics t) (AG.Semantics t))
-          ~ AG.Atts (AG.Inherited t) (Statement l l (AG.Semantics t) (AG.Semantics t)),
-          AG.Atts (AG.Inherited t) (Abstract.Expression l l (AG.Semantics t) (AG.Semantics t))
-          ~ AG.Atts (AG.Inherited t) (Statement l l (AG.Semantics t) (AG.Semantics t)),
-          AG.Atts (AG.Inherited t) (Abstract.StatementSequence l l (AG.Semantics t) (AG.Semantics t))
-          ~ AG.Atts (AG.Inherited t) (Statement l l (AG.Semantics t) (AG.Semantics t)),
-          AG.Atts (AG.Inherited t) (Abstract.ConditionalBranch l l (AG.Semantics t) (AG.Semantics t))
-          ~ AG.Atts (AG.Inherited t) (Statement l l (AG.Semantics t) (AG.Semantics t)),
-          AG.Atts (AG.Inherited t) (Abstract.Case l l (AG.Semantics t) (AG.Semantics t))
-          ~ AG.Atts (AG.Inherited t) (Statement l l (AG.Semantics t) (AG.Semantics t)),
-          AG.Atts (AG.Inherited t) (Abstract.WithAlternative l l (AG.Semantics t) (AG.Semantics t))
-          ~ AG.Atts (AG.Inherited t) (Statement l l (AG.Semantics t) (AG.Semantics t))) =>
-         AG.Inheritable t (Statement l l) where
-   passDown i EmptyStatement{} = EmptyStatement
-   passDown i Assignment{}     = Assignment (AG.Inherited i) (AG.Inherited i)
-   passDown i ProcedureCall{}  = ProcedureCall (AG.Inherited i) (Just [AG.Inherited i])
-   passDown i If{}             = If (pure $ AG.Inherited i) (Just $ AG.Inherited i)
-   passDown i CaseStatement{}  = CaseStatement (AG.Inherited i) (pure $ AG.Inherited i) (Just $ AG.Inherited i)
-   passDown i While{}          = While (AG.Inherited i) (AG.Inherited i)
-   passDown i Repeat{}         = Repeat (AG.Inherited i) (AG.Inherited i)
-   passDown i (For name _ _ _ _)
+instance (inh ~ AG.Inherited t, sem ~ AG.Semantics t,
+          AG.Atts inh (Abstract.Designator l l sem sem) ~ AG.Atts inh (Statement l l sem sem),
+          AG.Atts inh (Abstract.Expression l l sem sem) ~ AG.Atts inh (Statement l l sem sem),
+          AG.Atts inh (Abstract.StatementSequence l l sem sem) ~ AG.Atts inh (Statement l l sem sem),
+          AG.Atts inh (Abstract.ConditionalBranch l l sem sem) ~ AG.Atts inh (Statement l l sem sem),
+          AG.Atts inh (Abstract.Case l l sem sem) ~ AG.Atts inh (Statement l l sem sem),
+          AG.Atts inh (Abstract.WithAlternative l l sem sem) ~ AG.Atts inh (Statement l l sem sem)) =>
+         Shallow.Functor (AG.Inherited t (Statement l l sem sem)) (Statement l l sem) where
+   AG.Inherited i <$> EmptyStatement{} = EmptyStatement
+   AG.Inherited i <$> Assignment{}     = Assignment (AG.Inherited i) (AG.Inherited i)
+   AG.Inherited i <$> ProcedureCall{}  = ProcedureCall (AG.Inherited i) (Just [AG.Inherited i])
+   AG.Inherited i <$> If{}             = If (pure $ AG.Inherited i) (Just $ AG.Inherited i)
+   AG.Inherited i <$> CaseStatement{}  = CaseStatement (AG.Inherited i) (pure $ AG.Inherited i) (Just $ AG.Inherited i)
+   AG.Inherited i <$> While{}          = While (AG.Inherited i) (AG.Inherited i)
+   AG.Inherited i <$> Repeat{}         = Repeat (AG.Inherited i) (AG.Inherited i)
+   AG.Inherited i <$> (For name _ _ _ _)
       = For name (AG.Inherited i) (AG.Inherited i) (pure $ AG.Inherited i) (AG.Inherited i)  -- Oberon2
-   passDown i Loop{}           = Loop (AG.Inherited i)
-   passDown i With{}           = With (pure $ AG.Inherited i) (Just $ AG.Inherited i)
-   passDown i Exit{}           = Exit
-   passDown i Return{}         = Return (Just $ AG.Inherited i)
+   AG.Inherited i <$> Loop{}           = Loop (AG.Inherited i)
+   AG.Inherited i <$> With{}           = With (pure $ AG.Inherited i) (Just $ AG.Inherited i)
+   AG.Inherited i <$> Exit{}           = Exit
+   AG.Inherited i <$> Return{}         = Return (Just $ AG.Inherited i)
 
-instance (AG.Atts (AG.Inherited t) (Abstract.Designator l l (AG.Semantics t) (AG.Semantics t))
-          ~ AG.Atts (AG.Inherited t) (Expression l l (AG.Semantics t) (AG.Semantics t)),
-          AG.Atts (AG.Inherited t) (Abstract.Element l l (AG.Semantics t) (AG.Semantics t))
-          ~ AG.Atts (AG.Inherited t) (Expression l l (AG.Semantics t) (AG.Semantics t)),
-          AG.Atts (AG.Inherited t) (Abstract.Expression l l (AG.Semantics t) (AG.Semantics t))
-          ~ AG.Atts (AG.Inherited t) (Expression l l (AG.Semantics t) (AG.Semantics t)),
-          AG.Atts (AG.Inherited t) (Abstract.Value l l (AG.Semantics t) (AG.Semantics t))
-          ~ AG.Atts (AG.Inherited t) (Expression l l (AG.Semantics t) (AG.Semantics t))) =>
-         AG.Inheritable t (Expression l l) where
-   passDown i (Relation op _ _) = Relation op (AG.Inherited i) (AG.Inherited i)
-   passDown i (IsA _ typeName)  = IsA (AG.Inherited i) typeName
-   passDown i Positive{}        = Positive (AG.Inherited i)
-   passDown i Negative{}        = Negative (AG.Inherited i)
-   passDown i Add{}             = Add (AG.Inherited i) (AG.Inherited i)
-   passDown i Subtract{}        = Subtract (AG.Inherited i) (AG.Inherited i)
-   passDown i Or{}              = Or (AG.Inherited i) (AG.Inherited i)
-   passDown i Multiply{}        = Multiply (AG.Inherited i) (AG.Inherited i)
-   passDown i Divide{}          = Divide (AG.Inherited i) (AG.Inherited i)
-   passDown i IntegerDivide{}   = IntegerDivide (AG.Inherited i) (AG.Inherited i)
-   passDown i Modulo{}          = Modulo (AG.Inherited i) (AG.Inherited i)
-   passDown i And{}             = And (AG.Inherited i) (AG.Inherited i)
-   passDown i Set{}             = Set [AG.Inherited i]
-   passDown i Read{}            = Read (AG.Inherited i)
-   passDown i FunctionCall{}    = FunctionCall (AG.Inherited i) [AG.Inherited i]
-   passDown i Not{}             = Not (AG.Inherited i)
-   passDown i Literal{}         = Literal (AG.Inherited i)
+instance (inh ~ AG.Inherited t, sem ~ AG.Semantics t,
+          AG.Atts inh (Abstract.Designator l l sem sem) ~ AG.Atts inh (Expression l l sem sem),
+          AG.Atts inh (Abstract.Element l l sem sem) ~ AG.Atts inh (Expression l l sem sem),
+          AG.Atts inh (Abstract.Expression l l sem sem) ~ AG.Atts inh (Expression l l sem sem),
+          AG.Atts inh (Abstract.Value l l sem sem) ~ AG.Atts inh (Expression l l sem sem)) =>
+         Shallow.Functor (AG.Inherited t (Expression l l sem sem)) (Expression l l sem) where
+   AG.Inherited i <$> (Relation op _ _) = Relation op (AG.Inherited i) (AG.Inherited i)
+   AG.Inherited i <$> (IsA _ typeName)  = IsA (AG.Inherited i) typeName
+   AG.Inherited i <$> Positive{}        = Positive (AG.Inherited i)
+   AG.Inherited i <$> Negative{}        = Negative (AG.Inherited i)
+   AG.Inherited i <$> Add{}             = Add (AG.Inherited i) (AG.Inherited i)
+   AG.Inherited i <$> Subtract{}        = Subtract (AG.Inherited i) (AG.Inherited i)
+   AG.Inherited i <$> Or{}              = Or (AG.Inherited i) (AG.Inherited i)
+   AG.Inherited i <$> Multiply{}        = Multiply (AG.Inherited i) (AG.Inherited i)
+   AG.Inherited i <$> Divide{}          = Divide (AG.Inherited i) (AG.Inherited i)
+   AG.Inherited i <$> IntegerDivide{}   = IntegerDivide (AG.Inherited i) (AG.Inherited i)
+   AG.Inherited i <$> Modulo{}          = Modulo (AG.Inherited i) (AG.Inherited i)
+   AG.Inherited i <$> And{}             = And (AG.Inherited i) (AG.Inherited i)
+   AG.Inherited i <$> Set{}             = Set [AG.Inherited i]
+   AG.Inherited i <$> Read{}            = Read (AG.Inherited i)
+   AG.Inherited i <$> FunctionCall{}    = FunctionCall (AG.Inherited i) [AG.Inherited i]
+   AG.Inherited i <$> Not{}             = Not (AG.Inherited i)
+   AG.Inherited i <$> Literal{}         = Literal (AG.Inherited i)
 
-instance (AG.Atts (AG.Inherited t) (Abstract.Designator l l (AG.Semantics t) (AG.Semantics t))
-          ~ AG.Atts (AG.Inherited t) (Designator l l (AG.Semantics t) (AG.Semantics t)),
-          AG.Atts (AG.Inherited t) (Abstract.Expression l l (AG.Semantics t) (AG.Semantics t))
-          ~ AG.Atts (AG.Inherited t) (Designator l l (AG.Semantics t) (AG.Semantics t))) =>
-         AG.Inheritable t (Designator l l) where
-   passDown i (Variable q) = Variable q
-   passDown i (Field record name) = Field (AG.Inherited i) name
-   passDown i (Index array indices) = Index (AG.Inherited i) (pure $ AG.Inherited i)
-   passDown i (TypeGuard expr typeName) = TypeGuard (AG.Inherited i) typeName
-   passDown i (Dereference pointer) = Dereference (AG.Inherited i)
+$(mconcat <$> mapM Transformation.Shallow.TH.deriveAll
+  [''CaseLabels, ''Element])
+
+instance (inh ~ AG.Inherited t, sem ~ AG.Semantics t,
+          AG.Atts inh (Abstract.Designator l l sem sem) ~ AG.Atts inh (Designator l l sem sem),
+          AG.Atts inh (Abstract.Expression l l sem sem) ~ AG.Atts inh (Designator l l sem sem)) =>
+         Shallow.Functor (AG.Inherited t (Designator l l sem sem)) (Designator l l sem) where
+   AG.Inherited i <$> (Variable q) = Variable q
+   AG.Inherited i <$> (Field record name) = Field (AG.Inherited i) name
+   AG.Inherited i <$> (Index array indices) = Index (AG.Inherited i) (pure $ AG.Inherited i)
+   AG.Inherited i <$> (TypeGuard expr typeName) = TypeGuard (AG.Inherited i) typeName
+   AG.Inherited i <$> (Dereference pointer) = Dereference (AG.Inherited i)

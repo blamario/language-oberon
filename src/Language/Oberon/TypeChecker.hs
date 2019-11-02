@@ -640,13 +640,15 @@ instance (Abstract.Nameable l, Eq (Abstract.QualIdent l),
           Atts (Synthesized TypeCheck) (Abstract.ConstExpression l l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ SynTCExp l) =>
          Attribution TypeCheck (AST.CaseLabels l l) ((,) Int) where
-   attribution TypeCheck (pos, _) (Inherited inheritance, AST.SingleLabel value) =
-      (Synthesized SynTC{errors= assignmentCompatible (fst inheritance) pos (snd inheritance) (inferredType $ syn value)},
-       AST.SingleLabel (Inherited $ fst inheritance))
-   attribution TypeCheck (pos, _) (Inherited (inheritance, caseType), AST.LabelRange start end) =
-      (Synthesized SynTC{errors= assignmentCompatible inheritance pos caseType (inferredType $ syn start)
-                                 <> assignmentCompatible inheritance pos caseType (inferredType $ syn end)},
-       AST.LabelRange (Inherited inheritance) (Inherited inheritance))
+--   bequest TypeCheck (pos, c) (inheritance, caseType) _ = Inherited inheritance Shallow.<$> c
+   bequest TypeCheck (pos, AST.SingleLabel{}) (inheritance, _) _ = AST.SingleLabel (Inherited inheritance)
+   bequest TypeCheck (pos, AST.LabelRange{}) (inheritance, _) _ =
+      AST.LabelRange (Inherited inheritance) (Inherited inheritance)
+   synthesis TypeCheck (pos, _) inheritance (AST.SingleLabel value) =
+      SynTC{errors= assignmentCompatible (fst inheritance) pos (snd inheritance) (inferredType $ syn value)}
+   synthesis TypeCheck (pos, _) (inheritance, caseType) (AST.LabelRange start end) =
+      SynTC{errors= assignmentCompatible inheritance pos caseType (inferredType $ syn start)
+            <> assignmentCompatible inheritance pos caseType (inferredType $ syn end)}
 
 instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Inherited TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
@@ -661,7 +663,7 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Synthesized TypeCheck) (Abstract.Designator l l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ SynTCDes l) =>
          Attribution TypeCheck (AST.Expression l l) ((,) Int) where
-   bequest TypeCheck (pos, e) inheritance _ = AG.passDown inheritance e
+   bequest TypeCheck (pos, e) inheritance _ = AG.passDown (Inherited inheritance) e
    synthesis TypeCheck (pos, AST.Relation op _ _) inheritance (AST.Relation _op left right) =
       SynTCExp{expressionErrors= case expressionErrors (syn left) <> expressionErrors (syn right)
                                  of [] | t1 == t2 -> []
@@ -799,15 +801,14 @@ instance (Abstract.Wirthy l, Abstract.Nameable l,
           Atts (Synthesized TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ SynTCExp l) =>
          Attribution TypeCheck (AST.Element l l) ((,) Int) where
-   attribution TypeCheck (pos, _) (Inherited inheritance, AST.Element expr) =
-      (Synthesized SynTCExp{expressionErrors= integerExpressionErrors inheritance pos (syn expr),
-                            inferredType= NominalType (Abstract.nonQualIdent "SET") Nothing},
-       AST.Element (Inherited inheritance))
-   attribution TypeCheck (pos, _) (Inherited inheritance, AST.Range low high) =
-      (Synthesized SynTCExp{expressionErrors= integerExpressionErrors inheritance pos (syn low)
-                                              <> integerExpressionErrors inheritance pos (syn high),
-                            inferredType= NominalType (Abstract.nonQualIdent "SET") Nothing},
-       AST.Range (Inherited inheritance) (Inherited inheritance))
+   bequest TypeCheck (pos, elem) inheritance _ = AG.passDown (Inherited inheritance) elem
+   synthesis TypeCheck (pos, _) inheritance (AST.Element expr) =
+      SynTCExp{expressionErrors= integerExpressionErrors inheritance pos (syn expr),
+               inferredType= NominalType (Abstract.nonQualIdent "SET") Nothing}
+   synthesis TypeCheck (pos, _) inheritance (AST.Range low high) =
+      SynTCExp{expressionErrors= integerExpressionErrors inheritance pos (syn low)
+                                 <> integerExpressionErrors inheritance pos (syn high),
+               inferredType= NominalType (Abstract.nonQualIdent "SET") Nothing}
 
 instance (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
           Atts (Inherited TypeCheck) (Abstract.Expression l l (Semantics TypeCheck) (Semantics TypeCheck)) ~ InhTC l,
@@ -817,7 +818,7 @@ instance (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
           Atts (Synthesized TypeCheck) (Abstract.Designator l l (Semantics TypeCheck) (Semantics TypeCheck))
           ~ SynTCDes l) =>
          Attribution TypeCheck (AST.Designator l l) ((,) Int) where
-   bequest TypeCheck (pos, d) inheritance _ = AG.passDown inheritance d
+   bequest TypeCheck (pos, d) inheritance _ = AG.passDown (Inherited inheritance) d
    synthesis TypeCheck (pos, AST.Variable q) inheritance _ =
       SynTCDes{designatorErrors= case designatorType
                                  of Nothing -> [(currentModule inheritance, pos, UnknownName q)]
