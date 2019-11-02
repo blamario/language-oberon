@@ -30,17 +30,11 @@ import qualified Language.Oberon.AST as AST
 
 foldConstants :: (Abstract.Oberon l, Abstract.Nameable l,
                   Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
-                  Atts (Inherited ConstantFold)
-                  (Abstract.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))
-                  ~ InhCF l,
-                  Atts (Inherited ConstantFold)
-                       (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold))
-                  ~ InhCF l,
-                  Atts (Synthesized ConstantFold)
-                       (Abstract.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))
+                  Atts (Inherited ConstantFold) (Abstract.Declaration l l Sem Sem) ~ InhCF l,
+                  Atts (Inherited ConstantFold) (Abstract.StatementSequence l l Sem Sem) ~ InhCF l,
+                  Atts (Synthesized ConstantFold) (Abstract.Declaration l l Sem Sem)
                   ~ SynCFMod' l (Abstract.Declaration l l),
-                  Atts (Synthesized ConstantFold)
-                       (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold))
+                  Atts (Synthesized ConstantFold) (Abstract.StatementSequence l l Sem Sem)
                   ~ SynCF' (Abstract.StatementSequence l l),
                   Full.Functor ConstantFold (Abstract.Declaration l l),
                   Full.Functor ConstantFold (Abstract.StatementSequence l l),
@@ -61,6 +55,8 @@ type Environment l = Map (Abstract.QualIdent l) (Maybe (Abstract.Value l l ((,) 
 newtype Modules l f' f = Modules {getModules :: Map AST.Ident (f (AST.Module l l f' f'))}
 
 data ConstantFold = ConstantFold
+
+type Sem = Semantics ConstantFold
 
 data ConstantFoldSyn l = ConstantFoldSyn (InhCF l)
 
@@ -160,12 +156,10 @@ instance Ord (Abstract.QualIdent l) => Attribution ConstantFold (Modules l) ((,)
                                                         currentModule= name}
 
 instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
-          Atts (Synthesized ConstantFold) (Abstract.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCFMod' l (Abstract.Declaration l l),
-          Atts (Inherited ConstantFold) (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.StatementSequence l l (Semantics ConstantFold) (Semantics ConstantFold))
+          Atts (Synthesized ConstantFold) (Abstract.Declaration l l Sem Sem) ~ SynCFMod' l (Abstract.Declaration l l),
+          Atts (Inherited ConstantFold) (Abstract.StatementSequence l l Sem Sem) ~ InhCF l,
+          Atts (Inherited ConstantFold) (Abstract.Declaration l l Sem Sem) ~ InhCF l,
+          Atts (Synthesized ConstantFold) (Abstract.StatementSequence l l Sem Sem)
           ~ SynCF' (Abstract.StatementSequence l l)) =>
          Attribution ConstantFold (AST.Module l l) ((,) Int) where
    attribution ConstantFold (_, AST.Module moduleName imports _decls _body)
@@ -182,25 +176,20 @@ instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Sh
 
 instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Abstract.Expression l ~ AST.Expression l, Abstract.Value l ~ AST.Value l,
-          Atts (Inherited ConstantFold) (Abstract.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Type l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Block l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.ProcedureHeading l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.FormalParameters l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.ConstExpression l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.Declaration l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCFMod' l (Abstract.Declaration l l),
-          Atts (Synthesized ConstantFold) (Abstract.Type l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.Type l l),
-          Atts (Synthesized ConstantFold) (Abstract.ProcedureHeading l l (Semantics ConstantFold) (Semantics ConstantFold))
+          Atts (Inherited ConstantFold) (Abstract.Declaration l l Sem Sem) ~ InhCF l,
+          Atts (Inherited ConstantFold) (Abstract.Type l l Sem Sem) ~ InhCF l,
+          Atts (Inherited ConstantFold) (Abstract.Block l l Sem Sem) ~ InhCF l,
+          Atts (Inherited ConstantFold) (Abstract.ProcedureHeading l l Sem Sem) ~ InhCF l,
+          Atts (Inherited ConstantFold) (Abstract.FormalParameters l l Sem Sem) ~ InhCF l,
+          Atts (Inherited ConstantFold) (Abstract.ConstExpression l l Sem Sem) ~ InhCF l,
+          Atts (Synthesized ConstantFold) (Abstract.Declaration l l Sem Sem) ~ SynCFMod' l (Abstract.Declaration l l),
+          Atts (Synthesized ConstantFold) (Abstract.Type l l Sem Sem) ~ SynCF' (Abstract.Type l l),
+          Atts (Synthesized ConstantFold) (Abstract.ProcedureHeading l l Sem Sem)
           ~ SynCF' (Abstract.ProcedureHeading l l),
-          Atts (Synthesized ConstantFold) (Abstract.FormalParameters l l (Semantics ConstantFold) (Semantics ConstantFold))
+          Atts (Synthesized ConstantFold) (Abstract.FormalParameters l l Sem Sem)
           ~ SynCF' (Abstract.FormalParameters l l),
-          Atts (Synthesized ConstantFold) (Abstract.Block l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.Block l l),
-          Atts (Synthesized ConstantFold) (Abstract.ConstExpression l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCFExp l) =>
+          Atts (Synthesized ConstantFold) (Abstract.Block l l Sem Sem) ~ SynCF' (Abstract.Block l l),
+          Atts (Synthesized ConstantFold) (Abstract.ConstExpression l l Sem Sem) ~ SynCFExp l) =>
          Attribution ConstantFold (AST.Declaration l l) ((,) Int) where
    attribution ConstantFold (pos, AST.ConstantDeclaration namedef _)
                (Inherited inheritance, AST.ConstantDeclaration _ expression) =
@@ -235,14 +224,12 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
 
 instance (Abstract.CoWirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Abstract.Expression l ~ AST.Expression l, Abstract.Value l ~ AST.Value l,
-          Atts (Inherited ConstantFold) (Abstract.Expression l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Element l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.Expression l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCFExp l,
-          Atts (Synthesized ConstantFold) (Abstract.Element l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCF' (Abstract.Element l l),
-          Atts (Synthesized ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold))
+          Atts (Inherited ConstantFold) (Abstract.Expression l l Sem Sem) ~ InhCF l,
+          Atts (Inherited ConstantFold) (Abstract.Element l l Sem Sem) ~ InhCF l,
+          Atts (Inherited ConstantFold) (Abstract.Designator l l Sem Sem) ~ InhCF l,
+          Atts (Synthesized ConstantFold) (Abstract.Expression l l Sem Sem) ~ SynCFExp l,
+          Atts (Synthesized ConstantFold) (Abstract.Element l l Sem Sem) ~ SynCF' (Abstract.Element l l),
+          Atts (Synthesized ConstantFold) (Abstract.Designator l l Sem Sem)
           ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Value l l ((,) Int) ((,) Int)))) =>
          Attribution ConstantFold (AST.Expression l l) ((,) Int) where
    bequest ConstantFold (pos, e) inheritance _ = AG.passDown (Inherited inheritance) e
@@ -467,11 +454,10 @@ foldBinaryBoolean pos node op l r = case join (foldValues <$> foldedValue l <*> 
 instance (Abstract.CoWirthy l, Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
           Abstract.Expression l l ((,) Int) ((,) Int) ~ AST.Expression l l ((,) Int) ((,) Int),
           Abstract.Value l l ((,) Int) ((,) Int) ~ AST.Value l l ((,) Int) ((,) Int),
-          Atts (Inherited ConstantFold) (Abstract.Expression l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold)) ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.Expression l l (Semantics ConstantFold) (Semantics ConstantFold))
-          ~ SynCFExp l,
-          Atts (Synthesized ConstantFold) (Abstract.Designator l l (Semantics ConstantFold) (Semantics ConstantFold))
+          Atts (Inherited ConstantFold) (Abstract.Expression l l Sem Sem) ~ InhCF l,
+          Atts (Inherited ConstantFold) (Abstract.Designator l l Sem Sem) ~ InhCF l,
+          Atts (Synthesized ConstantFold) (Abstract.Expression l l Sem Sem) ~ SynCFExp l,
+          Atts (Synthesized ConstantFold) (Abstract.Designator l l Sem Sem)
           ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Value l l ((,) Int) ((,) Int)))) =>
          Attribution ConstantFold (AST.Designator l l) ((,) Int) where
    bequest ConstantFold (pos, d) inheritance _ = AG.passDown (Inherited inheritance) d
@@ -488,8 +474,7 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Abstract.Oberon l, Ord (Abst
       SynCF{folded= (pos, (AST.Dereference $ fmap fst $ folded $ syn pointer, Nothing))}
 
 -- * More boring Transformation.Functor instances, TH candidates
-instance Ord (Abstract.QualIdent l) =>
-         Transformation.Functor ConstantFold (Modules l (Semantics ConstantFold) (Semantics ConstantFold)) where
+instance Ord (Abstract.QualIdent l) => Transformation.Functor ConstantFold (Modules l Sem Sem) where
    (<$>) = AG.mapDefault snd
 
 -- * Shortcuts
