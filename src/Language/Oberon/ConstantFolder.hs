@@ -18,7 +18,7 @@ import Foreign.Storable (sizeOf)
 import Language.Haskell.TH (appT, conT, varT, varE, newName)
 
 import qualified Rank2
-import qualified Transformation as Shallow
+import qualified Transformation
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 import qualified Transformation.Full.TH
@@ -51,7 +51,7 @@ foldConstants :: (Abstract.Oberon l, Abstract.Nameable l,
 foldConstants predef modules =
    runIdentity <$>
    getModules (modulesFolded $
-               syn (ConstantFold Shallow.<$> (0, ConstantFold Deep.<$> Modules modules')
+               syn (ConstantFold Transformation.<$> (0, ConstantFold Deep.<$> Modules modules')
                     `Rank2.apply`
                     Inherited (InhCFRoot predef)))
    where modules' = ((,) 0) <$> modules
@@ -64,17 +64,17 @@ data ConstantFold = ConstantFold
 
 data ConstantFoldSyn l = ConstantFoldSyn (InhCF l)
 
-instance Shallow.Transformation ConstantFold where
+instance Transformation.Transformation ConstantFold where
    type Domain ConstantFold = Placed
    type Codomain ConstantFold = Semantics ConstantFold
 
-instance Shallow.Transformation (ConstantFoldSyn l) where
+instance Transformation.Transformation (ConstantFoldSyn l) where
    type Domain (ConstantFoldSyn l) = Semantics ConstantFold
    type Codomain (ConstantFoldSyn l) = Placed
 
 instance (Atts (Synthesized ConstantFold) (f ((,) Int) ((,) Int)) ~ SynCF' f,
           Atts (Inherited ConstantFold) (f ((,) Int) ((,) Int)) ~ InhCF l) =>
-         Shallow.Functor (ConstantFoldSyn l) (f ((,) Int) ((,) Int)) where
+         Transformation.Functor (ConstantFoldSyn l) (f ((,) Int) ((,) Int)) where
    ConstantFoldSyn inheritance <$> f = folded (syn $ Rank2.apply f $ Inherited inheritance)
 
 data InhCFRoot l = InhCFRoot{rootEnv :: Environment l}
@@ -93,11 +93,11 @@ data SynCFExp l = SynCFExp{foldedExp   :: (Int, AST.Expression l l ((,) Int) ((,
 data SynCFRoot a = SynCFRoot{modulesFolded :: a}
 
 -- * Modules instances, TH candidates
-instance (Shallow.Transformation t, Functor (Shallow.Domain t), Deep.Functor t (AST.Module l l),
-          Shallow.Functor t (AST.Module l l (Shallow.Codomain t) (Shallow.Codomain t))) =>
+instance (Transformation.Transformation t, Functor (Transformation.Domain t), Deep.Functor t (AST.Module l l),
+          Transformation.Functor t (AST.Module l l (Transformation.Codomain t) (Transformation.Codomain t))) =>
          Deep.Functor t (Modules l) where
    t <$> ~(Modules ms) = Modules (mapModule <$> ms)
-      where mapModule m = t Shallow.<$> ((t Deep.<$>) <$> m)
+      where mapModule m = t Transformation.<$> ((t Deep.<$>) <$> m)
 
 instance Rank2.Functor (Modules l f') where
    f <$> ~(Modules ms) = Modules (f <$> ms)
@@ -487,9 +487,9 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Abstract.Oberon l, Ord (Abst
    synthesis ConstantFold (pos, _) _ (AST.Dereference pointer) =
       SynCF{folded= (pos, (AST.Dereference $ fmap fst $ folded $ syn pointer, Nothing))}
 
--- * More boring Shallow.Functor instances, TH candidates
+-- * More boring Transformation.Functor instances, TH candidates
 instance Ord (Abstract.QualIdent l) =>
-         Shallow.Functor ConstantFold (Modules l (Semantics ConstantFold) (Semantics ConstantFold)) where
+         Transformation.Functor ConstantFold (Modules l (Semantics ConstantFold) (Semantics ConstantFold)) where
    (<$>) = AG.mapDefault snd
 
 -- * Shortcuts
@@ -536,7 +536,7 @@ $(do l <- varT  <$> newName "l"
 
 $(do let sem = [t|Semantics ConstantFold|]
      let inst g = [d| instance Attribution ConstantFold ($g l l) ((,) Int) =>
-                               Shallow.Functor ConstantFold ($g l l $sem $sem)
+                               Transformation.Functor ConstantFold ($g l l $sem $sem)
                          where (<$>) = AG.mapDefault snd |]
      mconcat <$> mapM (inst . conT)
         [''AST.Module, ''AST.Declaration, ''AST.Expression, ''AST.Designator])
@@ -550,7 +550,7 @@ $(do let inst g = [d| instance Full.Functor (ConstantFoldSyn l) ($g l l)
 
 $(do let sem = [t|Semantics ConstantFold|]
      let inst g = [d| instance Deep.Functor (ConstantFoldSyn l) ($g l l) =>
-                               Shallow.Functor ConstantFold ($g l l $sem $sem)
+                               Transformation.Functor ConstantFold ($g l l $sem $sem)
                          where ConstantFold <$> (pos, t) = Rank2.Arrow sem
                                   where sem inherited =
                                            Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> t)) |]

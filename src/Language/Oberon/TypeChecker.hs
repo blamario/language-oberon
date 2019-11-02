@@ -15,7 +15,7 @@ import qualified Data.Text as Text
 import Language.Haskell.TH (appT, conT, varT, newName)
 
 import qualified Rank2
-import qualified Transformation as Shallow
+import qualified Transformation
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 import qualified Transformation.Full.TH
@@ -181,11 +181,11 @@ data SynTCExp l = SynTCExp{expressionErrors :: [Error l],
                            inferredType :: Type l}
 
 -- * Modules instances, TH candidates
-instance (Shallow.Transformation t, Functor (Shallow.Domain t), Deep.Functor t (AST.Module l l),
-          Shallow.Functor t (AST.Module l l (Shallow.Codomain t) (Shallow.Codomain t))) =>
+instance (Transformation.Transformation t, Functor (Transformation.Domain t), Deep.Functor t (AST.Module l l),
+          Transformation.Functor t (AST.Module l l (Transformation.Codomain t) (Transformation.Codomain t))) =>
          Deep.Functor t (Modules l) where
    t <$> ~(Modules ms) = Modules (mapModule <$> ms)
-      where mapModule m = t Shallow.<$> ((t Deep.<$>) <$> m)
+      where mapModule m = t Transformation.<$> ((t Deep.<$>) <$> m)
 
 instance Rank2.Functor (Modules l f') where
    f <$> ~(Modules ms) = Modules (f <$> ms)
@@ -1052,13 +1052,13 @@ t1 `targetExtends` NominalType _ (Just t2) = t1 `targetExtends` t2
 t1 `targetExtends` t2 | t1 == t2 = True
 t1 `targetExtends` t2 = False
 
-instance Shallow.Transformation TypeCheck where
+instance Transformation.Transformation TypeCheck where
    type Domain TypeCheck = Placed
    type Codomain TypeCheck = Semantics TypeCheck
 
--- * More boring Shallow.Functor instances, TH candidates
+-- * More boring Transformation.Functor instances, TH candidates
 instance Ord (Abstract.QualIdent l) =>
-         Shallow.Functor TypeCheck (Modules l (Semantics TypeCheck) (Semantics TypeCheck)) where
+         Transformation.Functor TypeCheck (Modules l (Semantics TypeCheck) (Semantics TypeCheck)) where
    (<$>) = AG.mapDefault snd
 
 -- * Unsafe Rank2 AST instances
@@ -1083,7 +1083,7 @@ checkModules :: (Abstract.Oberon l, Abstract.Nameable l,
                  Full.Functor TypeCheck (Abstract.StatementSequence l l))
              => Environment l -> Map AST.Ident (AST.Module l l Placed Placed) -> [Error l]
 checkModules predef modules =
-   errors (syn (TypeCheck Shallow.<$> (0, TypeCheck Deep.<$> Modules modules')
+   errors (syn (TypeCheck Transformation.<$> (0, TypeCheck Deep.<$> Modules modules')
                 `Rank2.apply`
                 Inherited (InhTCRoot predef)))
    where modules' = ((,) 0) <$> modules
@@ -1152,7 +1152,7 @@ $(do l <- varT <$> newName "l"
 
 $(do let sem = [t|Semantics TypeCheck|]
      let inst g = [d| instance Attribution TypeCheck ($g l l) ((,) Int) =>
-                               Shallow.Functor TypeCheck ($g l l $sem $sem)
+                               Transformation.Functor TypeCheck ($g l l $sem $sem)
                          where (<$>) = AG.mapDefault snd |]
      mconcat <$> mapM (inst . conT)
         [''AST.Module, ''AST.Declaration, ''AST.Type, ''AST.FieldList,
