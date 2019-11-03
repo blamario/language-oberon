@@ -76,7 +76,7 @@ class Wirthy l where
    singleLabel :: f (ConstExpression l' l' f' f') -> CaseLabels l l' f' f
    labelRange :: f (ConstExpression l' l' f' f') -> f (ConstExpression l' l' f' f') -> CaseLabels l l' f' f
 
-   statementSequence :: NonEmpty (f (Statement l' l' f' f')) -> StatementSequence l l' f' f
+   statementSequence :: [f (Statement l' l' f' f')] -> StatementSequence l l' f' f
 
    -- Expression
    add, subtract :: f (Expression l' l' f' f') -> f (Expression l' l' f' f') -> Expression l l' f' f

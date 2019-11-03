@@ -373,7 +373,7 @@ deriving instance (Show (f (Abstract.Declaration l l f' f')), Show (f (Abstract.
                    Show (f (Abstract.Expression l l f' f')), Show (f (Abstract.StatementSequence l l f' f'))) =>
                   Show (Block λ l f' f)
 
-newtype StatementSequence λ l f' f = StatementSequence (NonEmpty (f (Abstract.Statement l l f' f')))
+newtype StatementSequence λ l f' f = StatementSequence [f (Abstract.Statement l l f' f')]
 
 deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f', Data (f (Abstract.Statement l l f' f'))) =>
                   Data (StatementSequence λ l f' f)

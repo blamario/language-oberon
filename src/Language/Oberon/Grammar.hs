@@ -304,7 +304,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                    <*> optional (keyword "BEGIN" *> wrap statementSequence) <* keyword "END",
    forwardDeclaration = Abstract.forwardDeclaration <$ keyword "PROCEDURE" <* delimiter "^"
                         <*> identdef <*> optional (wrap formalParameters),
-   statementSequence = Abstract.statementSequence <$> sepByNonEmpty (wrapAmbiguous statement) (delimiter ";"),
+   statementSequence = Abstract.statementSequence <$> sepBy1 (wrapAmbiguous statement) (delimiter ";"),
    statement = assignment <|> procedureCall <|> ifStatement <|> caseStatement 
                <|> whileStatement <|> repeatStatement <|> loopStatement <|> forStatement <|> withStatement 
                <|> Abstract.exitStatement <$ keyword "EXIT" 
