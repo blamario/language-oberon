@@ -318,10 +318,9 @@ grammar OberonGrammar{..} = OberonGrammar{
                          (keyword "ELSIF")
        <*> optional (keyword "ELSE" *> wrap statementSequence) <* keyword "END",
    caseStatement = Abstract.caseStatement <$ keyword "CASE" <*> expression
-       <*  keyword "OF" <*> sepByNonEmpty (wrap case_prod) (delimiter "|")
+       <*  keyword "OF" <*> (catMaybes <$> sepBy1 (optional $ wrap case_prod) (delimiter "|"))
        <*> optional (keyword "ELSE" *> wrap statementSequence) <* keyword "END",
-   case_prod = Abstract.caseAlternative <$> caseLabelList <* delimiter ":" <*> wrap statementSequence
-               <|> pure Abstract.emptyCase,
+   case_prod = Abstract.caseAlternative <$> caseLabelList <* delimiter ":" <*> wrap statementSequence,
    caseLabelList = sepByNonEmpty (wrap caseLabels) (delimiter ","),
    caseLabels = Abstract.singleLabel <$> constExpression
                 <|> Abstract.labelRange <$> constExpression <* delimiter ".." <*> constExpression,

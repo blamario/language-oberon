@@ -57,7 +57,7 @@ class Wirthy l where
 
    -- Statement
    assignment :: f (Designator l' l' f' f') -> f (Expression l' l' f' f') -> Statement l l' f' f
-   caseStatement :: f (Expression l' l' f' f') -> NonEmpty (f (Case l' l' f' f')) -> Maybe (f (StatementSequence l' l' f' f')) 
+   caseStatement :: f (Expression l' l' f' f') -> [f (Case l' l' f' f')] -> Maybe (f (StatementSequence l' l' f' f')) 
                  -> Statement l l' f' f
    emptyStatement :: Statement l l' f' f
    exitStatement :: Statement l l' f' f
@@ -72,7 +72,6 @@ class Wirthy l where
 
    conditionalBranch :: f (Expression l' l' f' f') -> f (StatementSequence l' l' f' f') -> ConditionalBranch l l' f' f
    caseAlternative :: NonEmpty (f (CaseLabels l' l' f' f')) -> f (StatementSequence l' l' f' f') -> Case l l' f' f
-   emptyCase :: Case l l' f' f
 
    singleLabel :: f (ConstExpression l' l' f' f') -> CaseLabels l l' f' f
    labelRange :: f (ConstExpression l' l' f' f') -> f (ConstExpression l' l' f' f') -> CaseLabels l l' f' f

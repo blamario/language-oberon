@@ -76,7 +76,6 @@ instance Abstract.Wirthy Language where
 
    conditionalBranch = ConditionalBranch
    caseAlternative = Case
-   emptyCase = EmptyCase
    labelRange = LabelRange
    singleLabel = SingleLabel
    
@@ -386,7 +385,7 @@ data Statement λ l f' f = EmptyStatement
                         | If (NonEmpty (f (Abstract.ConditionalBranch l l f' f')))
                              (Maybe (f (Abstract.StatementSequence l l f' f')))
                         | CaseStatement (f (Abstract.Expression l l f' f')) 
-                                        (NonEmpty (f (Abstract.Case l l f' f'))) 
+                                        [f (Abstract.Case l l f' f')]
                                         (Maybe (f (Abstract.StatementSequence l l f' f')))
                         | While (f (Abstract.Expression l l f' f')) (f (Abstract.StatementSequence l l f' f'))
                         | Repeat (f (Abstract.StatementSequence l l f' f')) (f (Abstract.Expression l l f' f'))
@@ -412,7 +411,6 @@ data WithAlternative λ l f' f = WithAlternative (Abstract.QualIdent l) (Abstrac
                                                 (f (Abstract.StatementSequence l l f' f'))
 
 data Case λ l f' f = Case (NonEmpty (f (Abstract.CaseLabels l l f' f'))) (f (Abstract.StatementSequence l l f' f'))
-                   | EmptyCase
 
 data CaseLabels λ l f' f = SingleLabel (f (Abstract.ConstExpression l l f' f'))
                          | LabelRange (f (Abstract.ConstExpression l l f' f')) (f (Abstract.ConstExpression l l f' f'))

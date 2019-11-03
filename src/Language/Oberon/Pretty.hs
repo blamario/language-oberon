@@ -191,8 +191,7 @@ instance (Pretty (Abstract.ConstExpression l l Identity Identity),
                                                     ++ foldMap (\x-> ["ELSE", prettyBlock x]) fallback
                                                     ++ ["END"])
    pretty (CaseStatement scrutinee cases fallback) = vsep ["CASE" <+> pretty scrutinee <+> "OF",
-                                                           align (encloseSep mempty mempty "| "
-                                                                  $ pretty <$> toList cases),
+                                                           align (encloseSep mempty mempty "| " $ pretty <$> cases),
                                                            foldMap ("ELSE" <#>) (prettyBlock <$> fallback),
                                                            "END"]
    pretty (While condition body) = vsep ["WHILE" <+> pretty condition <+> "DO",
@@ -227,7 +226,6 @@ instance (Pretty (Abstract.CaseLabels l l Identity Identity),
           Pretty (Abstract.StatementSequence l l Identity Identity)) => Pretty (Case λ l Identity Identity) where
    pretty (Case labels body) = vsep [hsep (punctuate comma (pretty <$> toList labels)) <+> colon,
                                      prettyBlock body]
-   pretty EmptyCase = mempty
    
 instance (Pretty (Abstract.QualIdent l), Pretty (Abstract.StatementSequence l l Identity Identity)) =>
          Pretty (WithAlternative λ l Identity Identity) where
