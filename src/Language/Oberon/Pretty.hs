@@ -131,7 +131,7 @@ instance (Pretty (Abstract.FormalParameters l l Identity Identity), Pretty (Abst
    pretty (ArrayType dimensions itemType) =
       "ARRAY" <+> hsep (punctuate comma $ pretty . runIdentity <$> dimensions) <+> "OF" <+> pretty itemType
    pretty (RecordType baseType fields) = vsep ["RECORD" <+> foldMap (parens . pretty) baseType,
-                                               indent 3 (vsep $ punctuate semi $ pretty <$> toList fields),
+                                               indent 3 (vsep $ punctuate semi $ pretty <$> fields),
                                                "END"]
    pretty (PointerType pointed) = "POINTER" <+> "TO" <+> pretty pointed
    pretty (ProcedureType parameters) = "PROCEDURE" <+> pretty parameters
@@ -143,7 +143,6 @@ instance Pretty (QualIdent l) where
 instance (Pretty (Abstract.IdentDef l), Pretty (Abstract.Type l l Identity Identity)) =>
          Pretty (FieldList λ l Identity Identity) where
    pretty (FieldList names t) = hsep (punctuate comma $ pretty <$> toList names) <+> ":" <+> pretty t
-   pretty EmptyFieldList = mempty
 
 instance (Pretty (Abstract.IdentDef l), Pretty (Abstract.FormalParameters l l Identity Identity),
           Pretty (Abstract.Type l l Identity Identity)) =>

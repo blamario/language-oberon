@@ -56,7 +56,6 @@ instance Abstract.Wirthy Language where
    block = Block
    
    fieldList = FieldList
-   emptyFieldList = EmptyFieldList
 
    -- Type
    pointerType = PointerType
@@ -322,7 +321,7 @@ deriving instance (Eq (Abstract.QualIdent l), Eq (f (Abstract.Designator l l f' 
 
 data Type λ l f' f = TypeReference (Abstract.QualIdent l)
                    | ArrayType [f (Abstract.ConstExpression l l f' f')] (f (Abstract.Type l l f' f'))
-                   | RecordType (Maybe (Abstract.BaseType l)) (NonEmpty (f (Abstract.FieldList l l f' f')))
+                   | RecordType (Maybe (Abstract.BaseType l)) [f (Abstract.FieldList l l f' f')]
                    | PointerType (f (Abstract.Type l l f' f'))
                    | ProcedureType (Maybe (f (Abstract.FormalParameters l l f' f')))
 
@@ -336,7 +335,6 @@ deriving instance (Show (Abstract.QualIdent l), Show (f (Abstract.Type l l f' f'
                   Show (Type λ l f' f)
 
 data FieldList λ l f' f = FieldList (Abstract.IdentList l) (f (Abstract.Type l l f' f'))
-                        | EmptyFieldList
 
 deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f', Data (Abstract.IdentDef l), Data (f (Abstract.Type l l f' f')),
                    Data (f (Abstract.Expression l l f' f'))) => Data (FieldList λ l f' f)

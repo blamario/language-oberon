@@ -497,9 +497,6 @@ instance (Abstract.Nameable l,
                                                           (definedType $ syn declaredType)) 
                                          names},
        AST.FieldList names (Inherited inheritance))
-   attribution TypeCheck self (Inherited inheritance, AST.EmptyFieldList) =
-     (Synthesized SynTCFields{fieldErrors= [], fieldEnv= mempty},
-      AST.EmptyFieldList)
 
 instance (Atts (Inherited TypeCheck) (Abstract.Statement l l Sem Sem) ~ InhTC l,
           Atts (Synthesized TypeCheck) (Abstract.Statement l l Sem Sem) ~ SynTC l) =>

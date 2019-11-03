@@ -11,6 +11,7 @@ import Control.Monad (guard)
 import Data.Char
 import Data.Functor.Compose (Compose(..))
 import Data.List.NonEmpty (NonEmpty)
+import Data.Maybe (catMaybes)
 import Data.Monoid ((<>), Endo(Endo, appEndo))
 import Numeric (readDec, readHex, readFloat)
 import Data.Text (Text, unpack)
@@ -64,7 +65,7 @@ data OberonGrammar l f p = OberonGrammar {
    length :: p (f (Abstract.Expression l l f f)),
    recordType :: p (Abstract.Type l l f f),
    baseType :: p (Abstract.BaseType l),
-   fieldListSequence :: p (NonEmpty (f (Abstract.FieldList l l f f))),
+   fieldListSequence :: p [f (Abstract.FieldList l l f f)],
    fieldList :: p (Abstract.FieldList l l f f),
    identList :: p (Abstract.IdentList l),
    pointerType :: p (Abstract.Type l l f f),
@@ -267,7 +268,7 @@ grammar OberonGrammar{..} = OberonGrammar{
    type_prod = Abstract.typeReference <$> qualident 
                <|> arrayType 
                <|> recordType 
-               <|> pointerType 
+               <|> pointerType
                <|> procedureType,
    qualident = Abstract.qualIdent <$> ident <* delimiter "." <*> ident
                <|> Abstract.nonQualIdent <$> ident,
@@ -276,9 +277,8 @@ grammar OberonGrammar{..} = OberonGrammar{
    recordType = Abstract.recordType <$ keyword "RECORD" <*> optional (parens baseType)
                 <*> fieldListSequence <* keyword "END",
    baseType = qualident,
-   fieldListSequence = sepByNonEmpty (wrap fieldList) (delimiter ";"),
-   fieldList = (Abstract.fieldList <$> identList <* delimiter ":" <*> wrap type_prod <?> "record field declarations")
-               <|> pure Abstract.emptyFieldList,
+   fieldListSequence = catMaybes <$> sepBy1 (optional $ wrap fieldList) (delimiter ";"),
+   fieldList = Abstract.fieldList <$> identList <* delimiter ":" <*> wrap type_prod <?> "record field declarations",
    identList = sepByNonEmpty identdef (delimiter ","),
    pointerType = Abstract.pointerType <$ keyword "POINTER" <* keyword "TO" <*> wrap type_prod,
    procedureType = Abstract.procedureType <$ keyword "PROCEDURE" <*> optional (wrap formalParameters),

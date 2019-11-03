@@ -49,7 +49,6 @@ class Wirthy l where
    block :: [f (Declaration l' l' f' f')] -> Maybe (f (StatementSequence l' l' f' f')) -> Block l l' f' f
 
    fieldList :: NonEmpty (IdentDef l') -> f (Type l' l' f' f') -> FieldList l l' f' f
-   emptyFieldList :: FieldList l l' f' f
 
    -- Type
    pointerType :: f (Type l' l' f' f') -> Type l l' f' f
@@ -139,7 +138,7 @@ class Wirthy l => Oberon l where
    procedureHeading :: Bool -> IdentDef l' -> Maybe (f (FormalParameters l' l' f' f')) -> ProcedureHeading l l' f' f
 
    arrayType :: [f (ConstExpression l' l' f' f')] -> f (Type l' l' f' f') -> Type l l' f' f
-   recordType :: Maybe (BaseType l') -> NonEmpty (f (FieldList l' l' f' f')) -> Type l l' f' f
+   recordType :: Maybe (BaseType l') -> [f (FieldList l' l' f' f')] -> Type l l' f' f
 
    withStatement :: f (WithAlternative l' l' f' f') -> Statement l l' f' f
    withAlternative :: QualIdent l' -> QualIdent l' -> f (StatementSequence l' l' f' f') -> WithAlternative l l' f' f
