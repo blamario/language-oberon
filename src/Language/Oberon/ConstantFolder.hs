@@ -3,7 +3,7 @@
 
 module Language.Oberon.ConstantFolder where
 
-import Control.Applicative (liftA2)
+import Control.Applicative (liftA2, ZipList(ZipList, getZipList))
 import Control.Arrow (first)
 import Control.Monad (join)
 import Data.Bits (shift)
@@ -315,7 +315,7 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
          (pos', (des', Nothing)) -> SynCFExp{foldedExp= (pos, AST.Read (pos', des')),
                                              foldedValue= Nothing}
    synthesis ConstantFold (pos, _) _ (AST.FunctionCall fn args) =
-      case (snd (snd $ folded $ syn fn), foldedValue . syn <$> args)
+      case (snd (snd $ folded $ syn fn), foldedValue . syn <$> getZipList args)
       of (Just (AST.Builtin "CAP"), [Just (AST.String s)])
             | Text.length s == 1, capital <- Text.toUpper s -> literalSynthesis (Abstract.string capital)
          (Just (AST.Builtin "CAP"), [Just (AST.CharCode c)])
@@ -466,8 +466,9 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Abstract.Oberon l, Ord (Abst
 --                                         >>= Abstract.coExpression :: Maybe (AST.Expression l l ((,) Int) ((,) Int))))}
    synthesis ConstantFold (pos, AST.Field _record fieldName) _ (AST.Field record _fieldName) =
       SynCF{folded= (pos, (AST.Field (fmap fst $ folded $ syn record) fieldName, Nothing))}
-   synthesis ConstantFold (pos, AST.Index _array _indexes) _ (AST.Index array indexes) =
-      SynCF{folded= (pos, (AST.Index (fmap fst $ folded $ syn array) (foldedExp . syn <$> indexes), Nothing))}
+   synthesis ConstantFold (pos, AST.Index{}) _ (AST.Index array index indexes) =
+      SynCF{folded= (pos, (AST.Index (fmap fst $ folded $ syn array)
+                                     (foldedExp . syn $ index) (foldedExp . syn <$> indexes), Nothing))}
    synthesis ConstantFold (pos, AST.TypeGuard _designator q) _ (AST.TypeGuard designator _q) =
       SynCF{folded= (pos, (AST.TypeGuard (fmap fst $ folded $ syn designator) q, Nothing))}
    synthesis ConstantFold (pos, _) _ (AST.Dereference pointer) =

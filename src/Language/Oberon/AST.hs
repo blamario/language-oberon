@@ -6,10 +6,12 @@
 
 module Language.Oberon.AST (module Language.Oberon.AST, RelOp(..)) where
 
+import Control.Applicative (ZipList(ZipList, getZipList))
 import Data.Data (Data, Typeable)
-import Data.List.NonEmpty
+import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Text (Text)
 
+import qualified Transformation
 import qualified Transformation.Shallow as Shallow
 import qualified Transformation.Shallow.TH
 import qualified Transformation.Deep.TH
@@ -18,6 +20,9 @@ import qualified Rank2.TH
 
 import qualified Language.Oberon.Abstract as Abstract
 import Language.Oberon.Abstract (RelOp(..))
+
+-- | Orphan instance
+deriving instance Data a => Data (ZipList a)
 
 data Language = Language deriving (Data, Typeable)
 
@@ -51,9 +56,9 @@ instance Abstract.Wirthy Language where
    variableDeclaration = VariableDeclaration
    procedureDeclaration = ProcedureDeclaration
 
-   formalParameters = FormalParameters
+   formalParameters = FormalParameters . ZipList
    fpSection = FPSection
-   block = Block
+   block = Block . ZipList
    
    fieldList = FieldList
 
@@ -64,28 +69,28 @@ instance Abstract.Wirthy Language where
 
    -- Statement
    assignment = Assignment
-   caseStatement = CaseStatement
+   caseStatement scrutinee cases = CaseStatement scrutinee (ZipList cases)
    emptyStatement = EmptyStatement
    exitStatement = Exit
-   ifStatement = If
+   ifStatement (branch :| branches) = If branch (ZipList branches)
    loopStatement = Loop
-   procedureCall = ProcedureCall
+   procedureCall proc args = ProcedureCall proc (ZipList <$> args)
    repeatStatement = Repeat
    returnStatement = Return
    whileStatement = While
 
    conditionalBranch = ConditionalBranch
-   caseAlternative = Case
+   caseAlternative (c :| cs) = Case c (ZipList cs)
    labelRange = LabelRange
    singleLabel = SingleLabel
    
-   statementSequence = StatementSequence
+   statementSequence = StatementSequence . ZipList
 
    -- Expression
    add = Add
    and = And
    divide = Divide
-   functionCall = FunctionCall
+   functionCall fun args = FunctionCall fun (ZipList args)
    integerDivide = IntegerDivide
    literal = Literal
    modulo = Modulo
@@ -114,7 +119,7 @@ instance Abstract.Wirthy Language where
    -- Designator
    variable = Variable
    field = Field
-   index = Index
+   index array (i :| is) = Index array i (ZipList is)
    dereference = Dereference
 
    -- Identifier
@@ -136,15 +141,15 @@ instance Abstract.CoWirthy Language where
    
    coStatement EmptyStatement = Just Abstract.emptyStatement
    coStatement (Assignment destination expression) = Just (Abstract.assignment destination expression)
-   coStatement (ProcedureCall procedure parameters) = Just (Abstract.procedureCall procedure parameters)
-   coStatement (If branches fallback) = Just (Abstract.ifStatement branches fallback)
+   coStatement (ProcedureCall procedure parameters) = Just (Abstract.procedureCall procedure $ getZipList <$> parameters)
+   coStatement (If branch elsifs fallback) = Just (Abstract.ifStatement (branch :| getZipList elsifs) fallback)
 --   coStatement (CaseStatement scrutinee cases fallback) = Just (Abstract.caseStatement scrutinee cases fallback)
    coStatement (CaseStatement scrutinee cases fallback) = Nothing
    coStatement (While condition body) = Just (Abstract.whileStatement condition body)
    coStatement (Repeat body condition) = Just (Abstract.repeatStatement body condition)
    coStatement (For _index _from _to _by _body) = Nothing
    coStatement (Loop body) = Just (Abstract.loopStatement body)
-   coStatement (With _alternatives _fallback) = Nothing
+   coStatement (With _alternative _alternatives _fallback) = Nothing
    coStatement Exit = Just Abstract.exitStatement
    coStatement (Return result) = Just (Abstract.returnStatement result)
    
@@ -162,7 +167,7 @@ instance Abstract.CoWirthy Language where
    coExpression (And left right) = Just (Abstract.and left right)
    coExpression (Set _elements) = Nothing
    coExpression (Read var) = Just (Abstract.read var)
-   coExpression (FunctionCall function parameters) = Just (Abstract.functionCall function parameters)
+   coExpression (FunctionCall function parameters) = Just (Abstract.functionCall function $ getZipList parameters)
    coExpression (Not e) = Just (Abstract.not e)
 
    coValue Nil = Just Abstract.nil
@@ -176,7 +181,7 @@ instance Abstract.CoWirthy Language where
    
    coDesignator (Variable q) = Just (Abstract.variable q)
    coDesignator (Field record name) = Just (Abstract.field record name)
-   coDesignator (Index array indexes) = Just (Abstract.index array indexes)
+   coDesignator (Index array index indexes) = Just (Abstract.index array (index :| getZipList indexes))
    coDesignator (TypeGuard _scrutinee _typeName) = Nothing
    coDesignator (Dereference pointer) = Just (Abstract.dereference pointer)
 
@@ -193,31 +198,31 @@ isNamedVar _ _ = False
 
 instance Abstract.Oberon Language where
    type WithAlternative Language = WithAlternative Language
-   moduleUnit = Module
+   moduleUnit name imports declarations = Module name imports (ZipList declarations)
    moduleImport = (,)
    exported = flip IdentDef Exported
    qualIdent = QualIdent
    getQualIdentNames (QualIdent moduleName name) = Just (moduleName, name)
    getQualIdentNames _ = Nothing
 
-   arrayType = ArrayType
-   recordType = RecordType
+   arrayType = ArrayType . ZipList
+   recordType base fields = RecordType base (ZipList fields)
    procedureHeading = ProcedureHeading
    forwardDeclaration = ForwardDeclaration
-   withStatement alt = With (alt :| []) Nothing
+   withStatement alt = With alt (ZipList []) Nothing
    withAlternative = WithAlternative
    is = IsA
-   set = Set
+   set = Set . ZipList
    typeGuard = TypeGuard
 
 instance Abstract.Oberon2 Language where
    readOnly = flip IdentDef ReadOnly
    typeBoundHeading = TypeBoundHeading
    forStatement = For
-   variantWithStatement = With
+   variantWithStatement (variant :| variants) = With variant (ZipList variants)
 
 data Module λ l f' f =
-   Module Ident [Import l] [f (Abstract.Declaration l l f' f')] (Maybe (f (Abstract.StatementSequence l l f' f')))
+   Module Ident [Import l] (ZipList (f (Abstract.Declaration l l f' f'))) (Maybe (f (Abstract.StatementSequence l l f' f')))
 
 deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f', Data (Abstract.Import l),
                    Data (f (Abstract.Declaration l l f' f')), Data (f (Abstract.StatementSequence l l f' f'))) =>
@@ -267,9 +272,9 @@ data Expression λ l f' f = Relation RelOp (f (Abstract.Expression l l f' f')) (
                          | IntegerDivide (f (Abstract.Expression l l f' f')) (f (Abstract.Expression l l f' f'))
                          | Modulo (f (Abstract.Expression l l f' f')) (f (Abstract.Expression l l f' f'))
                          | And (f (Abstract.Expression l l f' f')) (f (Abstract.Expression l l f' f'))
-                         | Set [f (Abstract.Element l l f' f')]
+                         | Set (ZipList (f (Abstract.Element l l f' f')))
                          | Read (f (Abstract.Designator l l f' f'))
-                         | FunctionCall (f (Abstract.Designator l l f' f')) [f (Abstract.Expression l l f' f')]
+                         | FunctionCall (f (Abstract.Designator l l f' f')) (ZipList (f (Abstract.Expression l l f' f')))
                          | Not (f (Abstract.Expression l l f' f'))
                          | Literal (f (Abstract.Value l l f' f'))
 
@@ -306,7 +311,8 @@ deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f') => Data (Va
 
 data Designator λ l f' f = Variable (Abstract.QualIdent l)
                          | Field (f (Abstract.Designator l l f' f')) Ident 
-                         | Index (f (Abstract.Designator l l f' f')) (NonEmpty (f (Abstract.Expression l l f' f')))
+                         | Index (f (Abstract.Designator l l f' f'))
+                                 (f (Abstract.Expression l l f' f')) (ZipList (f (Abstract.Expression l l f' f')))
                          | TypeGuard (f (Abstract.Designator l l f' f')) (Abstract.QualIdent l)
                          | Dereference (f (Abstract.Designator l l f' f'))
 
@@ -319,8 +325,8 @@ deriving instance (Eq (Abstract.QualIdent l), Eq (f (Abstract.Designator l l f' 
                    Eq (f (Abstract.Expression l l f' f'))) => Eq (Designator λ l f' f)
 
 data Type λ l f' f = TypeReference (Abstract.QualIdent l)
-                   | ArrayType [f (Abstract.ConstExpression l l f' f')] (f (Abstract.Type l l f' f'))
-                   | RecordType (Maybe (Abstract.BaseType l)) [f (Abstract.FieldList l l f' f')]
+                   | ArrayType (ZipList (f (Abstract.ConstExpression l l f' f'))) (f (Abstract.Type l l f' f'))
+                   | RecordType (Maybe (Abstract.BaseType l)) (ZipList (f (Abstract.FieldList l l f' f')))
                    | PointerType (f (Abstract.Type l l f' f'))
                    | ProcedureType (Maybe (f (Abstract.FormalParameters l l f' f')))
 
@@ -344,7 +350,7 @@ data ProcedureHeading λ l f' f =
    ProcedureHeading                    Bool (Abstract.IdentDef l) (Maybe (f (Abstract.FormalParameters l l f' f')))
    | TypeBoundHeading Bool Ident Ident Bool (Abstract.IdentDef l) (Maybe (f (Abstract.FormalParameters l l f' f')))
 
-data FormalParameters λ l f' f = FormalParameters [f (Abstract.FPSection l l f' f')] (Maybe (Abstract.ReturnType l))
+data FormalParameters λ l f' f = FormalParameters (ZipList (f (Abstract.FPSection l l f' f'))) (Maybe (Abstract.ReturnType l))
 
 data FPSection λ l f' f = FPSection Bool [Ident] (f (Abstract.Type l l f' f'))
 
@@ -363,7 +369,7 @@ deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f', Data (f (Ab
                    Data (f (Abstract.Expression l l f' f'))) => Data (FPSection λ l f' f)
 deriving instance (Show (f (Abstract.Type l l f' f')), Show (f (Abstract.Expression l l f' f'))) => Show (FPSection λ l f' f)
 
-data Block λ l f' f = Block [f (Abstract.Declaration l l f' f')] (Maybe (f (Abstract.StatementSequence l l f' f')))
+data Block λ l f' f = Block (ZipList (f (Abstract.Declaration l l f' f'))) (Maybe (f (Abstract.StatementSequence l l f' f')))
 
 deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f', Data (f (Abstract.Declaration l l f' f')),
                    Data (f (Abstract.Designator l l f' f')), Data (f (Abstract.Expression l l f' f')),
@@ -373,7 +379,7 @@ deriving instance (Show (f (Abstract.Declaration l l f' f')), Show (f (Abstract.
                    Show (f (Abstract.Expression l l f' f')), Show (f (Abstract.StatementSequence l l f' f'))) =>
                   Show (Block λ l f' f)
 
-newtype StatementSequence λ l f' f = StatementSequence [f (Abstract.Statement l l f' f')]
+newtype StatementSequence λ l f' f = StatementSequence (ZipList (f (Abstract.Statement l l f' f')))
 
 deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f', Data (f (Abstract.Statement l l f' f'))) =>
                   Data (StatementSequence λ l f' f)
@@ -381,18 +387,20 @@ deriving instance Show (f (Abstract.Statement l l f' f')) => Show (StatementSequ
 
 data Statement λ l f' f = EmptyStatement
                         | Assignment (f (Abstract.Designator l l f' f')) (f (Abstract.Expression l l f' f'))
-                        | ProcedureCall (f (Abstract.Designator l l f' f')) (Maybe [f (Abstract.Expression l l f' f')])
-                        | If (NonEmpty (f (Abstract.ConditionalBranch l l f' f')))
+                        | ProcedureCall (f (Abstract.Designator l l f' f')) (Maybe (ZipList (f (Abstract.Expression l l f' f'))))
+                        | If (f (Abstract.ConditionalBranch l l f' f'))
+                             (ZipList (f (Abstract.ConditionalBranch l l f' f')))
                              (Maybe (f (Abstract.StatementSequence l l f' f')))
                         | CaseStatement (f (Abstract.Expression l l f' f')) 
-                                        [f (Abstract.Case l l f' f')]
+                                        (ZipList (f (Abstract.Case l l f' f')))
                                         (Maybe (f (Abstract.StatementSequence l l f' f')))
                         | While (f (Abstract.Expression l l f' f')) (f (Abstract.StatementSequence l l f' f'))
                         | Repeat (f (Abstract.StatementSequence l l f' f')) (f (Abstract.Expression l l f' f'))
                         | For Ident (f (Abstract.Expression l l f' f')) (f (Abstract.Expression l l f' f')) 
                               (Maybe (f (Abstract.Expression l l f' f'))) (f (Abstract.StatementSequence l l f' f'))  -- Oberon2
                         | Loop (f (Abstract.StatementSequence l l f' f'))
-                        | With (NonEmpty (f (Abstract.WithAlternative l l f' f')))
+                        | With (f (Abstract.WithAlternative l l f' f'))
+                               (ZipList (f (Abstract.WithAlternative l l f' f')))
                                (Maybe (f (Abstract.StatementSequence l l f' f')))
                         | Exit
                         | Return (Maybe (f (Abstract.Expression l l f' f')))
@@ -410,7 +418,8 @@ deriving instance (Show (f (Abstract.Designator l l f' f')), Show (f (Abstract.E
 data WithAlternative λ l f' f = WithAlternative (Abstract.QualIdent l) (Abstract.QualIdent l)
                                                 (f (Abstract.StatementSequence l l f' f'))
 
-data Case λ l f' f = Case (NonEmpty (f (Abstract.CaseLabels l l f' f'))) (f (Abstract.StatementSequence l l f' f'))
+data Case λ l f' f = Case (f (Abstract.CaseLabels l l f' f')) (ZipList (f (Abstract.CaseLabels l l f' f')))
+                          (f (Abstract.StatementSequence l l f' f'))
 
 data CaseLabels λ l f' f = SingleLabel (f (Abstract.ConstExpression l l f' f'))
                          | LabelRange (f (Abstract.ConstExpression l l f' f')) (f (Abstract.ConstExpression l l f' f'))
@@ -454,61 +463,5 @@ $(mconcat <$> mapM Transformation.Deep.TH.deriveAll
    ''Statement, ''StatementSequence,
    ''Case, ''CaseLabels, ''ConditionalBranch, ''WithAlternative])
 
-instance (inh ~ AG.Inherited t, sem ~ AG.Semantics t,
-          AG.Atts inh (Abstract.Designator l l sem sem) ~ AG.Atts inh (Statement l l sem sem),
-          AG.Atts inh (Abstract.Expression l l sem sem) ~ AG.Atts inh (Statement l l sem sem),
-          AG.Atts inh (Abstract.StatementSequence l l sem sem) ~ AG.Atts inh (Statement l l sem sem),
-          AG.Atts inh (Abstract.ConditionalBranch l l sem sem) ~ AG.Atts inh (Statement l l sem sem),
-          AG.Atts inh (Abstract.Case l l sem sem) ~ AG.Atts inh (Statement l l sem sem),
-          AG.Atts inh (Abstract.WithAlternative l l sem sem) ~ AG.Atts inh (Statement l l sem sem)) =>
-         Shallow.Functor (AG.Inherited t (Statement l l sem sem)) (Statement l l sem) where
-   AG.Inherited i <$> EmptyStatement{} = EmptyStatement
-   AG.Inherited i <$> Assignment{}     = Assignment (AG.Inherited i) (AG.Inherited i)
-   AG.Inherited i <$> ProcedureCall{}  = ProcedureCall (AG.Inherited i) (Just [AG.Inherited i])
-   AG.Inherited i <$> If{}             = If (pure $ AG.Inherited i) (Just $ AG.Inherited i)
-   AG.Inherited i <$> CaseStatement{}  = CaseStatement (AG.Inherited i) (pure $ AG.Inherited i) (Just $ AG.Inherited i)
-   AG.Inherited i <$> While{}          = While (AG.Inherited i) (AG.Inherited i)
-   AG.Inherited i <$> Repeat{}         = Repeat (AG.Inherited i) (AG.Inherited i)
-   AG.Inherited i <$> (For name _ _ _ _)
-      = For name (AG.Inherited i) (AG.Inherited i) (pure $ AG.Inherited i) (AG.Inherited i)  -- Oberon2
-   AG.Inherited i <$> Loop{}           = Loop (AG.Inherited i)
-   AG.Inherited i <$> With{}           = With (pure $ AG.Inherited i) (Just $ AG.Inherited i)
-   AG.Inherited i <$> Exit{}           = Exit
-   AG.Inherited i <$> Return{}         = Return (Just $ AG.Inherited i)
-
-instance (inh ~ AG.Inherited t, sem ~ AG.Semantics t,
-          AG.Atts inh (Abstract.Designator l l sem sem) ~ AG.Atts inh (Expression l l sem sem),
-          AG.Atts inh (Abstract.Element l l sem sem) ~ AG.Atts inh (Expression l l sem sem),
-          AG.Atts inh (Abstract.Expression l l sem sem) ~ AG.Atts inh (Expression l l sem sem),
-          AG.Atts inh (Abstract.Value l l sem sem) ~ AG.Atts inh (Expression l l sem sem)) =>
-         Shallow.Functor (AG.Inherited t (Expression l l sem sem)) (Expression l l sem) where
-   AG.Inherited i <$> (Relation op _ _) = Relation op (AG.Inherited i) (AG.Inherited i)
-   AG.Inherited i <$> (IsA _ typeName)  = IsA (AG.Inherited i) typeName
-   AG.Inherited i <$> Positive{}        = Positive (AG.Inherited i)
-   AG.Inherited i <$> Negative{}        = Negative (AG.Inherited i)
-   AG.Inherited i <$> Add{}             = Add (AG.Inherited i) (AG.Inherited i)
-   AG.Inherited i <$> Subtract{}        = Subtract (AG.Inherited i) (AG.Inherited i)
-   AG.Inherited i <$> Or{}              = Or (AG.Inherited i) (AG.Inherited i)
-   AG.Inherited i <$> Multiply{}        = Multiply (AG.Inherited i) (AG.Inherited i)
-   AG.Inherited i <$> Divide{}          = Divide (AG.Inherited i) (AG.Inherited i)
-   AG.Inherited i <$> IntegerDivide{}   = IntegerDivide (AG.Inherited i) (AG.Inherited i)
-   AG.Inherited i <$> Modulo{}          = Modulo (AG.Inherited i) (AG.Inherited i)
-   AG.Inherited i <$> And{}             = And (AG.Inherited i) (AG.Inherited i)
-   AG.Inherited i <$> Set{}             = Set [AG.Inherited i]
-   AG.Inherited i <$> Read{}            = Read (AG.Inherited i)
-   AG.Inherited i <$> FunctionCall{}    = FunctionCall (AG.Inherited i) [AG.Inherited i]
-   AG.Inherited i <$> Not{}             = Not (AG.Inherited i)
-   AG.Inherited i <$> Literal{}         = Literal (AG.Inherited i)
-
 $(mconcat <$> mapM Transformation.Shallow.TH.deriveAll
-  [''CaseLabels, ''Element])
-
-instance (inh ~ AG.Inherited t, sem ~ AG.Semantics t,
-          AG.Atts inh (Abstract.Designator l l sem sem) ~ AG.Atts inh (Designator l l sem sem),
-          AG.Atts inh (Abstract.Expression l l sem sem) ~ AG.Atts inh (Designator l l sem sem)) =>
-         Shallow.Functor (AG.Inherited t (Designator l l sem sem)) (Designator l l sem) where
-   AG.Inherited i <$> (Variable q) = Variable q
-   AG.Inherited i <$> (Field record name) = Field (AG.Inherited i) name
-   AG.Inherited i <$> (Index array indices) = Index (AG.Inherited i) (pure $ AG.Inherited i)
-   AG.Inherited i <$> (TypeGuard expr typeName) = TypeGuard (AG.Inherited i) typeName
-   AG.Inherited i <$> (Dereference pointer) = Dereference (AG.Inherited i)
+  [''CaseLabels, ''Designator, ''Element, ''Expression, ''Statement])

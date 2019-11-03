@@ -5,6 +5,7 @@
 
 module Language.Oberon.Pretty (Precedence(Precedence)) where
 
+import Control.Applicative (ZipList(ZipList, getZipList))
 import Data.Char (toUpper)
 import Data.Functor.Identity (Identity(..))
 import Data.List (intersperse)
@@ -26,7 +27,7 @@ instance (Pretty (Abstract.Import l), Pretty (Abstract.Declaration l l Identity 
       ["MODULE" <+> pretty name <> semi,
        if null imports then mempty
        else "IMPORT" <+> align (fillSep (punctuate comma $ prettyImport <$> imports)) <> semi]
-      <> (pretty <$> declarations)
+      <> (pretty <$> getZipList declarations)
       <> [vsep (foldMap (\statements-> ["BEGIN" <#> indent 3 (pretty statements)]) body
                 <> ["END" <+> pretty name <> "." <> line])]
       where prettyImport (Nothing, mod) = pretty mod
@@ -80,10 +81,10 @@ instance  (Pretty (Precedence (Abstract.Expression l l Identity Identity)),
    pretty (Precedence p (IntegerDivide left right)) | p < 4 = prettyPrec' 4 left <+> "DIV" <+> prettyPrec' 4 right
    pretty (Precedence p (Modulo left right)) | p < 4 = prettyPrec' 4 left <+> "MOD" <+> prettyPrec' 4 right
    pretty (Precedence p (And left right)) | p < 4 = prettyPrec' 4 left <+> "&" <+> prettyPrec' 4 right
-   pretty (Precedence _ (Set elements)) = braces (hsep $ punctuate comma $ pretty . runIdentity <$> elements)
+   pretty (Precedence _ (Set elements)) = braces (hsep $ punctuate comma $ pretty . runIdentity <$> getZipList elements)
    pretty (Precedence _ (Read (Identity var))) = pretty var
    pretty (Precedence _ (FunctionCall (Identity fun) parameters)) =
-      pretty fun <> parens (hsep $ punctuate comma $ pretty . runIdentity <$> parameters)
+      pretty fun <> parens (hsep $ punctuate comma $ pretty . runIdentity <$> getZipList parameters)
    pretty (Precedence _ (Literal (Identity val))) = pretty val
    pretty (Precedence p (Not e)) | p < 5 = "~" <> prettyPrec' 5 e
    pretty (Precedence _ e) = parens (pretty e)
@@ -120,7 +121,8 @@ instance (Pretty (Abstract.QualIdent l), Pretty (Abstract.Designator l l Identit
           Pretty (Abstract.Expression l l Identity Identity)) => Pretty (Designator λ l Identity Identity) where
    pretty (Variable q) = pretty q
    pretty (Field record name) = pretty record <> dot <> pretty name
-   pretty (Index array indexes) = pretty array <> brackets (hsep $ punctuate comma $ pretty <$> toList indexes)
+   pretty (Index array index indexes) = pretty array <> brackets (hsep $ punctuate comma
+                                                                  $ pretty <$> index : getZipList indexes)
    pretty (TypeGuard scrutinee typeName) = pretty scrutinee <> parens (pretty typeName)
    pretty (Dereference pointer) = pretty pointer <> "^"
 
@@ -129,9 +131,9 @@ instance (Pretty (Abstract.FormalParameters l l Identity Identity), Pretty (Abst
           Pretty (Abstract.BaseType l)) => Pretty (Type λ l Identity Identity) where
    pretty (TypeReference q) = pretty q
    pretty (ArrayType dimensions itemType) =
-      "ARRAY" <+> hsep (punctuate comma $ pretty . runIdentity <$> dimensions) <+> "OF" <+> pretty itemType
+      "ARRAY" <+> hsep (punctuate comma $ pretty . runIdentity <$> getZipList dimensions) <+> "OF" <+> pretty itemType
    pretty (RecordType baseType fields) = vsep ["RECORD" <+> foldMap (parens . pretty) baseType,
-                                               indent 3 (vsep $ punctuate semi $ pretty <$> fields),
+                                               indent 3 (vsep $ punctuate semi $ pretty <$> getZipList fields),
                                                "END"]
    pretty (PointerType pointed) = "POINTER" <+> "TO" <+> pretty pointed
    pretty (ProcedureType parameters) = "PROCEDURE" <+> pretty parameters
@@ -157,7 +159,7 @@ instance (Pretty (Abstract.IdentDef l), Pretty (Abstract.FormalParameters l l Id
 instance (Pretty (Abstract.FPSection l l Identity Identity),
           Pretty (Abstract.ReturnType l)) => Pretty (FormalParameters λ l Identity Identity) where
    pretty (FormalParameters sections result) =
-      lparen <> hsep (punctuate semi $ pretty <$> sections) <> rparen <> foldMap (colon <+>) (pretty <$> result)
+      lparen <> hsep (punctuate semi $ pretty <$> getZipList sections) <> rparen <> foldMap (colon <+>) (pretty <$> result)
 
 instance Pretty (Abstract.Type l l Identity Identity) => Pretty (FPSection λ l Identity Identity) where
    pretty (FPSection var names t) =
@@ -166,11 +168,11 @@ instance Pretty (Abstract.Type l l Identity Identity) => Pretty (FPSection λ l 
 instance (Pretty (Abstract.Declaration l l Identity Identity), Pretty (Abstract.StatementSequence l l Identity Identity)) =>
          Pretty (Block λ l Identity Identity) where
    pretty (Block declarations body) =
-      vsep ((indent 3 . pretty <$> declarations)
+      vsep ((indent 3 . pretty <$> getZipList declarations)
             ++ foldMap (\statements-> ["BEGIN", prettyBlock statements]) body)
 
 instance Pretty (Abstract.Statement l l Identity Identity) => Pretty (StatementSequence λ l Identity Identity) where
-   pretty (StatementSequence statements) = pretty (runIdentity <$> statements)
+   pretty (StatementSequence statements) = pretty (runIdentity <$> getZipList statements)
 
 instance (Pretty (Abstract.ConstExpression l l Identity Identity),
           Pretty (Abstract.Designator l l Identity Identity),
@@ -185,13 +187,14 @@ instance (Pretty (Abstract.ConstExpression l l Identity Identity),
    pretty EmptyStatement = mempty
    pretty (Assignment (Identity destination) expression) = pretty destination <+> ":=" <+> pretty expression
    pretty (ProcedureCall (Identity procedure) parameters) =
-      pretty procedure <> foldMap (parens . hsep . punctuate comma . (pretty <$>)) parameters
-   pretty (If (ifThen :| elsifs) fallback) = vsep ("IF" <+> pretty ifThen
-                                                   : ((("ELSIF" <+>) . pretty) <$> elsifs)
-                                                    ++ foldMap (\x-> ["ELSE", prettyBlock x]) fallback
-                                                    ++ ["END"])
+      pretty procedure <> foldMap (parens . hsep . punctuate comma . (pretty <$>)) (getZipList <$> parameters)
+   pretty (If ifThen (ZipList elsifs) fallback) = vsep ("IF" <+> pretty ifThen
+                                                        : ((("ELSIF" <+>) . pretty) <$> elsifs)
+                                                        ++ foldMap (\x-> ["ELSE", prettyBlock x]) fallback
+                                                        ++ ["END"])
    pretty (CaseStatement scrutinee cases fallback) = vsep ["CASE" <+> pretty scrutinee <+> "OF",
-                                                           align (encloseSep mempty mempty "| " $ pretty <$> cases),
+                                                           align (encloseSep mempty mempty "| "
+                                                                  $ pretty <$> getZipList cases),
                                                            foldMap ("ELSE" <#>) (prettyBlock <$> fallback),
                                                            "END"]
    pretty (While condition body) = vsep ["WHILE" <+> pretty condition <+> "DO",
@@ -207,9 +210,9 @@ instance (Pretty (Abstract.ConstExpression l l Identity Identity),
    pretty (Loop body) = vsep ["LOOP",
                               prettyBlock body,
                               "END"]
-   pretty (With alternatives fallback) =
+   pretty (With alternative (ZipList alternatives) fallback) =
       "WITH" <+>
-      vsep (punctuate pipe (pretty <$> toList alternatives) ++ 
+      vsep (punctuate pipe (pretty <$> alternative : alternatives) ++ 
             foldMap (\x-> ["ELSE", prettyBlock x]) fallback ++
             ["END"])
    pretty Exit = "EXIT"
@@ -224,7 +227,7 @@ instance (Pretty (Abstract.Expression l l Identity Identity),
 instance (Pretty (Abstract.CaseLabels l l Identity Identity),
           Pretty (Abstract.ConstExpression l l Identity Identity),
           Pretty (Abstract.StatementSequence l l Identity Identity)) => Pretty (Case λ l Identity Identity) where
-   pretty (Case labels body) = vsep [hsep (punctuate comma (pretty <$> toList labels)) <+> colon,
+   pretty (Case label labels body) = vsep [hsep (punctuate comma (pretty <$> label : getZipList labels)) <+> colon,
                                      prettyBlock body]
    
 instance (Pretty (Abstract.QualIdent l), Pretty (Abstract.StatementSequence l l Identity Identity)) =>

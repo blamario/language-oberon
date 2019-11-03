@@ -1,9 +1,9 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
-             TemplateHaskell, TypeFamilies, UndecidableInstances #-}
+             ScopedTypeVariables, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
 module Language.Oberon.TypeChecker (Error, errorMessage, checkModules, predefined, predefined2) where
 
-import Control.Applicative (liftA2, (<|>))
+import Control.Applicative (liftA2, (<|>), ZipList(ZipList, getZipList))
 import Control.Arrow (first)
 import Data.Coerce (coerce)
 import qualified Data.List as List
@@ -16,6 +16,7 @@ import Language.Haskell.TH (appT, conT, varT, newName)
 
 import qualified Rank2
 import qualified Transformation
+import qualified Transformation.Shallow as Shallow
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 import qualified Transformation.Full.TH
@@ -256,7 +257,7 @@ instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Sh
       (Synthesized SynTCMod{moduleErrors= foldMap (moduleErrors . syn) decls' <> foldMap (errors . syn) body',
                             moduleEnv= exportedEnv,
                             pointerTargets= pointers},
-       AST.Module moduleName imports [Inherited (localEnv, pointers)] (Inherited localEnv <$ body))
+       AST.Module moduleName imports (pure $ Inherited (localEnv, pointers)) (Inherited localEnv <$ body))
       where exportedEnv = exportNominal <$> Map.mapKeysMonotonic export newEnv
             newEnv = Map.unionsWith mergeTypeBoundProcedures (moduleEnv . syn <$> decls')
             localEnv = InhTC (newEnv `Map.union` env inheritance) (currentModule inheritance)
@@ -453,8 +454,9 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
                                          <> foldMap (expectInteger . syn) dimensions',
                              typeName= Nothing,
                              pointerTarget= Nothing,
-                             definedType= ArrayType (integerValue . syn <$> dimensions') (definedType $ syn itemType)},
-       AST.ArrayType [Inherited inheritance] (Inherited inheritance))
+                             definedType= ArrayType (integerValue . syn <$> getZipList dimensions')
+                                                    (definedType $ syn itemType)},
+       AST.ArrayType (ZipList [Inherited inheritance]) (Inherited inheritance))
      where expectInteger SynTCExp{inferredType= IntegerType{}} = []
            expectInteger SynTCExp{inferredType= t} = [(currentModule inheritance, pos, NonIntegerType t)]
            integerValue SynTCExp{inferredType= IntegerType n} = n
@@ -521,8 +523,10 @@ instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
          Attribution TypeCheck (AST.Statement l l) ((,) Int) where
    bequest TypeCheck (_pos, AST.EmptyStatement) i _   = AST.EmptyStatement
    bequest TypeCheck (_pos, AST.Assignment{}) i _     = AST.Assignment (AG.Inherited i) (AG.Inherited i)
-   bequest TypeCheck (_pos, AST.ProcedureCall{}) i _  = AST.ProcedureCall (AG.Inherited i) (Just [AG.Inherited i])
-   bequest TypeCheck (_pos, AST.If{}) i _             = AST.If (pure $ AG.Inherited i) (Just $ AG.Inherited i)
+   bequest TypeCheck (_pos, AST.ProcedureCall{}) i _  =
+      AST.ProcedureCall (AG.Inherited i) (Just $ ZipList [AG.Inherited i])
+   bequest TypeCheck (_pos, AST.If{}) i _             =
+      AST.If (AG.Inherited i) (pure $ AG.Inherited i) (Just $ AG.Inherited i)
    bequest TypeCheck (_pos, AST.CaseStatement{}) i (AST.CaseStatement value _branches _fallback) =
       AST.CaseStatement (Inherited i) (pure $ Inherited (i, inferredType $ syn value)) (Just $ Inherited i)
    bequest TypeCheck (_pos, AST.While{}) i _          = AST.While (AG.Inherited i) (AG.Inherited i)
@@ -530,7 +534,8 @@ instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
    bequest TypeCheck (_pos, AST.For name _ _ _ _) i _ =
       AST.For name (AG.Inherited i) (AG.Inherited i) (pure $ AG.Inherited i) (AG.Inherited i)  -- Oberon2
    bequest TypeCheck (_pos, AST.Loop{}) i _           = AST.Loop (AG.Inherited i)
-   bequest TypeCheck (_pos, AST.With{}) i _           = AST.With (pure $ AG.Inherited i) (Just $ AG.Inherited i)
+   bequest TypeCheck (_pos, AST.With{}) i _           =
+      AST.With (AG.Inherited i) (pure $ AG.Inherited i) (Just $ AG.Inherited i)
    bequest TypeCheck (_pos, AST.Exit{}) i _           = AST.Exit
    bequest TypeCheck (_pos, AST.Return{}) i _         = AST.Return (Just $ AG.Inherited i)
    synthesis TypeCheck _ _ AST.EmptyStatement = SynTC{errors= []}
@@ -544,19 +549,20 @@ instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
                         SynTCDes{designatorErrors= errs} -> errs)
                     <> foldMap (foldMap (expressionErrors . syn)) parameters'}
      where procedureErrors (ProcedureType _ formalTypes Nothing)
-             | length formalTypes /= maybe 0 length parameters,
-               not (length formalTypes == 2 && (length <$> parameters) == Just 1
+             | length formalTypes /= maybe 0 (length . getZipList) parameters,
+               not (length formalTypes == 2 && (length . getZipList <$> parameters) == Just 1
                     && designatorName (syn procedure') == Just (Nothing, "ASSERT")
-                    || length formalTypes == 1 && (length <$> parameters) == Just 2
+                    || length formalTypes == 1 && (length . getZipList <$> parameters) == Just 2
                     && designatorName (syn procedure') == Just (Nothing, "NEW")
-                    && all (all (isIntegerType . inferredType . syn) . tail) parameters') =
-                 [(currentModule inheritance, pos, ArgumentCountMismatch (length formalTypes) $ maybe 0 length parameters)]
+                    && all (all (isIntegerType . inferredType . syn) . tail . getZipList) parameters') =
+                 [(currentModule inheritance, pos, ArgumentCountMismatch (length formalTypes)
+                   $ maybe 0 (length . getZipList) parameters)]
              | otherwise = concat (zipWith (parameterCompatible inheritance pos) formalTypes
-                                   $ maybe [] (inferredType . syn <$>) parameters')
+                                   $ maybe [] ((inferredType . syn <$>) . getZipList) parameters')
            procedureErrors (NominalType _ (Just t)) = procedureErrors t
            procedureErrors t = [(currentModule inheritance, pos, NonProcedureType t)]
-   synthesis TypeCheck self _ (AST.If branches fallback) =
-      SynTC{errors= foldMap (errors . syn) branches <> foldMap (errors . syn) fallback}
+   synthesis TypeCheck self _ (AST.If branch branches fallback) =
+      SynTC{errors= errors (syn branch) <> foldMap (errors . syn) branches <> foldMap (errors . syn) fallback}
    synthesis TypeCheck self _ (AST.CaseStatement value branches fallback) =
       SynTC{errors= expressionErrors (syn value) <> foldMap (errors . syn) branches
                     <> foldMap (errors . syn) fallback}
@@ -569,8 +575,8 @@ instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
                     <> integerExpressionErrors inheritance pos (syn end)
                     <> foldMap (integerExpressionErrors inheritance pos . syn) step <> errors (syn body)}
    synthesis TypeCheck self _ (AST.Loop body) = SynTC{errors= errors (syn body)}
-   synthesis TypeCheck self _ (AST.With branches fallback) =
-      SynTC{errors= foldMap (errors . syn) branches <> foldMap (errors . syn) fallback}
+   synthesis TypeCheck self _ (AST.With branch branches fallback) =
+      SynTC{errors= errors (syn branch) <> foldMap (errors . syn) branches <> foldMap (errors . syn) fallback}
    synthesis TypeCheck self _ AST.Exit = SynTC{errors= []}
    synthesis TypeCheck self _ (AST.Return value) = SynTC{errors= foldMap (expressionErrors . syn) value}
 
@@ -606,18 +612,16 @@ instance (Atts (Inherited TypeCheck) (Abstract.CaseLabels l l Sem Sem) ~ (InhTC 
           Atts (Synthesized TypeCheck) (Abstract.CaseLabels l l Sem Sem) ~ SynTC l,
           Atts (Synthesized TypeCheck) (Abstract.StatementSequence l l Sem Sem) ~ SynTC l) =>
          Attribution TypeCheck (AST.Case l l) ((,) Int) where
-   attribution TypeCheck self (Inherited inheritance, AST.Case labels body) =
-      (Synthesized SynTC{errors= foldMap (errors . syn) labels <> errors (syn body)},
-       AST.Case (pure $ Inherited inheritance) (Inherited $ fst inheritance))
+   attribution TypeCheck self (Inherited inheritance, AST.Case label labels body) =
+      (Synthesized SynTC{errors= errors (syn label) <> foldMap (errors . syn) labels <> errors (syn body)},
+       AST.Case (Inherited inheritance) (pure $ Inherited inheritance) (Inherited $ fst inheritance))
 
-instance (Abstract.Nameable l, Eq (Abstract.QualIdent l),
-          Atts (Inherited TypeCheck) (Abstract.ConstExpression l l Sem Sem) ~ InhTC l,
-          Atts (Synthesized TypeCheck) (Abstract.ConstExpression l l Sem Sem) ~ SynTCExp l) =>
+instance forall l. (Abstract.Nameable l, Eq (Abstract.QualIdent l),
+                    Atts (Inherited TypeCheck) (Abstract.ConstExpression l l Sem Sem) ~ InhTC l,
+                    Atts (Synthesized TypeCheck) (Abstract.ConstExpression l l Sem Sem) ~ SynTCExp l) =>
          Attribution TypeCheck (AST.CaseLabels l l) ((,) Int) where
---   bequest TypeCheck (pos, c) (inheritance, caseType) _ = Inherited inheritance Shallow.<$> c
-   bequest TypeCheck (pos, AST.SingleLabel{}) (inheritance, _) _ = AST.SingleLabel (Inherited inheritance)
-   bequest TypeCheck (pos, AST.LabelRange{}) (inheritance, _) _ =
-      AST.LabelRange (Inherited inheritance) (Inherited inheritance)
+   bequest TypeCheck (_, c) (inheritance, _) _ =
+      (Inherited inheritance :: Inherited TypeCheck (Abstract.ConstExpression l l Sem Sem)) Shallow.<$> c
    synthesis TypeCheck (pos, _) inheritance (AST.SingleLabel value) =
       SynTC{errors= assignmentCompatible (fst inheritance) pos (snd inheritance) (inferredType $ syn value)}
    synthesis TypeCheck (pos, _) (inheritance, caseType) (AST.LabelRange start end) =
@@ -722,8 +726,8 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
    synthesis TypeCheck _self _ (AST.Literal value) =
       SynTCExp{expressionErrors= expressionErrors (syn value),
                inferredType= inferredType (syn value)}
-   synthesis TypeCheck (pos, AST.FunctionCall _designator parameters) inheritance
-             (AST.FunctionCall designator parameters') =
+   synthesis TypeCheck (pos, AST.FunctionCall _designator (ZipList parameters)) inheritance
+             (AST.FunctionCall designator (ZipList parameters')) =
       SynTCExp{expressionErrors=
                    case {-# SCC "FunctionCall" #-} syn designator
                    of SynTCDes{designatorErrors= [],
@@ -780,7 +784,7 @@ instance (Abstract.Wirthy l, Abstract.Nameable l,
                                  <> integerExpressionErrors inheritance pos (syn high),
                inferredType= NominalType (Abstract.nonQualIdent "SET") Nothing}
 
-instance (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
+instance (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
           Atts (Inherited TypeCheck) (Abstract.Expression l l Sem Sem) ~ InhTC l,
           Atts (Inherited TypeCheck) (Abstract.Designator l l Sem Sem) ~ InhTC l,
           Atts (Synthesized TypeCheck) (Abstract.Expression l l Sem Sem) ~ SynTCExp l,
@@ -813,7 +817,7 @@ instance (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
            access _ _ = Nothing
            receive (ProcedureType _ params result) = ProcedureType True params result
            receive t = t
-   synthesis TypeCheck (pos, AST.Index _array indexes) inheritance (AST.Index array _indexes) =
+   synthesis TypeCheck (pos, AST.Index _array index indexes) inheritance (AST.Index array _index _indexes) =
       SynTCDes{designatorErrors= case syn array
                                  of SynTCDes{designatorErrors= [],
                                              designatorType= t} ->
@@ -821,9 +825,10 @@ instance (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
                                     SynTCDes{designatorErrors= errors} -> errors,
                designatorType= either (const UnknownType) id (access True $ designatorType $ syn array)}
       where access _ (ArrayType dimensions t)
-              | length dimensions == length indexes = Right t
-              | length dimensions == 0 && length indexes == 1 = Right t
-              | otherwise = Left [(currentModule inheritance, pos, ExtraDimensionalIndex (length dimensions) (length indexes))]
+              | length dimensions == length indexes + 1 = Right t
+              | length dimensions == 0 && length indexes == 0 = Right t
+              | otherwise = Left [(currentModule inheritance, pos,
+                                   ExtraDimensionalIndex (length dimensions) (1 + length indexes))]
             access allowPtr (NominalType _ (Just t)) = access allowPtr t
             access allowPtr (ReceiverType t) = access allowPtr t
             access True (PointerType t) = access False t

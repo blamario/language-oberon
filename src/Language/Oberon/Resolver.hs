@@ -9,6 +9,7 @@
 module Language.Oberon.Resolver (Error(..),
                                  Predefined, predefined, predefined2, resolveModule, resolveModules) where
 
+import Control.Applicative (ZipList(ZipList, getZipList))
 import Control.Monad.Trans.State (StateT(..), evalStateT, execStateT, get, put)
 import Data.Either (partitionEithers)
 import Data.Either.Validation (Validation(..), validationToEither)
@@ -145,7 +146,7 @@ instance {-# overlaps #-}
                      -> pure (e, ExpressionOrTypeState)
                    | Success{} <- evalStateT (traverse (Transformation.traverse res) parameters) (scope, ExpressionState)
                      -> pure (e, ExpressionState)
-                   | otherwise -> Failure (pure $ InvalidFunctionParameters parameters)
+                   | otherwise -> Failure (pure $ InvalidFunctionParameters $ getZipList parameters)
           resolveExpression e@(IsA _lefts q) =
             case resolveName res scope q
             of Failure err ->  Failure err
@@ -183,9 +184,9 @@ class CoFormalParameters l where
    getLocalDeclarations :: Abstract.Block l l f' f -> [f (Abstract.Declaration l l f' f')]
 
 instance CoFormalParameters Language where
-   getFPSections (FormalParameters sections _) = sections
+   getFPSections (FormalParameters sections _) = getZipList sections
    evalFPSection (FPSection var names types) f = f var names types
-   getLocalDeclarations (Block declarations _statements) = declarations
+   getLocalDeclarations (Block declarations _statements) = getZipList declarations
 
 instance {-# overlaps #-}
    (Abstract.Wirthy l, CoFormalParameters l,
@@ -229,7 +230,7 @@ instance {-# overlaps #-}
     Deep.Traversable (Resolution l) (Abstract.FormalParameters l l),
     Deep.Traversable (Resolution l) (Abstract.ConstExpression l l)) =>
    Transformation.Traversable (Resolution l) (Block l l NodeWrap NodeWrap) where
-   traverse res (Compose (pos, Ambiguous (body@(Block declarations _statements) :| []))) =
+   traverse res (Compose (pos, Ambiguous (body@(Block (ZipList declarations) _statements) :| []))) =
      StateT $ \(scope, state)-> Success ((pos, body), (localScope res "" declarations scope, state))
    traverse _ _ = StateT (const $ Failure $ pure AmbiguousParses)
 
@@ -343,7 +344,7 @@ resolveModule :: forall l. (BindableDeclaration l,
                             Deep.Traversable (Resolution l) (Abstract.ConstExpression l l)) =>
                  Scope l -> Map Ident (Validation (NonEmpty (Error l)) (Module l l Placed Placed))
               -> Module l l NodeWrap NodeWrap -> Validation (NonEmpty (Error l)) (Module l l Placed Placed)
-resolveModule predefined modules m@(Module moduleName imports declarations body) =
+resolveModule predefined modules m@(Module moduleName imports (ZipList declarations) body) =
    evalStateT (Deep.traverse res m) (moduleGlobalScope, ModuleState)
    where res = Resolution moduleExports
          importedModules = Map.delete mempty (Map.mapKeysWith clashingRenames importedAs modules)
