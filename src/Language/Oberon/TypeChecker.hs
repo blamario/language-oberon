@@ -523,10 +523,10 @@ instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
          Attribution TypeCheck (AST.Statement l l) ((,) Int) where
    bequest TypeCheck (_pos, AST.EmptyStatement) i _   = AST.EmptyStatement
    bequest TypeCheck (_pos, AST.Assignment{}) i _     = AST.Assignment (AG.Inherited i) (AG.Inherited i)
-   bequest TypeCheck (_pos, AST.ProcedureCall{}) i _  =
-      AST.ProcedureCall (AG.Inherited i) (Just $ ZipList [AG.Inherited i])
-   bequest TypeCheck (_pos, AST.If{}) i _             =
-      AST.If (AG.Inherited i) (pure $ AG.Inherited i) (Just $ AG.Inherited i)
+   bequest TypeCheck (_pos, AST.ProcedureCall proc args) i _  =
+      AST.ProcedureCall (AG.Inherited i) ((AG.Inherited i <$) <$> args)
+   bequest TypeCheck (_pos, AST.If _branch branches _fallback) i _ =
+      AST.If (AG.Inherited i) (AG.Inherited i <$ branches) (Just $ AG.Inherited i)
    bequest TypeCheck (_pos, AST.CaseStatement{}) i (AST.CaseStatement value _branches _fallback) =
       AST.CaseStatement (Inherited i) (pure $ Inherited (i, inferredType $ syn value)) (Just $ Inherited i)
    bequest TypeCheck (_pos, AST.While{}) i _          = AST.While (AG.Inherited i) (AG.Inherited i)

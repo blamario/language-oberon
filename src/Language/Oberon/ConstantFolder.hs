@@ -191,36 +191,28 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Synthesized ConstantFold) (Abstract.Block l l Sem Sem) ~ SynCF' (Abstract.Block l l),
           Atts (Synthesized ConstantFold) (Abstract.ConstExpression l l Sem Sem) ~ SynCFExp l) =>
          Attribution ConstantFold (AST.Declaration l l) ((,) Int) where
-   attribution ConstantFold (pos, AST.ConstantDeclaration namedef _)
-               (Inherited inheritance, AST.ConstantDeclaration _ expression) =
-      (Synthesized $
-       SynCFMod{moduleEnv= Map.singleton (Abstract.nonQualIdent name) val,
-                moduleFolded = (pos,
-                                AST.ConstantDeclaration namedef $
-                                maybe (foldedExp $ syn expression) ((,) pos . Abstract.literal . (,) pos) val)},
-       AST.ConstantDeclaration namedef (Inherited inheritance))
+   bequest ConstantFold (pos, d) inheritance _ = AG.passDown (Inherited inheritance) d
+   synthesis ConstantFold (pos, AST.ConstantDeclaration namedef _) _ (AST.ConstantDeclaration _ expression) =
+      SynCFMod{moduleEnv= Map.singleton (Abstract.nonQualIdent name) val,
+               moduleFolded = (pos,
+                               AST.ConstantDeclaration namedef $
+                               maybe (foldedExp $ syn expression) ((,) pos . Abstract.literal . (,) pos) val)}
       where name = Abstract.getIdentDefName namedef
             val = foldedValue (syn expression)
-   attribution ConstantFold (pos, AST.TypeDeclaration namedef _)
-               (Inherited inheritance, AST.TypeDeclaration _ definition) =
-      (Synthesized SynCFMod{moduleEnv= mempty,
-                            moduleFolded = (pos, AST.TypeDeclaration namedef (folded $ syn definition))},
-       AST.TypeDeclaration namedef (Inherited inheritance))
-   attribution ConstantFold (pos, AST.VariableDeclaration names _declaredType)
-               (Inherited inheritance, AST.VariableDeclaration _names declaredType) =
-      (Synthesized SynCFMod{moduleEnv= mempty,
-                            moduleFolded= (pos, AST.VariableDeclaration names (folded $ syn declaredType))},
-       AST.VariableDeclaration names (Inherited inheritance))
-   attribution ConstantFold (pos, AST.ProcedureDeclaration _heading _body)
-               (Inherited inheritance, AST.ProcedureDeclaration heading body) =
-      (Synthesized SynCFMod{moduleEnv= mempty,
-                            moduleFolded= (pos, AST.ProcedureDeclaration (folded $ syn heading) (folded $ syn body))},
-       AST.ProcedureDeclaration (Inherited inheritance) (Inherited inheritance))
-   attribution ConstantFold (pos, AST.ForwardDeclaration namedef _signature)
-               (Inherited inheritance, AST.ForwardDeclaration _namedef signature) =
-      (Synthesized SynCFMod{moduleEnv= mempty,
-                            moduleFolded= (pos, AST.ForwardDeclaration namedef (folded . syn <$> signature))},
-       AST.ForwardDeclaration namedef (Just (Inherited inheritance)))
+   synthesis ConstantFold (pos, AST.TypeDeclaration namedef _) _ (AST.TypeDeclaration _ definition) =
+      SynCFMod{moduleEnv= mempty,
+               moduleFolded = (pos, AST.TypeDeclaration namedef (folded $ syn definition))}
+   synthesis ConstantFold (pos, AST.VariableDeclaration names _declaredType) _
+             (AST.VariableDeclaration _names declaredType) =
+      SynCFMod{moduleEnv= mempty,
+               moduleFolded= (pos, AST.VariableDeclaration names (folded $ syn declaredType))}
+   synthesis ConstantFold (pos, _) _ (AST.ProcedureDeclaration heading body) =
+      SynCFMod{moduleEnv= mempty,
+               moduleFolded= (pos, AST.ProcedureDeclaration (folded $ syn heading) (folded $ syn body))}
+   synthesis ConstantFold (pos, AST.ForwardDeclaration namedef _signature) _
+             (AST.ForwardDeclaration _namedef signature) =
+      SynCFMod{moduleEnv= mempty,
+               moduleFolded= (pos, AST.ForwardDeclaration namedef (folded . syn <$> signature))}
 
 instance (Abstract.CoWirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Abstract.Expression l ~ AST.Expression l, Abstract.Value l ~ AST.Value l,

@@ -464,4 +464,8 @@ $(mconcat <$> mapM Transformation.Deep.TH.deriveAll
    ''Case, ''CaseLabels, ''ConditionalBranch, ''WithAlternative])
 
 $(mconcat <$> mapM Transformation.Shallow.TH.deriveAll
-  [''CaseLabels, ''Designator, ''Element, ''Expression, ''Statement])
+  [''Module, ''Declaration, ''Type, ''Expression, ''Value,
+   ''Element, ''Designator, ''FieldList,
+   ''ProcedureHeading, ''FormalParameters, ''FPSection, ''Block,
+   ''Statement, ''StatementSequence,
+   ''Case, ''CaseLabels, ''ConditionalBranch, ''WithAlternative])
