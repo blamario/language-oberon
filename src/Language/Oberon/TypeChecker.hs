@@ -185,10 +185,10 @@ data SynTCExp l = SynTCExp{expressionErrors :: [Error l],
 
 -- * Modules instances, TH candidates
 instance (Transformation.Transformation t, Functor (Transformation.Domain t), Deep.Functor t (AST.Module l l),
-          Transformation.Functor t (AST.Module l l (Transformation.Codomain t) (Transformation.Codomain t))) =>
+          Transformation.At t (AST.Module l l (Transformation.Codomain t) (Transformation.Codomain t))) =>
          Deep.Functor t (Modules l) where
    t <$> ~(Modules ms) = Modules (mapModule <$> ms)
-      where mapModule m = t Transformation.<$> ((t Deep.<$>) <$> m)
+      where mapModule m = Transformation.apply t ((t Deep.<$>) <$> m)
 
 instance Rank2.Functor (Modules l f') where
    f <$> ~(Modules ms) = Modules (f <$> ms)
@@ -1029,9 +1029,8 @@ instance Transformation.Transformation TypeCheck where
    type Domain TypeCheck = Placed
    type Codomain TypeCheck = Semantics TypeCheck
 
--- * More boring Transformation.Functor instances, TH candidates
-instance Ord (Abstract.QualIdent l) => Transformation.Functor TypeCheck (Modules l Sem Sem) where
-   (<$>) = AG.mapDefault snd
+instance Ord (Abstract.QualIdent l) => Transformation.At TypeCheck (Modules l Sem Sem) where
+   apply = AG.applyDefault snd
 
 -- * Unsafe Rank2 AST instances
 
@@ -1051,7 +1050,7 @@ checkModules :: (Abstract.Oberon l, Abstract.Nameable l,
                  Full.Functor TypeCheck (Abstract.StatementSequence l l))
              => Environment l -> Map AST.Ident (AST.Module l l Placed Placed) -> [Error l]
 checkModules predef modules =
-   errors (syn (TypeCheck Transformation.<$> (0, TypeCheck Deep.<$> Modules modules')
+   errors (syn (Transformation.apply TypeCheck (0, TypeCheck Deep.<$> Modules modules')
                 `Rank2.apply`
                 Inherited (InhTCRoot predef)))
    where modules' = ((,) 0) <$> modules
@@ -1120,8 +1119,8 @@ $(do l <- varT <$> newName "l"
 
 $(do let sem = [t|Semantics TypeCheck|]
      let inst g = [d| instance Attribution TypeCheck ($g l l) ((,) Int) =>
-                               Transformation.Functor TypeCheck ($g l l $sem $sem)
-                         where (<$>) = AG.mapDefault snd |]
+                               Transformation.At TypeCheck ($g l l $sem $sem)
+                         where apply = AG.applyDefault snd |]
      mconcat <$> mapM (inst . conT)
         [''AST.Module, ''AST.Declaration, ''AST.Type, ''AST.FieldList,
          ''AST.ProcedureHeading, ''AST.FormalParameters, ''AST.FPSection,
