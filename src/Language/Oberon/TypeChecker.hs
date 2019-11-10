@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
-             ScopedTypeVariables, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
+             ScopedTypeVariables, TemplateHaskell, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 module Language.Oberon.TypeChecker (Error, errorMessage, checkModules, predefined, predefined2) where
 
@@ -7,6 +7,7 @@ import Control.Applicative (liftA2, (<|>), ZipList(ZipList, getZipList))
 import Control.Arrow (first)
 import Data.Coerce (coerce)
 import qualified Data.List as List
+import Data.Functor.Const (Const(..))
 import Data.Maybe (fromMaybe)
 import Data.Map.Lazy (Map)
 import qualified Data.Map.Lazy as Map
@@ -140,6 +141,12 @@ newtype Modules l f' f = Modules (Map AST.Ident (f (AST.Module l l f' f')))
 
 data TypeCheck = TypeCheck
 
+data TypeCheckErrors l = TypeCheckErrors
+
+instance Transformation.Transformation (TypeCheckErrors l) where
+   type Domain (TypeCheckErrors l) = Synthesized TypeCheck
+   type Codomain (TypeCheckErrors l) = Const [Error l]
+
 type Sem = Semantics TypeCheck
 
 data InhTCRoot l = InhTCRoot{rootEnv :: Environment l}
@@ -189,6 +196,21 @@ instance (Transformation.Transformation t, Functor (Transformation.Domain t), De
          Deep.Functor t (Modules l) where
    t <$> ~(Modules ms) = Modules (mapModule <$> ms)
       where mapModule m = Transformation.apply t ((t Deep.<$>) <$> m)
+
+instance Transformation.At (TypeCheckErrors l) (AST.StatementSequence l l Sem Sem) where
+   apply _ s = Const (errors $ syn s)
+instance Transformation.At (TypeCheckErrors l) (AST.Statement l l Sem Sem) where
+   apply _ s = Const (errors $ syn s)
+instance Transformation.At (TypeCheckErrors l) (AST.ConditionalBranch l l Sem Sem) where
+   apply _ s = Const (errors $ syn s)
+instance Transformation.At (TypeCheckErrors l) (AST.Case l l Sem Sem) where
+   apply _ s = Const (errors $ syn s)
+instance Transformation.At (TypeCheckErrors l) (AST.WithAlternative l l Sem Sem) where
+   apply _ s = Const (errors $ syn s)
+instance Transformation.At (TypeCheckErrors l) (AST.Designator l l Sem Sem) where
+   apply _ s = Const (designatorErrors $ syn s)
+instance Transformation.At (TypeCheckErrors l) (AST.Expression l l Sem Sem) where
+   apply _ s = Const (expressionErrors $ syn s)
 
 instance Rank2.Functor (Modules l f') where
    f <$> ~(Modules ms) = Modules (f <$> ms)
@@ -501,11 +523,10 @@ instance (Abstract.Nameable l,
        AST.FieldList names (Inherited inheritance))
 
 instance (Atts (Inherited TypeCheck) (Abstract.Statement l l Sem Sem) ~ InhTC l,
-          Atts (Synthesized TypeCheck) (Abstract.Statement l l Sem Sem) ~ SynTC l) =>
+          TypeCheckErrors l `Transformation.At` Abstract.Statement l l Sem Sem) =>
          Attribution TypeCheck (AST.StatementSequence l l) ((,) Int) where
-   attribution TypeCheck (pos, AST.StatementSequence statements) (Inherited inheritance, AST.StatementSequence statements') =
-      (Synthesized SynTC{errors= foldMap (errors . syn) statements'},
-       AST.StatementSequence (pure $ Inherited inheritance))
+   bequest TypeCheck (_pos, statements) inheritance _ = AG.passDown (Inherited inheritance) statements
+   synthesis TypeCheck _ _ statements = SynTC{errors= Shallow.foldMap TypeCheckErrors statements}
 
 instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Inherited TypeCheck) (Abstract.StatementSequence l l Sem Sem) ~ InhTC l,
@@ -515,11 +536,14 @@ instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Inherited TypeCheck) (Abstract.Expression l l Sem Sem) ~ InhTC l,
           Atts (Inherited TypeCheck) (Abstract.Designator l l Sem Sem) ~ InhTC l,
           Atts (Synthesized TypeCheck) (Abstract.StatementSequence l l Sem Sem) ~ SynTC l,
-          Atts (Synthesized TypeCheck) (Abstract.ConditionalBranch l l Sem Sem) ~ SynTC l,
-          Atts (Synthesized TypeCheck) (Abstract.Case l l Sem Sem) ~ SynTC l,
-          Atts (Synthesized TypeCheck) (Abstract.WithAlternative l l Sem Sem) ~ SynTC l,
           Atts (Synthesized TypeCheck) (Abstract.Expression l l Sem Sem) ~ SynTCExp l,
-          Atts (Synthesized TypeCheck) (Abstract.Designator l l Sem Sem) ~ SynTCDes l) =>
+          Atts (Synthesized TypeCheck) (Abstract.Designator l l Sem Sem) ~ SynTCDes l,
+          TypeCheckErrors l `Transformation.At` Abstract.StatementSequence l l Sem Sem,
+          TypeCheckErrors l `Transformation.At` Abstract.ConditionalBranch l l Sem Sem,
+          TypeCheckErrors l `Transformation.At` Abstract.Case l l Sem Sem,
+          TypeCheckErrors l `Transformation.At` Abstract.WithAlternative l l Sem Sem,
+          TypeCheckErrors l `Transformation.At` Abstract.Designator l l Sem Sem,
+          TypeCheckErrors l `Transformation.At` Abstract.Expression l l Sem Sem) =>
          Attribution TypeCheck (AST.Statement l l) ((,) Int) where
    bequest TypeCheck (_pos, AST.EmptyStatement) i _   = AST.EmptyStatement
    bequest TypeCheck (_pos, AST.Assignment{}) i _     = AST.Assignment (AG.Inherited i) (AG.Inherited i)
@@ -539,7 +563,7 @@ instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
    bequest TypeCheck (_pos, AST.Exit{}) i _           = AST.Exit
    bequest TypeCheck (_pos, AST.Return{}) i _         = AST.Return (Just $ AG.Inherited i)
    synthesis TypeCheck _ _ AST.EmptyStatement = SynTC{errors= []}
-   synthesis TypeCheck (pos, _) inheritance (AST.Assignment var value) = {-# SCC "Assignment" #-}
+   synthesis TypeCheck (pos, _) inheritance statement@(AST.Assignment var value) = {-# SCC "Assignment" #-}
       SynTC{errors= assignmentCompatible inheritance pos (designatorType $ syn var) (inferredType $ syn value)}
    synthesis TypeCheck (pos, AST.ProcedureCall _proc parameters)
              inheritance (AST.ProcedureCall procedure' parameters') =
@@ -561,11 +585,6 @@ instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
                                    $ maybe [] ((inferredType . syn <$>) . getZipList) parameters')
            procedureErrors (NominalType _ (Just t)) = procedureErrors t
            procedureErrors t = [(currentModule inheritance, pos, NonProcedureType t)]
-   synthesis TypeCheck self _ (AST.If branch branches fallback) =
-      SynTC{errors= errors (syn branch) <> foldMap (errors . syn) branches <> foldMap (errors . syn) fallback}
-   synthesis TypeCheck self _ (AST.CaseStatement value branches fallback) =
-      SynTC{errors= expressionErrors (syn value) <> foldMap (errors . syn) branches
-                    <> foldMap (errors . syn) fallback}
    synthesis TypeCheck (pos, _) inheritance (AST.While condition body) =
       SynTC{errors= booleanExpressionErrors inheritance pos (syn condition) <> errors (syn body)}
    synthesis TypeCheck (pos, _) inheritance (AST.Repeat body condition) =
@@ -574,11 +593,7 @@ instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
       SynTC{errors= integerExpressionErrors inheritance pos (syn start) 
                     <> integerExpressionErrors inheritance pos (syn end)
                     <> foldMap (integerExpressionErrors inheritance pos . syn) step <> errors (syn body)}
-   synthesis TypeCheck self _ (AST.Loop body) = SynTC{errors= errors (syn body)}
-   synthesis TypeCheck self _ (AST.With branch branches fallback) =
-      SynTC{errors= errors (syn branch) <> foldMap (errors . syn) branches <> foldMap (errors . syn) fallback}
-   synthesis TypeCheck self _ AST.Exit = SynTC{errors= []}
-   synthesis TypeCheck self _ (AST.Return value) = SynTC{errors= foldMap (expressionErrors . syn) value}
+   synthesis TypeCheck self _ statement = SynTC{errors= Shallow.foldMap TypeCheckErrors statement}
 
 instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Inherited TypeCheck) (Abstract.StatementSequence l l Sem Sem) ~ InhTC l,

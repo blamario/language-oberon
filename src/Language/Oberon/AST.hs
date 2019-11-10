@@ -6,6 +6,7 @@
 
 module Language.Oberon.AST (module Language.Oberon.AST, RelOp(..)) where
 
+import Control.Monad (forM, mapM)
 import Control.Applicative (ZipList(ZipList, getZipList))
 import Data.Data (Data, Typeable)
 import Data.List.NonEmpty (NonEmpty((:|)))
@@ -449,22 +450,18 @@ deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f', Data (f (Ab
                   Data (CaseLabels λ l f' f)
 deriving instance Show (f (Abstract.ConstExpression l l f' f')) => Show (CaseLabels λ l f' f)
 
+$(concat <$>
+  (forM [Rank2.TH.deriveFunctor, Rank2.TH.deriveFoldable, Rank2.TH.deriveTraversable,
+         Transformation.Shallow.TH.deriveAll, Transformation.Deep.TH.deriveAll] $
+   \derive-> mconcat <$> mapM derive
+             [''Module, ''Declaration, ''Type, ''Expression, ''Value,
+              ''Element, ''Designator, ''FieldList,
+              ''ProcedureHeading, ''FormalParameters, ''FPSection, ''Block,
+              ''Statement, ''StatementSequence,
+              ''Case, ''CaseLabels, ''ConditionalBranch, ''WithAlternative]))
+
 $(mconcat <$> mapM Rank2.TH.unsafeDeriveApply
   [''Declaration, ''Type, ''Expression, ''Value,
-   ''Element, ''Designator, ''FieldList,
-   ''ProcedureHeading, ''FormalParameters, ''FPSection, ''Block,
-   ''Statement, ''StatementSequence,
-   ''Case, ''CaseLabels, ''ConditionalBranch, ''WithAlternative])
-
-$(mconcat <$> mapM Transformation.Deep.TH.deriveAll
-  [''Module, ''Declaration, ''Type, ''Expression, ''Value,
-   ''Element, ''Designator, ''FieldList,
-   ''ProcedureHeading, ''FormalParameters, ''FPSection, ''Block,
-   ''Statement, ''StatementSequence,
-   ''Case, ''CaseLabels, ''ConditionalBranch, ''WithAlternative])
-
-$(mconcat <$> mapM Transformation.Shallow.TH.deriveAll
-  [''Module, ''Declaration, ''Type, ''Expression, ''Value,
    ''Element, ''Designator, ''FieldList,
    ''ProcedureHeading, ''FormalParameters, ''FPSection, ''Block,
    ''Statement, ''StatementSequence,
