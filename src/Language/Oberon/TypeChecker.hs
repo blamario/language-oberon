@@ -37,6 +37,7 @@ data Type l = NominalType (Abstract.QualIdent l) (Maybe (Type l))
             | PointerType (Type l)
             | ReceiverType (Type l)
             | ProcedureType Bool [(Bool, Type l)] (Maybe (Type l))
+            | BuiltinType Text.Text
             | UnknownType
 
 data ErrorType l = ArgumentCountMismatch Int Int
@@ -69,6 +70,7 @@ instance Eq (Abstract.QualIdent l) => Eq (Type l) where
   ProcedureType _ p1 r1 == ProcedureType _ p2 r2 = r1 == r2 && p1 == p2
   StringType len1 == StringType len2 = len1 == len2
   NilType == NilType = True
+  BuiltinType name1 == BuiltinType name2 = name1 == name2
   ReceiverType t1 == t2 = t1 == t2
   t1 == ReceiverType t2 = t1 == t2
   _ == _ = False
@@ -82,6 +84,7 @@ instance Show (Abstract.QualIdent l) => Show (Type l) where
   show (ReceiverType t) = "ReceiverType " ++ show t
   show (IntegerType n) = "IntegerType " ++ show n
   show (StringType len) = "StringType " ++ show len
+  show (BuiltinType name) = "BuiltinType " ++ show name
   show NilType = "NilType"
   show UnknownType = "UnknownType"
 
@@ -112,6 +115,7 @@ errorMessage (UnknownName q) = "Unknown name " <> show q
 errorMessage (UnknownField name t) = "Record type " <> typeMessage t <> " has no field " <> show name
 
 typeMessage :: (Abstract.Nameable l, Abstract.Oberon l) => Type l -> String
+typeMessage (BuiltinType name) = Text.unpack name
 typeMessage (NominalType name _) = nameMessage name
 typeMessage (RecordType ancestry fields) = 
    "RECORD " ++ foldMap (("(" ++) . (++ ") ") . nameMessage) ancestry
@@ -348,7 +352,8 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
                             moduleEnv= Map.singleton qname (nominal $ definedType $ syn definition),
                             pointerTargets= foldMap (Map.singleton name) (pointerTarget $ syn definition)},
        AST.TypeDeclaration namedef (Inherited $ fst inheritance))
-      where nominal t@NominalType{} = t
+      where nominal t@BuiltinType{} = t
+            nominal t@NominalType{} = t
             nominal (PointerType t@RecordType{}) =
                NominalType qname (Just $ PointerType $ NominalType (Abstract.nonQualIdent $ name<>"^") (Just t))
             nominal t = NominalType qname (Just t)
@@ -662,45 +667,35 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
                                        | equality op, [] <- assignmentCompatible inheritance pos t2 t1 -> []
                                        | otherwise -> comparable (ultimate t1) (ultimate t2)
                                     errs -> errs,
-               inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing}
+               inferredType= BuiltinType "BOOLEAN"}
       where t1 = inferredType (syn left)
             t2 = inferredType (syn right)
             equality AST.Equal = True
             equality AST.Unequal = True
             equality _ = False
-            comparable (NominalType q1 Nothing) (NominalType q2 Nothing)
-               | Abstract.getNonQualIdentName q1 == Just "BOOLEAN", Abstract.getNonQualIdentName q2 == Just "BOOLEAN" = []
-               | Abstract.getNonQualIdentName q1 == Just "CHAR", Abstract.getNonQualIdentName q2 == Just "CHAR" = []
+            comparable (BuiltinType "BOOLEAN") (BuiltinType "BOOLEAN") = []
+            comparable (BuiltinType "CHAR") (BuiltinType "CHAR") = []
             comparable StringType{} StringType{} = []
-            comparable (StringType 1) (NominalType q Nothing)
-               | Abstract.getNonQualIdentName q == Just "CHAR" = []
-            comparable (NominalType q Nothing) (StringType 1)
-               | Abstract.getNonQualIdentName q == Just "CHAR" = []
-            comparable StringType{} (ArrayType _ (NominalType q Nothing))
-               | Abstract.getNonQualIdentName q == Just "CHAR" = []
-            comparable (ArrayType _ (NominalType q Nothing)) StringType{}
-               | Abstract.getNonQualIdentName q == Just "CHAR" = []
-            comparable (ArrayType _ (NominalType q1 Nothing))
-                       (ArrayType _ (NominalType q2 Nothing))
-               | Abstract.getNonQualIdentName q1 == Just "CHAR", Abstract.getNonQualIdentName q2 == Just "CHAR" = []
-            comparable (NominalType q1 Nothing) (NominalType q2 Nothing)
-               | Just t1 <- Abstract.getNonQualIdentName q1,
-                 Just t2 <- Abstract.getNonQualIdentName q2, isNumerical t1 && isNumerical t2 = []
-            comparable (NominalType q1 Nothing) IntegerType{}
-               | Just t1 <- Abstract.getNonQualIdentName q1, isNumerical t1 = []
-            comparable IntegerType{} (NominalType q2 Nothing)
-               | Just t2 <- Abstract.getNonQualIdentName q2, isNumerical t2 = []
+            comparable (StringType 1) (BuiltinType "CHAR") = []
+            comparable (BuiltinType "CHAR") (StringType 1) = []
+            comparable StringType{} (ArrayType _ (BuiltinType "CHAR")) = []
+            comparable (ArrayType _ (BuiltinType "CHAR")) StringType{} = []
+            comparable (ArrayType _ (BuiltinType "CHAR")) (ArrayType _ (BuiltinType "CHAR")) = []
+            comparable (BuiltinType t1) (BuiltinType t2)
+               | isNumerical t1 && isNumerical t2 = []
+            comparable (BuiltinType t1) IntegerType{}
+               | isNumerical t1 = []
+            comparable IntegerType{} (BuiltinType t2)
+               | isNumerical t2 = []
             comparable t1 t2 = [(currentModule inheritance, pos, IncomparableTypes t1 t2)]
-            membershipCompatible IntegerType{} (NominalType q Nothing)
-               | Abstract.getNonQualIdentName q == Just "SET" = []
-            membershipCompatible (NominalType q1 Nothing) (NominalType q2 Nothing)
-               | Just t1 <- Abstract.getNonQualIdentName q1,
-                 Abstract.getNonQualIdentName q2 == Just "SET", isNumerical t1 = []
+            membershipCompatible IntegerType{} (BuiltinType "SET") = []
+            membershipCompatible (BuiltinType t1) (BuiltinType "SET")
+               | isNumerical t1 = []
    synthesis TypeCheck (pos, AST.IsA _ q) inheritance (AST.IsA left _) =
       SynTCExp{expressionErrors= case Map.lookup q (env inheritance)
                                  of Nothing -> [(currentModule inheritance, pos, UnknownName q)]
                                     Just t -> assignmentCompatible inheritance pos (inferredType $ syn left) t,
-               inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing}
+               inferredType= BuiltinType "BOOLEAN"}
    synthesis TypeCheck (pos, _) inheritance (AST.Positive expr) =
       SynTCExp{expressionErrors= unaryNumericOperatorErrors inheritance pos (syn expr),
                inferredType= inferredType (syn expr)}
@@ -717,24 +712,22 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
    synthesis TypeCheck (pos, _) inheritance (AST.Divide left right) =
       SynTCExp{expressionErrors=
                   case (syn left, syn right)
-                  of (SynTCExp{expressionErrors= [], inferredType= NominalType q1 Nothing},
-                      SynTCExp{expressionErrors= [], inferredType= NominalType q2 Nothing})
-                        | Abstract.getNonQualIdentName q1 == Just "REAL",
-                          Abstract.getNonQualIdentName q2 == Just "REAL" -> []
-                        | Abstract.getNonQualIdentName q1 == Just "SET",
-                          Abstract.getNonQualIdentName q2 == Just "SET" -> []
+                  of (SynTCExp{expressionErrors= [], inferredType= BuiltinType t1},
+                      SynTCExp{expressionErrors= [], inferredType= BuiltinType t2})
+                        | t1 == "REAL", t2 == "REAL" -> []
+                        | t1 == "SET", t2 == "SET" -> []
                      (SynTCExp{expressionErrors= [], inferredType= t1},
                       SynTCExp{expressionErrors= [], inferredType= t2})
                        | t1 == t2 -> [(currentModule inheritance, pos, UnrealType t1)]
                        | otherwise -> [(currentModule inheritance, pos, TypeMismatch t1 t2)],
-               inferredType= NominalType (Abstract.nonQualIdent "REAL") Nothing}
+               inferredType= BuiltinType "REAL"}
    synthesis TypeCheck (pos, _) inheritance (AST.IntegerDivide left right) =
       binaryIntegerSynthesis inheritance pos left right
    synthesis TypeCheck (pos, _) inheritance (AST.Modulo left right) = binaryIntegerSynthesis inheritance pos left right
    synthesis TypeCheck (pos, _) inheritance (AST.And left right) = binaryBooleanSynthesis inheritance pos left right
    synthesis TypeCheck _self _ (AST.Set elements) =
       SynTCExp{expressionErrors= mempty,
-               inferredType= NominalType (Abstract.nonQualIdent "SET") Nothing}
+               inferredType= BuiltinType "SET"}
    synthesis TypeCheck _self _ (AST.Read designator) =
       SynTCExp{expressionErrors= designatorErrors (syn designator),
                inferredType= designatorType (syn designator)}
@@ -768,23 +761,22 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
            systemCallType _ _ = Nothing
    synthesis TypeCheck (pos, _) inheritance (AST.Not expr) =
       SynTCExp{expressionErrors= booleanExpressionErrors inheritance pos (syn expr),
-               inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing}
+               inferredType= BuiltinType "BOOLEAN"}
 
 instance (Abstract.Wirthy l) => Attribution TypeCheck (AST.Value l l) ((,) Int) where
    bequest TypeCheck (pos, val) inheritance _ = coerce val
    synthesis TypeCheck (pos, AST.Integer x) _ _ =
       SynTCExp{expressionErrors= mempty, inferredType= IntegerType $ fromIntegral x}
    synthesis TypeCheck (pos, AST.Real x) _ _ =
-      SynTCExp{expressionErrors= mempty, inferredType= NominalType (Abstract.nonQualIdent "REAL") Nothing}
+      SynTCExp{expressionErrors= mempty, inferredType= BuiltinType "REAL"}
    synthesis TypeCheck (pos, AST.Boolean x) _ _ =
-      SynTCExp{expressionErrors= mempty, inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing}
+      SynTCExp{expressionErrors= mempty, inferredType= BuiltinType "BOOLEAN"}
    synthesis TypeCheck (pos, AST.CharCode x) _ _ =
-      SynTCExp{expressionErrors= mempty, inferredType= NominalType (Abstract.nonQualIdent "CHAR") Nothing}
+      SynTCExp{expressionErrors= mempty, inferredType= BuiltinType "CHAR"}
    synthesis TypeCheck (pos, AST.String x) _ _ =
       SynTCExp{expressionErrors= mempty, inferredType= StringType (Text.length x)}
    synthesis TypeCheck (pos, AST.Nil) _ _ = SynTCExp{expressionErrors= mempty, inferredType= NilType}
-   synthesis TypeCheck (pos, AST.Builtin x) _ _ =
-      SynTCExp{expressionErrors= mempty, inferredType= NominalType (Abstract.nonQualIdent x) Nothing}
+   synthesis TypeCheck (pos, AST.Builtin x) _ _ = SynTCExp{expressionErrors= mempty, inferredType= BuiltinType x}
 
 instance (Abstract.Wirthy l, Abstract.Nameable l,
           Atts (Inherited TypeCheck) (Abstract.Expression l l Sem Sem) ~ InhTC l,
@@ -793,11 +785,11 @@ instance (Abstract.Wirthy l, Abstract.Nameable l,
    bequest TypeCheck (pos, elem) inheritance _ = AG.passDown (Inherited inheritance) elem
    synthesis TypeCheck (pos, _) inheritance (AST.Element expr) =
       SynTCExp{expressionErrors= integerExpressionErrors inheritance pos (syn expr),
-               inferredType= NominalType (Abstract.nonQualIdent "SET") Nothing}
+               inferredType= BuiltinType "SET"}
    synthesis TypeCheck (pos, _) inheritance (AST.Range low high) =
       SynTCExp{expressionErrors= integerExpressionErrors inheritance pos (syn low)
                                  <> integerExpressionErrors inheritance pos (syn high),
-               inferredType= NominalType (Abstract.nonQualIdent "SET") Nothing}
+               inferredType= BuiltinType "SET"}
 
 instance (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
           Atts (Inherited TypeCheck) (Abstract.Expression l l Sem Sem) ~ InhTC l,
@@ -885,13 +877,13 @@ binaryIntegerSynthesis inheritance pos left right =
 
 binaryBooleanSynthesis inheritance pos left right =
    SynTCExp{expressionErrors= binaryBooleanOperatorErrors inheritance pos (syn left) (syn right),
-            inferredType= NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing}
+            inferredType= BuiltinType "BOOLEAN"}
 
 unaryNumericOperatorErrors :: Abstract.Nameable l => InhTC l -> Int -> SynTCExp l -> [Error l]
 unaryNumericOperatorErrors _ _ SynTCExp{expressionErrors= [], inferredType= IntegerType{}} = []
 unaryNumericOperatorErrors _ _ SynTCExp{expressionErrors= [],
-                                        inferredType= NominalType q Nothing}
-  | Just name <- Abstract.getNonQualIdentName q, isNumerical name = []
+                                        inferredType= BuiltinType name}
+  | isNumerical name = []
 unaryNumericOperatorErrors inheritance pos SynTCExp{expressionErrors= [], inferredType= t} = 
    [(currentModule inheritance, pos, NonNumericType t)]
 unaryNumericOperatorErrors _ _ SynTCExp{expressionErrors= errs} = errs
@@ -903,18 +895,17 @@ unaryNumericOperatorType _ SynTCExp{inferredType= t} = t
 binarySetOrNumericOperatorErrors :: (Abstract.Nameable l, Eq (Abstract.QualIdent l))
                                  => InhTC l -> Int -> SynTCExp l -> SynTCExp l -> [Error l]
 binarySetOrNumericOperatorErrors _ _
-  SynTCExp{expressionErrors= [], inferredType= NominalType q1 Nothing}
-  SynTCExp{expressionErrors= [], inferredType= NominalType q2 Nothing}
-  | Just name1 <- Abstract.getNonQualIdentName q1, Just name2 <- Abstract.getNonQualIdentName q2,
-    isNumerical name1 && isNumerical name2 || name1 == "SET" && name2 == "SET" = []
+  SynTCExp{expressionErrors= [], inferredType= BuiltinType name1}
+  SynTCExp{expressionErrors= [], inferredType= BuiltinType name2}
+  | isNumerical name1 && isNumerical name2 || name1 == "SET" && name2 == "SET" = []
 binarySetOrNumericOperatorErrors _ _
   SynTCExp{expressionErrors= [], inferredType= IntegerType{}}
-  SynTCExp{expressionErrors= [], inferredType= NominalType q Nothing}
-  | Just name <- Abstract.getNonQualIdentName q, isNumerical name = []
+  SynTCExp{expressionErrors= [], inferredType= BuiltinType name}
+  | isNumerical name = []
 binarySetOrNumericOperatorErrors _ _
-  SynTCExp{expressionErrors= [], inferredType= NominalType q Nothing}
+  SynTCExp{expressionErrors= [], inferredType= BuiltinType name}
   SynTCExp{expressionErrors= [], inferredType= IntegerType{}}
-  | Just name <- Abstract.getNonQualIdentName q, isNumerical name = []
+  | isNumerical name = []
 binarySetOrNumericOperatorErrors _ _
   SynTCExp{expressionErrors= [], inferredType= IntegerType{}}
   SynTCExp{expressionErrors= [], inferredType= IntegerType{}} = []
@@ -929,11 +920,9 @@ binaryNumericOperatorType SynTCExp{inferredType= t1} SynTCExp{inferredType= t2}
   | t1 == t2 = t1
   | IntegerType{} <- t1 = t2
   | IntegerType{} <- t2 = t1
-  | NominalType q1 Nothing <- t1, Just name1 <- Abstract.getNonQualIdentName q1,
-    NominalType q2 Nothing <- t2, Just name2 <- Abstract.getNonQualIdentName q2,
+  | BuiltinType name1 <- t1, BuiltinType name2 <- t2,
     Just index1 <- List.elemIndex name1 numericTypeNames,
-    Just index2 <- List.elemIndex name2 numericTypeNames =
-      NominalType (Abstract.nonQualIdent $ numericTypeNames !! max index1 index2) Nothing
+    Just index2 <- List.elemIndex name2 numericTypeNames = BuiltinType (numericTypeNames !! max index1 index2)
   | otherwise = t1
 
 binaryIntegerOperatorErrors :: Abstract.Nameable l => InhTC l -> Int ->  SynTCExp l -> SynTCExp l -> [Error l]
@@ -946,14 +935,13 @@ integerExpressionErrors inheritance pos SynTCExp{expressionErrors= [], inferredT
 integerExpressionErrors _ _ SynTCExp{expressionErrors= errs} = errs
 
 isIntegerType IntegerType{} = True
-isIntegerType (NominalType q Nothing) | Abstract.getNonQualIdentName q == Just "SHORTINT" = True
-isIntegerType (NominalType q Nothing) | Abstract.getNonQualIdentName q == Just "INTEGER" = True
-isIntegerType (NominalType q Nothing) | Abstract.getNonQualIdentName q == Just "LONGINT" = True
+isIntegerType (BuiltinType "SHORTINT") = True
+isIntegerType (BuiltinType "INTEGER") = True
+isIntegerType (BuiltinType "LONGINT") = True
 isIntegerType t = False
 
 booleanExpressionErrors _ _ SynTCExp{expressionErrors= [],
-                                     inferredType= NominalType q Nothing}
-  | Abstract.getNonQualIdentName q == Just "BOOLEAN" = []
+                                     inferredType= BuiltinType "BOOLEAN"} = []
 booleanExpressionErrors inheritance pos SynTCExp{expressionErrors= [], inferredType= t} = 
    [(currentModule inheritance, pos, NonBooleanType t)]
 booleanExpressionErrors _ _ SynTCExp{expressionErrors= errs} = errs
@@ -961,9 +949,8 @@ booleanExpressionErrors _ _ SynTCExp{expressionErrors= errs} = errs
 binaryBooleanOperatorErrors :: (Abstract.Nameable l, Eq (Abstract.QualIdent l))
                             => InhTC l -> Int -> SynTCExp l -> SynTCExp l -> [Error l]
 binaryBooleanOperatorErrors _inh _pos
-  SynTCExp{expressionErrors= [], inferredType= NominalType q1 Nothing}
-  SynTCExp{expressionErrors= [], inferredType= NominalType q2 Nothing}
-  | Abstract.getNonQualIdentName q1 == Just "BOOLEAN", Abstract.getNonQualIdentName q2 == Just "BOOLEAN" = []
+  SynTCExp{expressionErrors= [], inferredType= BuiltinType "BOOLEAN"}
+  SynTCExp{expressionErrors= [], inferredType= BuiltinType "BOOLEAN"} = []
 binaryBooleanOperatorErrors inheritance pos
   SynTCExp{expressionErrors= [], inferredType= t1}
   SynTCExp{expressionErrors= [], inferredType= t2}
@@ -979,44 +966,38 @@ parameterCompatible inheritance pos (True, expected) actual
   | expected == actual = []
   | otherwise = [(currentModule inheritance, pos, UnequalTypes expected actual)]
 parameterCompatible inheritance pos (False, expected) actual
-  | NominalType q Nothing <- expected, Abstract.getNonQualIdentName q == Just "ARRAY", ArrayType{} <- actual = []
+  | BuiltinType "ARRAY" <- expected, ArrayType{} <- actual = []
   | otherwise = assignmentCompatible inheritance pos expected actual
 
 assignmentCompatible :: (Abstract.Nameable l, Eq (Abstract.QualIdent l))
                      => InhTC l -> Int -> Type l -> Type l -> [Error l]
 assignmentCompatible inheritance pos expected actual
    | expected == actual = []
-   | NominalType q1 Nothing <- expected, Just name1 <- Abstract.getNonQualIdentName q1,
-     NominalType q2 Nothing <- actual, Just name2 <- Abstract.getNonQualIdentName q2,
+   | BuiltinType name1 <- expected, BuiltinType name2 <- actual,
      Just index1 <- List.elemIndex name1 numericTypeNames,
      Just index2 <- List.elemIndex name2 numericTypeNames, 
      index1 >= index2 = []
-   | NominalType q Nothing <- expected, Just name <- Abstract.getNonQualIdentName q,
-     IntegerType{} <- actual, isNumerical name = []
-   | NominalType q Nothing <- expected, Abstract.getNonQualIdentName q == Just "BASIC TYPE",
-     NominalType q Nothing <- actual, Just name <- Abstract.getNonQualIdentName q,
+   | BuiltinType name <- expected, IntegerType{} <- actual, isNumerical name = []
+   | BuiltinType "BASIC TYPE" <- expected, BuiltinType name <- actual,
      name `elem` ["BOOLEAN", "CHAR", "SHORTINT", "INTEGER", "LONGINT", "REAL", "LONGREAL", "SET"] = []
-   | NominalType q Nothing <- expected, Abstract.getNonQualIdentName q == Just "POINTER", PointerType{} <- actual = []
-   | NominalType q Nothing <- expected, Abstract.getNonQualIdentName q == Just "POINTER",
-     NominalType _ (Just t) <- actual =
+   | BuiltinType "POINTER" <- expected, PointerType{} <- actual = []
+   | BuiltinType "POINTER" <- expected, NominalType _ (Just t) <- actual =
        assignmentCompatible inheritance pos expected t
-   | NominalType q Nothing <- expected, Abstract.getNonQualIdentName q == Just "CHAR", actual == StringType 1 = []
+   | BuiltinType "CHAR" <- expected, actual == StringType 1 = []
    | ReceiverType t <- actual = assignmentCompatible inheritance pos expected t
    | ReceiverType t <- expected = assignmentCompatible inheritance pos t actual
    | NilType <- actual, PointerType{} <- expected = []
    | NilType <- actual, ProcedureType{} <- expected = []
    | NilType <- actual, NominalType _ (Just t) <- expected = assignmentCompatible inheritance pos t actual
---   | ArrayType [] (NominalType (Abstract.nonQualIdent "CHAR") Nothing) <- expected, StringType{} <- actual = []
-   | ArrayType [m] (NominalType q Nothing) <- expected, Abstract.getNonQualIdentName q == Just "CHAR",
-     StringType n <- actual =
+--   | ArrayType [] (BuiltinType "CHAR") <- expected, StringType{} <- actual = []
+   | ArrayType [m] (BuiltinType "CHAR") <- expected, StringType n <- actual =
       if m < n then [(currentModule inheritance, pos, TooSmallArrayType m n)] else []
    | targetExtends actual expected = []
    | NominalType _ (Just t) <- expected, ProcedureType{} <- actual = assignmentCompatible inheritance pos t actual
    | otherwise = [(currentModule inheritance, pos, IncompatibleTypes expected actual)]
 
 arrayCompatible (ArrayType [] t1) (ArrayType _ t2) = t1 == t2 || arrayCompatible t1 t2
-arrayCompatible (ArrayType [] (NominalType q Nothing)) StringType{}
-   | Abstract.getNonQualIdentName q == Just "CHAR" = True
+arrayCompatible (ArrayType [] (BuiltinType "CHAR")) StringType{} = True
 arrayCompatible (NominalType _ (Just t1)) t2 = arrayCompatible t1 t2
 arrayCompatible t1 (NominalType _ (Just t2)) = arrayCompatible t1 t2
 arrayCompatible _ _ = False
@@ -1073,56 +1054,42 @@ checkModules predef modules =
 predefined, predefined2 :: (Abstract.Wirthy l, Ord (Abstract.QualIdent l)) => Environment l
 -- | The set of 'Predefined' types and procedures defined in the Oberon Language Report.
 predefined = Map.fromList $ map (first Abstract.nonQualIdent) $
-   [("BOOLEAN", NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing),
-    ("CHAR", NominalType (Abstract.nonQualIdent "CHAR") Nothing),
-    ("SHORTINT", NominalType (Abstract.nonQualIdent "SHORTINT") Nothing),
-    ("INTEGER", NominalType (Abstract.nonQualIdent "INTEGER") Nothing),
-    ("LONGINT", NominalType (Abstract.nonQualIdent "LONGINT") Nothing),
-    ("REAL", NominalType (Abstract.nonQualIdent "REAL") Nothing),
-    ("LONGREAL", NominalType (Abstract.nonQualIdent "LONGREAL") Nothing),
-    ("SET", NominalType (Abstract.nonQualIdent "SET") Nothing),
-    ("TRUE", NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing),
-    ("FALSE", NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing),
-    ("ABS", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "INTEGER") Nothing)] $
-            Just $ NominalType (Abstract.nonQualIdent "INTEGER") Nothing),
-    ("ASH", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "INTEGER") Nothing)] $
-            Just $ NominalType (Abstract.nonQualIdent "INTEGER") Nothing),
-    ("CAP", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "CHAR") Nothing)] $
-            Just $ NominalType (Abstract.nonQualIdent "CHAR") Nothing),
-    ("LEN", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "ARRAY") Nothing)] $
-            Just $ NominalType (Abstract.nonQualIdent "LONGINT") Nothing),
-    ("MAX", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "BASIC TYPE") Nothing)] $ Just UnknownType),
-    ("MIN", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "BASIC TYPE") Nothing)] $ Just UnknownType),
-    ("ODD", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "CHAR") Nothing)] $
-            Just $ NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing),
-    ("SIZE", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "CHAR") Nothing)] $
-             Just $ NominalType (Abstract.nonQualIdent "INTEGER") Nothing),
-    ("ORD", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "CHAR") Nothing)] $
-            Just $ NominalType (Abstract.nonQualIdent "INTEGER") Nothing),
-    ("CHR", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "INTEGER") Nothing)] $
-            Just $ NominalType (Abstract.nonQualIdent "CHAR") Nothing),
-    ("SHORT", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "INTEGER") Nothing)]
-              $ Just $ NominalType (Abstract.nonQualIdent "INTEGER") Nothing),
-    ("LONG", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "INTEGER") Nothing)] $
-             Just $ NominalType (Abstract.nonQualIdent "INTEGER") Nothing),
-    ("ENTIER", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "REAL") Nothing)] $
-               Just $ NominalType (Abstract.nonQualIdent "INTEGER") Nothing),
-    ("INC", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "LONGINT") Nothing)] Nothing),
-    ("DEC", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "LONGINT") Nothing)] Nothing),
-    ("INCL", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "SET") Nothing),
-                                  (False, NominalType (Abstract.nonQualIdent "INTEGER") Nothing)] Nothing),
-    ("EXCL", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "SET") Nothing),
-                                  (False, NominalType (Abstract.nonQualIdent "INTEGER") Nothing)] Nothing),
-    ("COPY", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "ARRAY") Nothing),
-                                  (False, NominalType (Abstract.nonQualIdent "ARRAY") Nothing)] Nothing),
-    ("NEW", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "POINTER") Nothing)] Nothing),
-    ("HALT", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "INTEGER") Nothing)] Nothing)]
+   [("BOOLEAN", BuiltinType "BOOLEAN"),
+    ("CHAR", BuiltinType "CHAR"),
+    ("SHORTINT", BuiltinType "SHORTINT"),
+    ("INTEGER", BuiltinType "INTEGER"),
+    ("LONGINT", BuiltinType "LONGINT"),
+    ("REAL", BuiltinType "REAL"),
+    ("LONGREAL", BuiltinType "LONGREAL"),
+    ("SET", BuiltinType "SET"),
+    ("TRUE", BuiltinType "BOOLEAN"),
+    ("FALSE", BuiltinType "BOOLEAN"),
+    ("ABS", ProcedureType False [(False, BuiltinType "INTEGER")] $ Just $ BuiltinType "INTEGER"),
+    ("ASH", ProcedureType False [(False, BuiltinType "INTEGER")] $ Just $ BuiltinType "INTEGER"),
+    ("CAP", ProcedureType False [(False, BuiltinType "CHAR")] $ Just $ BuiltinType "CHAR"),
+    ("LEN", ProcedureType False [(False, BuiltinType "ARRAY")] $ Just $ BuiltinType "LONGINT"),
+    ("MAX", ProcedureType False [(False, BuiltinType "BASIC TYPE")] $ Just UnknownType),
+    ("MIN", ProcedureType False [(False, BuiltinType "BASIC TYPE")] $ Just UnknownType),
+    ("ODD", ProcedureType False [(False, BuiltinType "CHAR")] $ Just $ BuiltinType "BOOLEAN"),
+    ("SIZE", ProcedureType False [(False, BuiltinType "CHAR")] $ Just $ BuiltinType "INTEGER"),
+    ("ORD", ProcedureType False [(False, BuiltinType "CHAR")] $ Just $ BuiltinType "INTEGER"),
+    ("CHR", ProcedureType False [(False, BuiltinType "INTEGER")] $ Just $ BuiltinType "CHAR"),
+    ("SHORT", ProcedureType False [(False, BuiltinType "INTEGER")] $ Just $ BuiltinType "INTEGER"),
+    ("LONG", ProcedureType False [(False, BuiltinType "INTEGER")] $ Just $ BuiltinType "INTEGER"),
+    ("ENTIER", ProcedureType False [(False, BuiltinType "REAL")] $ Just $ BuiltinType "INTEGER"),
+    ("INC", ProcedureType False [(False, BuiltinType "LONGINT")] Nothing),
+    ("DEC", ProcedureType False [(False, BuiltinType "LONGINT")] Nothing),
+    ("INCL", ProcedureType False [(False, BuiltinType "SET"), (False, BuiltinType "INTEGER")] Nothing),
+    ("EXCL", ProcedureType False [(False, BuiltinType "SET"), (False, BuiltinType "INTEGER")] Nothing),
+    ("COPY", ProcedureType False [(False, BuiltinType "ARRAY"), (False, BuiltinType "ARRAY")] Nothing),
+    ("NEW", ProcedureType False [(False, BuiltinType "POINTER")] Nothing),
+    ("HALT", ProcedureType False [(False, BuiltinType "INTEGER")] Nothing)]
 
 -- | The set of 'Predefined' types and procedures defined in the Oberon-2 Language Report.
 predefined2 = predefined <>
    Map.fromList (first Abstract.nonQualIdent <$>
-                 [("ASSERT", ProcedureType False [(False, NominalType (Abstract.nonQualIdent "BOOLEAN") Nothing),
-                                                  (False, NominalType (Abstract.nonQualIdent "INTEGER") Nothing)] Nothing)])
+                 [("ASSERT", ProcedureType False [(False, BuiltinType "BOOLEAN"),
+                                                  (False, BuiltinType "INTEGER")] Nothing)])
 
 $(do l <- varT <$> newName "l"
      mconcat <$> mapM (\t-> Transformation.Full.TH.deriveUpFunctor (conT ''TypeCheck) $ conT t `appT` l `appT` l)
