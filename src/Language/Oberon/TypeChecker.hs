@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
-             ScopedTypeVariables, TemplateHaskell, TypeFamilies, TypeOperators, UndecidableInstances #-}
+             ScopedTypeVariables, TemplateHaskell, TypeFamilies, TypeOperators, UndecidableInstances, ViewPatterns #-}
 
 module Language.Oberon.TypeChecker (Error, errorMessage, checkModules, predefined, predefined2) where
 
@@ -569,7 +569,8 @@ instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
    bequest TypeCheck (_pos, AST.Return{}) i _         = AST.Return (Just $ AG.Inherited i)
    synthesis TypeCheck _ _ AST.EmptyStatement = SynTC{errors= []}
    synthesis TypeCheck (pos, _) inheritance statement@(AST.Assignment var value) = {-# SCC "Assignment" #-}
-      SynTC{errors= assignmentCompatible inheritance pos (designatorType $ syn var) (inferredType $ syn value)}
+      SynTC{errors= assignmentCompatible inheritance pos (designatorType $ syn var) (inferredType $ syn value)
+                    <> Shallow.foldMap TypeCheckErrors statement}
    synthesis TypeCheck (pos, AST.ProcedureCall _proc parameters)
              inheritance (AST.ProcedureCall procedure' parameters') =
       SynTC{errors= (case syn procedure'
@@ -697,11 +698,11 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
                                     Just t -> assignmentCompatible inheritance pos (inferredType $ syn left) t,
                inferredType= BuiltinType "BOOLEAN"}
    synthesis TypeCheck (pos, _) inheritance (AST.Positive expr) =
-      SynTCExp{expressionErrors= unaryNumericOperatorErrors inheritance pos (syn expr),
+      SynTCExp{expressionErrors= unaryNumericOrSetOperatorErrors inheritance pos (syn expr),
                inferredType= inferredType (syn expr)}
    synthesis TypeCheck (pos, _) inheritance (AST.Negative expr) =
-      SynTCExp{expressionErrors= unaryNumericOperatorErrors inheritance pos (syn expr),
-               inferredType= unaryNumericOperatorType negate (syn expr)}
+      SynTCExp{expressionErrors= unaryNumericOrSetOperatorErrors inheritance pos (syn expr),
+               inferredType= unaryNumericOrSetOperatorType negate (syn expr)}
    synthesis TypeCheck (pos, _) inheritance (AST.Add left right) =
       binaryNumericOrSetSynthesis inheritance pos left right
    synthesis TypeCheck (pos, _) inheritance (AST.Subtract left right) =
@@ -739,11 +740,13 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
       SynTCExp{expressionErrors=
                    case {-# SCC "FunctionCall" #-} syn designator
                    of SynTCDes{designatorErrors= [],
-                               designatorType= ProcedureType _ formalTypes Just{}}
+                               designatorName= name,
+                               designatorType= ultimate -> ProcedureType _ formalTypes Just{}}
                         | length formalTypes /= length parameters ->
                             [(currentModule inheritance, pos,
                               ArgumentCountMismatch (length formalTypes)
                                                     (length parameters))]
+                        | name == Just (Just "SYSTEM", "VAL") -> []
                         | otherwise -> concat (zipWith (parameterCompatible inheritance pos) formalTypes
                                                $ inferredType . syn <$> parameters')
                       SynTCDes{designatorErrors= [],
@@ -879,18 +882,19 @@ binaryBooleanSynthesis inheritance pos left right =
    SynTCExp{expressionErrors= binaryBooleanOperatorErrors inheritance pos (syn left) (syn right),
             inferredType= BuiltinType "BOOLEAN"}
 
-unaryNumericOperatorErrors :: Abstract.Nameable l => InhTC l -> Int -> SynTCExp l -> [Error l]
-unaryNumericOperatorErrors _ _ SynTCExp{expressionErrors= [], inferredType= IntegerType{}} = []
-unaryNumericOperatorErrors _ _ SynTCExp{expressionErrors= [],
-                                        inferredType= BuiltinType name}
+unaryNumericOrSetOperatorErrors :: Abstract.Nameable l => InhTC l -> Int -> SynTCExp l -> [Error l]
+unaryNumericOrSetOperatorErrors _ _ SynTCExp{expressionErrors= [], inferredType= IntegerType{}} = []
+unaryNumericOrSetOperatorErrors _ _ SynTCExp{expressionErrors= [],
+                                             inferredType= BuiltinType name}
   | isNumerical name = []
-unaryNumericOperatorErrors inheritance pos SynTCExp{expressionErrors= [], inferredType= t} = 
+  | name == "SET" = []
+unaryNumericOrSetOperatorErrors inheritance pos SynTCExp{expressionErrors= [], inferredType= t} = 
    [(currentModule inheritance, pos, NonNumericType t)]
-unaryNumericOperatorErrors _ _ SynTCExp{expressionErrors= errs} = errs
+unaryNumericOrSetOperatorErrors _ _ SynTCExp{expressionErrors= errs} = errs
 
-unaryNumericOperatorType :: (Int -> Int) -> SynTCExp l -> Type l
-unaryNumericOperatorType f SynTCExp{inferredType= IntegerType x} = IntegerType (f x)
-unaryNumericOperatorType _ SynTCExp{inferredType= t} = t
+unaryNumericOrSetOperatorType :: (Int -> Int) -> SynTCExp l -> Type l
+unaryNumericOrSetOperatorType f SynTCExp{inferredType= IntegerType x} = IntegerType (f x)
+unaryNumericOrSetOperatorType _ SynTCExp{inferredType= t} = t
 
 binarySetOrNumericOperatorErrors :: (Abstract.Nameable l, Eq (Abstract.QualIdent l))
                                  => InhTC l -> Int -> SynTCExp l -> SynTCExp l -> [Error l]
@@ -1073,8 +1077,8 @@ predefined = Map.fromList $ map (first Abstract.nonQualIdent) $
     ("ODD", ProcedureType False [(False, BuiltinType "CHAR")] $ Just $ BuiltinType "BOOLEAN"),
     ("SIZE", ProcedureType False [(False, BuiltinType "CHAR")] $ Just $ BuiltinType "INTEGER"),
     ("ORD", ProcedureType False [(False, BuiltinType "CHAR")] $ Just $ BuiltinType "INTEGER"),
-    ("CHR", ProcedureType False [(False, BuiltinType "INTEGER")] $ Just $ BuiltinType "CHAR"),
-    ("SHORT", ProcedureType False [(False, BuiltinType "INTEGER")] $ Just $ BuiltinType "INTEGER"),
+    ("CHR", ProcedureType False [(False, BuiltinType "LONGINT")] $ Just $ BuiltinType "CHAR"),
+    ("SHORT", ProcedureType False [(False, BuiltinType "LONGINT")] $ Just $ BuiltinType "SHORTINT"),
     ("LONG", ProcedureType False [(False, BuiltinType "INTEGER")] $ Just $ BuiltinType "INTEGER"),
     ("ENTIER", ProcedureType False [(False, BuiltinType "REAL")] $ Just $ BuiltinType "INTEGER"),
     ("INC", ProcedureType False [(False, BuiltinType "LONGINT")] Nothing),
