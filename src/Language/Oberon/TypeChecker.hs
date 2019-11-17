@@ -199,22 +199,22 @@ instance (Transformation.Transformation t, Functor (Transformation.Domain t), De
           Transformation.At t (AST.Module l l (Transformation.Codomain t) (Transformation.Codomain t))) =>
          Deep.Functor t (Modules l) where
    t <$> ~(Modules ms) = Modules (mapModule <$> ms)
-      where mapModule m = Transformation.apply t ((t Deep.<$>) <$> m)
+      where mapModule m = t Transformation.$ ((t Deep.<$>) <$> m)
 
 instance Transformation.At (TypeCheckErrors l) (AST.StatementSequence l l Sem Sem) where
-   apply _ s = Const (errors $ syn s)
+   _ $ s = Const (errors $ syn s)
 instance Transformation.At (TypeCheckErrors l) (AST.Statement l l Sem Sem) where
-   apply _ s = Const (errors $ syn s)
+   _ $ s = Const (errors $ syn s)
 instance Transformation.At (TypeCheckErrors l) (AST.ConditionalBranch l l Sem Sem) where
-   apply _ s = Const (errors $ syn s)
+   _ $ s = Const (errors $ syn s)
 instance Transformation.At (TypeCheckErrors l) (AST.Case l l Sem Sem) where
-   apply _ s = Const (errors $ syn s)
+   _ $ s = Const (errors $ syn s)
 instance Transformation.At (TypeCheckErrors l) (AST.WithAlternative l l Sem Sem) where
-   apply _ s = Const (errors $ syn s)
+   _ $ s = Const (errors $ syn s)
 instance Transformation.At (TypeCheckErrors l) (AST.Designator l l Sem Sem) where
-   apply _ s = Const (designatorErrors $ syn s)
+   _ $ s = Const (designatorErrors $ syn s)
 instance Transformation.At (TypeCheckErrors l) (AST.Expression l l Sem Sem) where
-   apply _ s = Const (expressionErrors $ syn s)
+   _ $ s = Const (expressionErrors $ syn s)
 
 instance Rank2.Functor (Modules l f') where
    f <$> ~(Modules ms) = Modules (f <$> ms)
@@ -1030,7 +1030,7 @@ instance Transformation.Transformation TypeCheck where
    type Codomain TypeCheck = Semantics TypeCheck
 
 instance Ord (Abstract.QualIdent l) => Transformation.At TypeCheck (Modules l Sem Sem) where
-   apply = AG.applyDefault snd
+   ($) = AG.applyDefault snd
 
 -- * Unsafe Rank2 AST instances
 
@@ -1106,7 +1106,7 @@ $(do l <- varT <$> newName "l"
 $(do let sem = [t|Semantics TypeCheck|]
      let inst g = [d| instance Attribution TypeCheck ($g l l) ((,) Int) =>
                                Transformation.At TypeCheck ($g l l $sem $sem)
-                         where apply = AG.applyDefault snd |]
+                         where ($) = AG.applyDefault snd |]
      mconcat <$> mapM (inst . conT)
         [''AST.Module, ''AST.Declaration, ''AST.Type, ''AST.FieldList,
          ''AST.ProcedureHeading, ''AST.FormalParameters, ''AST.FPSection,
