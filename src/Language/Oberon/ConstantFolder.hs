@@ -148,7 +148,7 @@ type SynCFMod' l node = SynCFMod l (node ((,) Int) ((,) Int))
 
 -- * Rules
 
-instance Ord (Abstract.QualIdent l) => Attribution ConstantFold (Modules l) ((,) Int) where
+instance Ord (Abstract.QualIdent l) => Attribution ConstantFold (Modules l) Sem ((,) Int) where
    attribution ConstantFold (_, Modules self) (Inherited inheritance, Modules ms) =
      (Synthesized SynCFRoot{modulesFolded= Modules (pure . snd . moduleFolded . syn <$> ms)},
       Modules (Map.mapWithKey moduleInheritance self))
@@ -161,7 +161,7 @@ instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Sh
           Atts (Inherited ConstantFold) (Abstract.Declaration l l Sem Sem) ~ InhCF l,
           Atts (Synthesized ConstantFold) (Abstract.StatementSequence l l Sem Sem)
           ~ SynCF' (Abstract.StatementSequence l l)) =>
-         Attribution ConstantFold (AST.Module l l) ((,) Int) where
+         Attribution ConstantFold (AST.Module l l) Sem ((,) Int) where
    attribution ConstantFold (_, AST.Module moduleName imports _decls _body)
                (Inherited inheritance, AST.Module _ _ decls body) =
       (Synthesized SynCFMod{moduleEnv= exportedEnv,
@@ -190,7 +190,7 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           ~ SynCF' (Abstract.FormalParameters l l),
           Atts (Synthesized ConstantFold) (Abstract.Block l l Sem Sem) ~ SynCF' (Abstract.Block l l),
           Atts (Synthesized ConstantFold) (Abstract.ConstExpression l l Sem Sem) ~ SynCFExp l) =>
-         Attribution ConstantFold (AST.Declaration l l) ((,) Int) where
+         Attribution ConstantFold (AST.Declaration l l) Sem ((,) Int) where
    bequest ConstantFold (pos, d) inheritance _ = AG.passDown (Inherited inheritance) d
    synthesis ConstantFold (pos, AST.ConstantDeclaration namedef _) _ (AST.ConstantDeclaration _ expression) =
       SynCFMod{moduleEnv= Map.singleton (Abstract.nonQualIdent name) val,
@@ -223,7 +223,7 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Synthesized ConstantFold) (Abstract.Element l l Sem Sem) ~ SynCF' (Abstract.Element l l),
           Atts (Synthesized ConstantFold) (Abstract.Designator l l Sem Sem)
           ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Value l l ((,) Int) ((,) Int)))) =>
-         Attribution ConstantFold (AST.Expression l l) ((,) Int) where
+         Attribution ConstantFold (AST.Expression l l) Sem ((,) Int) where
    bequest ConstantFold (pos, e) inheritance _ = AG.passDown (Inherited inheritance) e
    synthesis ConstantFold (pos, AST.Relation op _ _) _ (AST.Relation _op left right) =
       case join (compareValues <$> foldedValue (syn left) <*> foldedValue (syn right))
@@ -451,7 +451,7 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Abstract.Oberon l, Ord (Abst
           Atts (Synthesized ConstantFold) (Abstract.Expression l l Sem Sem) ~ SynCFExp l,
           Atts (Synthesized ConstantFold) (Abstract.Designator l l Sem Sem)
           ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Value l l ((,) Int) ((,) Int)))) =>
-         Attribution ConstantFold (AST.Designator l l) ((,) Int) where
+         Attribution ConstantFold (AST.Designator l l) Sem ((,) Int) where
    bequest ConstantFold (pos, d) inheritance _ = AG.passDown (Inherited inheritance) d
    synthesis ConstantFold (pos, AST.Variable q) inheritance _ =
       SynCF{folded= (pos, (AST.Variable q, join (Map.lookup q $ env inheritance)))}
@@ -513,7 +513,7 @@ $(do l <- varT  <$> newName "l"
          ''AST.Case, ''AST.CaseLabels, ''AST.ConditionalBranch, ''AST.WithAlternative])
 
 $(do let sem = [t|Semantics ConstantFold|]
-     let inst g = [d| instance Attribution ConstantFold ($g l l) ((,) Int) =>
+     let inst g = [d| instance Attribution ConstantFold ($g l l) Sem ((,) Int) =>
                                Transformation.At ConstantFold ($g l l $sem $sem)
                          where ($) = AG.applyDefault snd |]
      mconcat <$> mapM (inst . conT)
