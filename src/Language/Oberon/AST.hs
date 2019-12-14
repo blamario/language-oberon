@@ -6,8 +6,8 @@
 
 module Language.Oberon.AST (module Language.Oberon.AST, RelOp(..)) where
 
-import Control.Monad (forM, mapM)
 import Control.Applicative (ZipList(ZipList, getZipList))
+import Control.Monad (forM, mapM)
 import Data.Data (Data, Typeable)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Text (Text)
@@ -199,7 +199,7 @@ isNamedVar _ _ = False
 
 instance Abstract.Oberon Language where
    type WithAlternative Language = WithAlternative Language
-   moduleUnit name imports declarations = Module name imports (ZipList declarations)
+   moduleUnit = Module
    moduleImport = (,)
    exported = flip IdentDef Exported
    qualIdent = QualIdent
@@ -222,15 +222,12 @@ instance Abstract.Oberon2 Language where
    forStatement = For
    variantWithStatement (variant :| variants) = With variant (ZipList variants)
 
-data Module λ l f' f =
-   Module Ident [Import l] (ZipList (f (Abstract.Declaration l l f' f'))) (Maybe (f (Abstract.StatementSequence l l f' f')))
+data Module λ l f' f = Module Ident [Import l] (f (Abstract.Block l l f' f'))
 
 deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f', Data (Abstract.Import l),
-                   Data (f (Abstract.Declaration l l f' f')), Data (f (Abstract.StatementSequence l l f' f'))) =>
+                   Data (f (Abstract.Block l l f' f'))) =>
                   Data (Module λ l f' f)
-deriving instance (Show (Abstract.Import l), Show (f (Abstract.Declaration l l f' f')),
-                   Show (f (Abstract.StatementSequence l l f' f'))) =>
-                  Show (Module λ l f' f)
+deriving instance (Show (Abstract.Import l), Show (f (Abstract.Block l l f' f'))) => Show (Module λ l f' f)
 
 type Ident = Text
 

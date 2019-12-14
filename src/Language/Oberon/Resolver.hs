@@ -318,7 +318,8 @@ resolveModules :: forall l. (BindableDeclaration l, CoFormalParameters l, Abstra
                              Full.Traversable (Resolution l) (Abstract.FormalParameters l l),
                              Full.Traversable (Resolution l) (Abstract.Expression l l),
                              Full.Traversable (Resolution l) (Abstract.Block l l),
-                             Full.Traversable (Resolution l) (Abstract.StatementSequence l l)) =>
+                             Full.Traversable (Resolution l) (Abstract.StatementSequence l l),
+                             Resolution l `Transformation.At` Abstract.Block l l NodeWrap NodeWrap) =>
                   Predefined l -> Map Ident (Module l l NodeWrap NodeWrap)
                 -> Validation (NonEmpty (Ident, NonEmpty (Error l))) (Map Ident (Module l l Placed Placed))
 resolveModules predefinedScope modules = traverseWithKey extractErrors modules'
@@ -326,7 +327,8 @@ resolveModules predefinedScope modules = traverseWithKey extractErrors modules'
          extractErrors moduleKey (Failure e)   = Failure ((moduleKey, e) :| [])
          extractErrors _         (Success mod) = Success mod
 
-resolveModule :: forall l. (BindableDeclaration l,
+resolveModule :: forall l. (BindableDeclaration l, CoFormalParameters l,
+                            Full.Traversable (Resolution l) (Abstract.Block l l),
                             Full.Traversable (Resolution l) (Abstract.Declaration l l),
                             Full.Traversable (Resolution l) (Abstract.Type l l),
                             Full.Traversable (Resolution l) (Abstract.FormalParameters l l),
@@ -337,10 +339,11 @@ resolveModule :: forall l. (BindableDeclaration l,
                             Deep.Traversable (Resolution l) (Abstract.StatementSequence l l),
                             Deep.Traversable (Resolution l) (Abstract.Type l l),
                             Deep.Traversable (Resolution l) (Abstract.FormalParameters l l),
-                            Deep.Traversable (Resolution l) (Abstract.ConstExpression l l)) =>
+                            Deep.Traversable (Resolution l) (Abstract.ConstExpression l l),
+                            Resolution l `Transformation.At` Abstract.Block l l NodeWrap NodeWrap) =>
                  Scope l -> Map Ident (Validation (NonEmpty (Error l)) (Module l l Placed Placed))
               -> Module l l NodeWrap NodeWrap -> Validation (NonEmpty (Error l)) (Module l l Placed Placed)
-resolveModule predefined modules m@(Module moduleName imports (ZipList declarations) body) =
+resolveModule predefined modules m@(Module moduleName imports body) =
    evalStateT (Deep.traverse res m) (moduleGlobalScope, ModuleState)
    where res = Resolution moduleExports
          importedModules = Map.delete mempty (Map.mapKeysWith clashingRenames importedAs modules)
@@ -352,7 +355,8 @@ resolveModule predefined modules m@(Module moduleName imports (ZipList declarati
          resolveDeclaration :: NodeWrap (Declaration l l NodeWrap NodeWrap) -> Resolved l (Declaration l l Placed Placed)
          resolveDeclaration d = snd <$> (traverse (Deep.traverse res) d >>= getCompose . (res Transformation.$))
          moduleExports = foldMap exportsOfModule <$> importedModules
-         moduleGlobalScope = localScope res moduleName declarations predefined
+         Success (_, body') = evalStateT (getCompose $ res Transformation.$ body) (predefined, ModuleState)
+         moduleGlobalScope = localScope res moduleName (getLocalDeclarations body') predefined
 
 localScope :: forall l. (BindableDeclaration l,
                          Full.Traversable (Resolution l) (Abstract.Type l l),
@@ -488,14 +492,15 @@ predefined2 = predefined <>
         (,) 0 $ Abstract.fpSection False (pure "n") $ (,) 0 $ Abstract.typeReference $ Abstract.nonQualIdent "ARRAY"]
       Nothing)])
 
-exportsOfModule :: BindableDeclaration l => Module l l Placed Placed -> Scope l
+exportsOfModule :: (BindableDeclaration l, CoFormalParameters l) => Module l l Placed Placed -> Scope l
 exportsOfModule = fmap Success . Map.mapMaybe isExported . globalsOfModule
    where isExported (PrivateOnly, _) = Nothing
          isExported (_, binding) = Just binding
 
-globalsOfModule :: BindableDeclaration l => Module l l Placed Placed -> Map Ident (AccessMode, DeclarationRHS l Placed Placed)
-globalsOfModule (Module name imports declarations _) =
-   Map.fromList (concatMap (declarationBinding name . snd) declarations)
+globalsOfModule :: forall l. (BindableDeclaration l, CoFormalParameters l) =>
+                   Module l l Placed Placed -> Map Ident (AccessMode, DeclarationRHS l Placed Placed)
+globalsOfModule (Module name imports (_, body)) =
+   Map.fromList (concatMap (declarationBinding name . snd) (getLocalDeclarations body))
 
 unique :: (NonEmpty (Error l) -> Error l) -> ([a] -> Error l) -> NodeWrap (Validation (NonEmpty (Error l)) a)
        -> Validation (NonEmpty (Error l)) (Placed a)

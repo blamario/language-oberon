@@ -145,11 +145,11 @@ definitionMixin g@OberonGrammar{..} = g{
                     name <- ident
                     delimiter ";"
                     imports <- moptional importList
-                    declarations <- declarationSequence
+                    block <- wrap (Abstract.block <$> declarationSequence <*> pure Nothing)
                     keyword "END"
                     lexicalToken (string name)
                     delimiter "."
-                    return (Abstract.moduleUnit name imports declarations Nothing),
+                    return (Abstract.moduleUnit name imports block),
    procedureDeclaration = Abstract.procedureDeclaration . snd . sequenceA 
                           <$> wrap procedureHeading 
                           <*> wrap (pure $ Abstract.block [] Nothing),
@@ -194,12 +194,12 @@ grammar OberonGrammar{..} = OberonGrammar{
                     name <- ident
                     delimiter ";"
                     imports <- moptional importList
-                    declarations <- declarationSequence
-                    body <- optional (keyword "BEGIN" *> wrap statementSequence)
+                    body <- wrap (Abstract.block <$> declarationSequence
+                                                 <*> optional (keyword "BEGIN" *> wrap statementSequence))
                     keyword "END"
                     lexicalToken (string name)
                     delimiter "."
-                    return (Abstract.moduleUnit name imports declarations body),
+                    return (Abstract.moduleUnit name imports body),
    ident = identifier,
    letter = satisfyCharInput isLetter,
    digit = satisfyCharInput isDigit,

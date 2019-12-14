@@ -19,17 +19,15 @@ import Language.Oberon.AST
 
 data Precedence e = Precedence Int e
 
-instance (Pretty (Abstract.Import l), Pretty (Abstract.Declaration l l Identity Identity),
-          Pretty (Abstract.StatementSequence l l Identity Identity)) =>
+instance (Pretty (Abstract.Import l), Pretty (Abstract.Block l l Identity Identity)) =>
          Pretty (Module λ l Identity Identity) where
-   pretty (Module name imports declarations body) =
+   pretty (Module name imports body) =
       vsep $ intersperse mempty $
       ["MODULE" <+> pretty name <> semi,
        if null imports then mempty
-       else "IMPORT" <+> align (fillSep (punctuate comma $ prettyImport <$> imports)) <> semi]
-      <> (pretty <$> getZipList declarations)
-      <> [vsep (foldMap (\statements-> ["BEGIN" <#> indent 3 (pretty statements)]) body
-                <> ["END" <+> pretty name <> "." <> line])]
+       else "IMPORT" <+> align (fillSep (punctuate comma $ prettyImport <$> imports)) <> semi,
+       pretty body,
+       "END" <+> pretty name <> "." <> line]
       where prettyImport (Nothing, mod) = pretty mod
             prettyImport (Just inner, mod) = pretty inner <> ":=" <+> pretty mod
 

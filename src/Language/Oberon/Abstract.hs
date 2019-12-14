@@ -126,8 +126,7 @@ class Wirthy l => Nameable l where
 class Wirthy l => Oberon l where
    type WithAlternative l = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
 
-   moduleUnit :: Ident -> [Import l] -> [f (Declaration l' l' f' f')] -> Maybe (f (StatementSequence l' l' f' f'))
-              -> Module l l' f' f
+   moduleUnit :: Ident -> [Import l] -> f (Block l' l' f' f') -> Module l l' f' f
    moduleImport :: Maybe Ident -> Ident -> Import l
    qualIdent :: Ident -> Ident -> QualIdent l
    getQualIdentNames :: QualIdent l -> Maybe (Ident, Ident)

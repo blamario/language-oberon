@@ -232,7 +232,7 @@ type instance Atts (Synthesized TypeCheck) (AST.Declaration l l _ _) = SynTCMod 
 type instance Atts (Inherited TypeCheck) (AST.ProcedureHeading l l _ _) = (InhTC l, Map AST.Ident AST.Ident)
 type instance Atts (Synthesized TypeCheck) (AST.ProcedureHeading l l _ _) = SynTCHead l
 type instance Atts (Inherited TypeCheck) (AST.Block l l _ _) = InhTC l
-type instance Atts (Synthesized TypeCheck) (AST.Block l l _ _) = SynTC l
+type instance Atts (Synthesized TypeCheck) (AST.Block l l _ _) = SynTCMod l
 type instance Atts (Inherited TypeCheck) (AST.FormalParameters l l _ _) = InhTC l
 type instance Atts (Synthesized TypeCheck) (AST.FormalParameters l l _ _) = SynTCSig l
 type instance Atts (Inherited TypeCheck) (AST.FPSection l l _ _) = InhTC l
@@ -272,21 +272,17 @@ instance Ord (Abstract.QualIdent l) =>
      where moduleInheritance name mod = Inherited InhTC{env= rootEnv inheritance <> foldMap (moduleEnv . syn) ms,
                                                         currentModule= name}
 
-instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
-          Atts (Synthesized TypeCheck) (Abstract.Declaration l l Sem Sem) ~ SynTCMod l,
-          Atts (Inherited TypeCheck) (Abstract.StatementSequence l l Sem Sem) ~ InhTC l,
-          Atts (Inherited TypeCheck) (Abstract.Declaration l l Sem Sem) ~ (InhTC l, Map AST.Ident AST.Ident),
-          Atts (Synthesized TypeCheck) (Abstract.StatementSequence l l Sem Sem) ~ SynTC l) =>
+instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
+          Atts (Synthesized TypeCheck) (Abstract.Block l l Sem Sem) ~ SynTCMod l,
+          Atts (Inherited TypeCheck) (Abstract.Block l l Sem Sem) ~ InhTC l) =>
          Attribution TypeCheck (AST.Module l l) Sem ((,) Int) where
-   attribution TypeCheck (pos, AST.Module moduleName imports decls body) 
-               (Inherited inheritance, AST.Module _ _ decls' body') =
-      (Synthesized SynTCMod{moduleErrors= foldMap (moduleErrors . syn) decls' <> foldMap (errors . syn) body',
+   attribution TypeCheck (pos, AST.Module moduleName imports body) 
+               (Inherited inheritance, AST.Module _ _ body') =
+      (Synthesized SynTCMod{moduleErrors= moduleErrors (syn body'),
                             moduleEnv= exportedEnv,
-                            pointerTargets= pointers},
-       AST.Module moduleName imports (pure $ Inherited (localEnv, pointers)) (Inherited localEnv <$ body))
-      where exportedEnv = exportNominal <$> Map.mapKeysMonotonic export newEnv
-            newEnv = Map.unionsWith mergeTypeBoundProcedures (moduleEnv . syn <$> decls')
-            localEnv = InhTC (newEnv `Map.union` env inheritance) (currentModule inheritance)
+                            pointerTargets= pointerTargets (syn body')},
+       AST.Module moduleName imports (Inherited inheritance))
+      where exportedEnv = exportNominal <$> Map.mapKeysMonotonic export (moduleEnv $ syn body')
             export q
                | Just name <- Abstract.getNonQualIdentName q = Abstract.qualIdent moduleName name
                | otherwise = q
@@ -304,26 +300,6 @@ instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Sh
                 fromMaybe (NominalType (Abstract.qualIdent moduleName name) $ Just $ exportNominal' t)
                           (Map.lookup q exportedEnv)
             exportNominal' t = t
-            pointers= foldMap (pointerTargets . syn) decls'
-            mergeTypeBoundProcedures (NominalType q (Just t1)) t2
-               | Abstract.getNonQualIdentName q == Just "" = mergeTypeBoundProcedures t1 t2
-               | otherwise = NominalType q (Just $ mergeTypeBoundProcedures t1 t2)
-            mergeTypeBoundProcedures t1 (NominalType q (Just t2))
-               | Abstract.getNonQualIdentName q == Just "" = mergeTypeBoundProcedures t1 t2
-               | otherwise = NominalType q (Just $ mergeTypeBoundProcedures t1 t2)
-            mergeTypeBoundProcedures (RecordType ancestry1 fields1) (RecordType ancestry2 fields2) =
-               RecordType (ancestry1 <> ancestry2) (fields1 <> fields2)
-            mergeTypeBoundProcedures (PointerType (RecordType ancestry1 fields1)) (RecordType ancestry2 fields2) =
-               PointerType (RecordType (ancestry1 <> ancestry2) (fields1 <> fields2))
-            mergeTypeBoundProcedures (RecordType ancestry1 fields1) (PointerType (RecordType ancestry2 fields2)) =
-               PointerType (RecordType (ancestry1 <> ancestry2) (fields1 <> fields2))
-            mergeTypeBoundProcedures (PointerType (NominalType q (Just (RecordType ancestry1 fields1))))
-                                     (RecordType ancestry2 fields2) =
-               PointerType (NominalType q $ Just $ RecordType (ancestry1 <> ancestry2) (fields1 <> fields2))
-            mergeTypeBoundProcedures (RecordType ancestry1 fields1)
-                                     (PointerType (NominalType q (Just (RecordType ancestry2 fields2)))) =
-               PointerType (NominalType q $ Just $ RecordType (ancestry1 <> ancestry2) (fields1 <> fields2))
-            mergeTypeBoundProcedures t1 t2 = error (take 90 $ show t1)
 
 instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Inherited TypeCheck) (Abstract.Declaration l l Sem Sem) ~ (InhTC l, Map AST.Ident AST.Ident),
@@ -336,7 +312,7 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Synthesized TypeCheck) (Abstract.Type l l Sem Sem) ~ SynTCType l,
           Atts (Synthesized TypeCheck) (Abstract.FormalParameters l l Sem Sem) ~ SynTCSig l,
           Atts (Synthesized TypeCheck) (Abstract.ProcedureHeading l l Sem Sem) ~ SynTCHead l,
-          Atts (Synthesized TypeCheck) (Abstract.Block l l Sem Sem) ~ SynTC l,
+          Atts (Synthesized TypeCheck) (Abstract.Block l l Sem Sem) ~ SynTCMod l,
           Atts (Synthesized TypeCheck) (Abstract.ConstExpression l l Sem Sem) ~ SynTCExp l) =>
          Attribution TypeCheck (AST.Declaration l l) Sem ((,) Int) where
    attribution TypeCheck (pos, AST.ConstantDeclaration namedef _)
@@ -372,7 +348,7 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
        AST.VariableDeclaration names (Inherited $ fst inheritance))
    attribution TypeCheck (pos, AST.ProcedureDeclaration _heading _body)
                (Inherited inheritance, AST.ProcedureDeclaration heading body) =
-      (Synthesized SynTCMod{moduleErrors= headingErrors (syn heading) <> errors (syn body),
+      (Synthesized SynTCMod{moduleErrors= headingErrors (syn heading) <> moduleErrors (syn body),
                             moduleEnv= outsideEnv (syn heading),
                             pointerTargets= mempty},
        AST.ProcedureDeclaration (Inherited inheritance) (Inherited bodyInherited))
@@ -421,17 +397,40 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
                      | PointerType t' <- ultimate t, RecordType{} <- ultimate t' -> []
                      | otherwise -> [(currentModule $ fst inheritance, pos, NonRecordType t)]
 
-instance (Ord (Abstract.QualIdent l),
+instance (Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
           Atts (Inherited TypeCheck) (Abstract.Declaration l l Sem Sem) ~ (InhTC l, Map AST.Ident AST.Ident),
           Atts (Inherited TypeCheck) (Abstract.StatementSequence l l Sem Sem) ~ InhTC l,
           Atts (Synthesized TypeCheck) (Abstract.Declaration l l Sem Sem) ~ SynTCMod l,
           Atts (Synthesized TypeCheck) (Abstract.StatementSequence l l Sem Sem) ~ SynTC l) =>
          Attribution TypeCheck (AST.Block l l) Sem ((,) Int) where
    attribution TypeCheck (pos, AST.Block{}) (Inherited inheritance, AST.Block declarations statements) =
-      (Synthesized SynTC{errors= foldMap (moduleErrors . syn) declarations <> foldMap (errors . syn) statements},
-       AST.Block (pure $ Inherited (localInherited, mempty)) (pure $ Inherited localInherited))
-      where localInherited = InhTC (foldMap (moduleEnv . syn) declarations <> env inheritance)
-                                   (currentModule inheritance)
+      (Synthesized SynTCMod{moduleErrors= foldMap (moduleErrors . syn) declarations
+                                          <> foldMap (errors . syn) statements,
+                            moduleEnv= newEnv,
+                            pointerTargets= pointers},
+       AST.Block (pure $ Inherited (localInherited, pointers)) (pure $ Inherited localInherited))
+      where newEnv = Map.unionsWith mergeTypeBoundProcedures (moduleEnv . syn <$> declarations)
+            localInherited = InhTC (newEnv <> env inheritance) (currentModule inheritance)
+            pointers= foldMap (pointerTargets . syn) declarations
+            mergeTypeBoundProcedures (NominalType q (Just t1)) t2
+               | Abstract.getNonQualIdentName q == Just "" = mergeTypeBoundProcedures t1 t2
+               | otherwise = NominalType q (Just $ mergeTypeBoundProcedures t1 t2)
+            mergeTypeBoundProcedures t1 (NominalType q (Just t2))
+               | Abstract.getNonQualIdentName q == Just "" = mergeTypeBoundProcedures t1 t2
+               | otherwise = NominalType q (Just $ mergeTypeBoundProcedures t1 t2)
+            mergeTypeBoundProcedures (RecordType ancestry1 fields1) (RecordType ancestry2 fields2) =
+               RecordType (ancestry1 <> ancestry2) (fields1 <> fields2)
+            mergeTypeBoundProcedures (PointerType (RecordType ancestry1 fields1)) (RecordType ancestry2 fields2) =
+               PointerType (RecordType (ancestry1 <> ancestry2) (fields1 <> fields2))
+            mergeTypeBoundProcedures (RecordType ancestry1 fields1) (PointerType (RecordType ancestry2 fields2)) =
+               PointerType (RecordType (ancestry1 <> ancestry2) (fields1 <> fields2))
+            mergeTypeBoundProcedures (PointerType (NominalType q (Just (RecordType ancestry1 fields1))))
+                                     (RecordType ancestry2 fields2) =
+               PointerType (NominalType q $ Just $ RecordType (ancestry1 <> ancestry2) (fields1 <> fields2))
+            mergeTypeBoundProcedures (RecordType ancestry1 fields1)
+                                     (PointerType (NominalType q (Just (RecordType ancestry2 fields2)))) =
+               PointerType (NominalType q $ Just $ RecordType (ancestry1 <> ancestry2) (fields1 <> fields2))
+            mergeTypeBoundProcedures t1 t2 = error (take 90 $ show t1)
             
 instance (Ord (Abstract.QualIdent l),
           Atts (Inherited TypeCheck) (Abstract.FPSection l l Sem Sem) ~ InhTC l,
@@ -1035,19 +1034,16 @@ instance Ord (Abstract.QualIdent l) => Transformation.At TypeCheck (Modules l Se
 -- * Unsafe Rank2 AST instances
 
 instance Rank2.Apply (AST.Module l l f') where
-   AST.Module name1 imports1 decls1 body1 <*> ~(AST.Module name2 imports2 decls2 body2) =
-      AST.Module name1 imports1 (liftA2 Rank2.apply decls1 decls2) (liftA2 Rank2.apply body1 body2)
+   AST.Module name1 imports1 body1 <*> ~(AST.Module name2 imports2 body2) =
+      AST.Module name1 imports1 (Rank2.apply body1 body2)
 
 type Placed = ((,) Int)
 
 checkModules :: (Abstract.Oberon l, Abstract.Nameable l,
                  Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
-                 Atts (Inherited TypeCheck) (Abstract.Declaration l l Sem Sem) ~ (InhTC l, Map AST.Ident AST.Ident),
-                 Atts (Inherited TypeCheck) (Abstract.StatementSequence l l Sem Sem) ~ InhTC l,
-                 Atts (Synthesized TypeCheck) (Abstract.Declaration l l Sem Sem) ~ SynTCMod l,
-                 Atts (Synthesized TypeCheck) (Abstract.StatementSequence l l Sem Sem) ~ SynTC l,
-                 Full.Functor TypeCheck (Abstract.Declaration l l),
-                 Full.Functor TypeCheck (Abstract.StatementSequence l l))
+                 Atts (Inherited TypeCheck) (Abstract.Block l l Sem Sem) ~ InhTC l,
+                 Atts (Synthesized TypeCheck) (Abstract.Block l l Sem Sem) ~ SynTCMod l,
+                 Full.Functor TypeCheck (Abstract.Block l l))
              => Environment l -> Map AST.Ident (AST.Module l l Placed Placed) -> [Error l]
 checkModules predef modules =
    errors (syn (Transformation.apply TypeCheck (0, TypeCheck Deep.<$> Modules modules')

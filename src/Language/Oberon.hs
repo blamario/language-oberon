@@ -79,7 +79,7 @@ parseImportsOf version path modules =
                      (traverse . traverse) (parseNamedModule version path) [(p, p) | p <- newImports])
                     >>= parseImportsOf version path
    where moduleImports = foldMap importsOf modules
-         importsOf (Module _ imports _ _) = snd <$> imports
+         importsOf (Module _ imports _) = snd <$> imports
          assertSuccess (m, Left err) = error ("Parse error in module " <> unpack m)
          assertSuccess (m, Right [p]) = (m, p)
          assertSuccess (m, Right _) = error ("Ambiguous parses of module " <> unpack m)
@@ -92,7 +92,7 @@ parseAndResolveModule :: Options -> FilePath -> Text
 parseAndResolveModule Options{..} path source =
    case parseModule version source
    of Left err -> return (Failure $ Left $ Resolver.UnparseableModule (failureDescription source err 4) :| [])
-      Right [rootModule@(Module moduleName imports _ _)] ->
+      Right [rootModule@(Module moduleName imports _)] ->
          do importedModules <- parseImportsOf version path (Map.singleton moduleName rootModule)
             let resolvedImportMap = Resolver.resolveModule predefinedScope resolvedImportMap <$> importedModules
                 predefinedScope = case version 
