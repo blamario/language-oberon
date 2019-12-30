@@ -53,16 +53,16 @@ definitionGrammar Oberon1 = Grammar.oberonDefinitionGrammar
 definitionGrammar Oberon2 = Grammar.oberon2DefinitionGrammar 
 
 -- | Parse the given text of a single module, without resolving the syntactic ambiguities.
-parseModule :: LanguageVersion -> Text -> ParseResults [Module Language Language NodeWrap NodeWrap]
+parseModule :: LanguageVersion -> Text -> ParseResults Text [Module Language Language NodeWrap NodeWrap]
 parseModule version src =
   getCompose (resolvePositions src <$> Grammar.module_prod (parseComplete (moduleGrammar version) src))
 
 -- | Parse the given text of a single /definition/ module, without resolving the syntactic ambiguities.
-parseDefinitionModule :: LanguageVersion -> Text -> ParseResults [Module Language Language NodeWrap NodeWrap]
+parseDefinitionModule :: LanguageVersion -> Text -> ParseResults Text [Module Language Language NodeWrap NodeWrap]
 parseDefinitionModule version src =
   getCompose (resolvePositions src <$> Grammar.module_prod (parseComplete (definitionGrammar version) src))
 
-parseNamedModule :: LanguageVersion -> FilePath -> Text -> IO (ParseResults [Module Language Language NodeWrap NodeWrap])
+parseNamedModule :: LanguageVersion -> FilePath -> Text -> IO (ParseResults Text [Module Language Language NodeWrap NodeWrap])
 parseNamedModule version path name =
    do let basePath = combine path (unpack name)
       isDefn <- doesFileExist (addExtension basePath "Def")
