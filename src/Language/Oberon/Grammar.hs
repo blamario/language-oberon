@@ -249,7 +249,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                     Abstract.variable <$> qualident
                 <|> Abstract.field <$> designator <* delimiter "." <*> ident
                 <|> Abstract.index <$> designator <*> brackets expList
-                <|> (Abstract.typeGuard <$> designator <*> parens qualident :: Parser (OberonGrammar l NodeWrap) Text (Abstract.Designator l l NodeWrap NodeWrap))
+                <|> Abstract.typeGuard <$> designator <*> parens qualident
                 <|> Abstract.dereference <$> designator <* operator "^",
    expList = sepByNonEmpty expression (delimiter ","),
    actualParameters = parens (sepBy expression (delimiter ",")),
