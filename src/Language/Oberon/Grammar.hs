@@ -1,4 +1,5 @@
-{-# Language OverloadedStrings, Rank2Types, RecordWildCards, ScopedTypeVariables, TypeFamilies, TemplateHaskell #-}
+{-# Language FlexibleInstances, OverloadedStrings, Rank2Types, RecordWildCards, ScopedTypeVariables,
+             TypeFamilies, TypeSynonymInstances, TemplateHaskell #-}
 
 -- | Oberon grammar adapted from http://www.ethoberon.ethz.ch/EBNF.html
 -- Extracted from the book Programmieren in Oberon - Das neue Pascal by N. Wirth and M. Reiser and translated by J. Templ.
@@ -102,8 +103,10 @@ instance Show (BinOp l f) where
 
 $(Rank2.TH.deriveAll ''OberonGrammar)
 
-instance Lexical (OberonGrammar l f) where
-   type LexicalConstraint p (OberonGrammar l f) s = (s ~ Text, p ~ Parser)
+instance TokenParsing (Parser (OberonGrammar l f) Text) where
+   someSpace = someLexicalSpace
+
+instance LexicalParsing (Parser (OberonGrammar l f) Text) where
    lexicalComment = try (string "(*"
                          *> skipMany (lexicalComment
                                       <|> notFollowedBy (string "*)") <* anyToken <* takeCharsWhile isCommentChar)
