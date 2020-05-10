@@ -22,9 +22,6 @@ import qualified Rank2.TH
 import qualified Language.Oberon.Abstract as Abstract
 import Language.Oberon.Abstract (RelOp(..))
 
--- | Orphan instance
-deriving instance Data a => Data (ZipList a)
-
 data Language = Language deriving (Data, Typeable)
 
 instance Abstract.Wirthy Language where
