@@ -77,8 +77,8 @@ data SynCF a = SynCF{folded :: (Int, a)}
 data SynCFMod l a = SynCFMod{moduleEnv    :: Environment l,
                              moduleFolded :: (Int, a)}
 
-data SynCFExp l = SynCFExp{foldedExp   :: (Int, Abstract.Expression l l ((,) Int) ((,) Int)),
-                           foldedValue :: Maybe (Abstract.Value l l ((,) Int) ((,) Int))}
+data SynCFExp λ l = SynCFExp{foldedExp   :: (Int, Abstract.Expression λ l ((,) Int) ((,) Int)),
+                             foldedValue :: Maybe (Abstract.Value l l ((,) Int) ((,) Int))}
 
 data SynCFRoot a = SynCFRoot{modulesFolded :: a}
 
@@ -106,7 +106,7 @@ type instance Atts (Synthesized ConstantFold) (AST.FPSection l l _ _) = SynCF' (
 type instance Atts (Synthesized ConstantFold) (AST.Type l l _ _) = SynCF' (AST.Type l l)
 type instance Atts (Synthesized ConstantFold) (AST.FieldList l l _ _) = SynCF' (AST.FieldList l l)
 type instance Atts (Synthesized ConstantFold) (AST.StatementSequence l l _ _) = SynCF' (AST.StatementSequence l l)
-type instance Atts (Synthesized ConstantFold) (AST.Expression l l _ _) = SynCFExp l
+type instance Atts (Synthesized ConstantFold) (AST.Expression λ l _ _) = SynCFExp λ l
 type instance Atts (Synthesized ConstantFold) (AST.Element l l _ _) = SynCF' (AST.Element l l)
 type instance Atts (Synthesized ConstantFold) (AST.Value l l _ _) = SynCF' (AST.Value l l)
 type instance Atts (Synthesized ConstantFold) (AST.Designator l l _ _) =
@@ -127,7 +127,7 @@ type instance Atts (Inherited ConstantFold) (AST.FPSection l l _ _) = InhCF l
 type instance Atts (Inherited ConstantFold) (AST.Type l l _ _) = InhCF l
 type instance Atts (Inherited ConstantFold) (AST.FieldList l l _ _) = InhCF l
 type instance Atts (Inherited ConstantFold) (AST.StatementSequence l l _ _) = InhCF l
-type instance Atts (Inherited ConstantFold) (AST.Expression l l _ _) = InhCF l
+type instance Atts (Inherited ConstantFold) (AST.Expression l _ _ _) = InhCF l
 type instance Atts (Inherited ConstantFold) (AST.Element l l _ _) = InhCF l
 type instance Atts (Inherited ConstantFold) (AST.Value l l _ _) = InhCF l
 type instance Atts (Inherited ConstantFold) (AST.Designator l l _ _) = InhCF l
@@ -163,7 +163,7 @@ instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Sh
                | Just name <- Abstract.getNonQualIdentName q = Abstract.qualIdent moduleName name
                | otherwise = q
 
-instance (Abstract.Nameable l, Ord (Abstract.QualIdent l), Abstract.Value l ~ AST.Value l,
+instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Inherited ConstantFold) (Abstract.Declaration l l Sem Sem) ~ InhCF l,
           Atts (Inherited ConstantFold) (Abstract.Type l l Sem Sem) ~ InhCF l,
           Atts (Inherited ConstantFold) (Abstract.Block l l Sem Sem) ~ InhCF l,
@@ -177,7 +177,7 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l), Abstract.Value l ~ AS
           Atts (Synthesized ConstantFold) (Abstract.FormalParameters l l Sem Sem)
           ~ SynCF' (Abstract.FormalParameters l l),
           Atts (Synthesized ConstantFold) (Abstract.Block l l Sem Sem) ~ SynCFMod' l (Abstract.Block l l),
-          Atts (Synthesized ConstantFold) (Abstract.ConstExpression l l Sem Sem) ~ SynCFExp l) =>
+          Atts (Synthesized ConstantFold) (Abstract.ConstExpression l l Sem Sem) ~ SynCFExp l l) =>
          Attribution ConstantFold (AST.Declaration l l) Sem ((,) Int) where
    bequest ConstantFold (pos, d) inheritance _ = AG.passDown (Inherited inheritance) d
    synthesis ConstantFold (pos, AST.ConstantDeclaration namedef _) _ (AST.ConstantDeclaration _ expression) =
@@ -217,15 +217,15 @@ instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Sh
             localEnv = InhCF (newEnv `Map.union` env inheritance) (currentModule inheritance)
 
 instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Abstract.Value l ~ AST.Value l,
+          Abstract.Value l ~ AST.Value l, InhCF l ~ InhCF λ,
           Atts (Inherited ConstantFold) (Abstract.Expression l l Sem Sem) ~ InhCF l,
           Atts (Inherited ConstantFold) (Abstract.Element l l Sem Sem) ~ InhCF l,
           Atts (Inherited ConstantFold) (Abstract.Designator l l Sem Sem) ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.Expression l l Sem Sem) ~ SynCFExp l,
+          Atts (Synthesized ConstantFold) (Abstract.Expression l l Sem Sem) ~ SynCFExp λ l,
           Atts (Synthesized ConstantFold) (Abstract.Element l l Sem Sem) ~ SynCF' (Abstract.Element l l),
           Atts (Synthesized ConstantFold) (Abstract.Designator l l Sem Sem)
           ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Value l l ((,) Int) ((,) Int)))) =>
-         Attribution ConstantFold (AST.Expression l l) Sem ((,) Int) where
+         Attribution ConstantFold (AST.Expression λ l) Sem ((,) Int) where
    bequest ConstantFold (pos, e) inheritance _ = AG.passDown (Inherited inheritance) e
    synthesis ConstantFold (pos, AST.Relation op _ _) _ (AST.Relation _op left right) =
       case join (compareValues <$> foldedValue (syn left) <*> foldedValue (syn right))
@@ -378,11 +378,11 @@ maxReal = encodeFloat (floatRadix x - 1) (snd (floatRange x) - 1)
 minReal = encodeFloat (floatRadix x - 1) (fst (floatRange x))
    where x = 0 :: Double
 
-foldBinaryArithmetic :: forall l f. (f ~ ((,) Int), Abstract.Value l ~ AST.Value l, Abstract.Wirthy l) =>
+foldBinaryArithmetic :: forall λ l f. (f ~ ((,) Int), Abstract.Value l ~ AST.Value l, Abstract.Wirthy λ) =>
                         Int
-                     -> (f (Abstract.Expression l l f f) -> f (Abstract.Expression l l f f) -> Abstract.Expression l l f f)
+                     -> (f (Abstract.Expression λ l f f) -> f (Abstract.Expression λ l f f) -> Abstract.Expression λ l f f)
                      -> (forall n. Num n => n -> n -> n)
-                     -> SynCFExp l -> SynCFExp l -> SynCFExp l
+                     -> SynCFExp λ l -> SynCFExp λ l -> SynCFExp λ l
 foldBinaryArithmetic pos node op l r = case join (foldValues <$> foldedValue l <*> foldedValue r)
                                        of Just v -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, v)),
                                                              foldedValue= Just v}
@@ -395,11 +395,11 @@ foldBinaryArithmetic pos node op l r = case join (foldValues <$> foldedValue l <
          foldValues (AST.Real l')    (AST.Integer r') = Just (AST.Real $ op l' (fromIntegral r'))
          foldValues _ _ = Nothing
 
-foldBinaryFractional :: forall l f. (f ~ ((,) Int), Abstract.Value l ~ AST.Value l, Abstract.Wirthy l) =>
+foldBinaryFractional :: forall λ l f. (f ~ ((,) Int), Abstract.Value l ~ AST.Value l, Abstract.Wirthy λ) =>
                         Int
-                     -> (f (Abstract.Expression l l f f) -> f (Abstract.Expression l l f f) -> Abstract.Expression l l f f)
+                     -> (f (Abstract.Expression λ l f f) -> f (Abstract.Expression λ l f f) -> Abstract.Expression λ l f f)
                      -> (forall n. Fractional n => n -> n -> n)
-                     -> SynCFExp l -> SynCFExp l -> SynCFExp l
+                     -> SynCFExp λ l -> SynCFExp λ l -> SynCFExp λ l
 foldBinaryFractional pos node op l r = case join (foldValues <$> foldedValue l <*> foldedValue r)
                                        of Just v -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, v)),
                                                              foldedValue= Just v}
@@ -409,11 +409,11 @@ foldBinaryFractional pos node op l r = case join (foldValues <$> foldedValue l <
          foldValues (AST.Real l')    (AST.Real r')    = Just (AST.Real $ op l' r')
          foldValues _ _ = Nothing
 
-foldBinaryInteger :: forall l f. (f ~ ((,) Int), Abstract.Value l ~ AST.Value l, Abstract.Wirthy l) =>
+foldBinaryInteger :: forall λ l f. (f ~ ((,) Int), Abstract.Value l ~ AST.Value l, Abstract.Wirthy λ) =>
                         Int
-                     -> (f (Abstract.Expression l l f f) -> f (Abstract.Expression l l f f) -> Abstract.Expression l l f f)
+                     -> (f (Abstract.Expression λ l f f) -> f (Abstract.Expression λ l f f) -> Abstract.Expression λ l f f)
                      -> (forall n. Integral n => n -> n -> n)
-                     -> SynCFExp l -> SynCFExp l -> SynCFExp l
+                     -> SynCFExp λ l -> SynCFExp λ l -> SynCFExp λ l
 foldBinaryInteger pos node op l r = case join (foldValues <$> foldedValue l <*> foldedValue r)
                                     of Just v -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, v)),
                                                           foldedValue= Just v}
@@ -423,11 +423,11 @@ foldBinaryInteger pos node op l r = case join (foldValues <$> foldedValue l <*> 
          foldValues (AST.Integer l') (AST.Integer r') = Just (AST.Integer $ op l' r')
          foldValues _ _ = Nothing
 
-foldBinaryBoolean :: forall l f. (f ~ ((,) Int), Abstract.Value l ~ AST.Value l, Abstract.Wirthy l) =>
+foldBinaryBoolean :: forall λ l f. (f ~ ((,) Int), Abstract.Value l ~ AST.Value l, Abstract.Wirthy λ) =>
                      Int
-                  -> (f (Abstract.Expression l l f f) -> f (Abstract.Expression l l f f) -> Abstract.Expression l l f f)
+                  -> (f (Abstract.Expression λ l f f) -> f (Abstract.Expression λ l f f) -> Abstract.Expression λ l f f)
                   -> (Bool -> Bool -> Bool)
-                  -> SynCFExp l -> SynCFExp l -> SynCFExp l
+                  -> SynCFExp λ l -> SynCFExp λ l -> SynCFExp λ l
 foldBinaryBoolean pos node op l r = case join (foldValues <$> foldedValue l <*> foldedValue r)
                                     of Just v -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, v)),
                                                           foldedValue= Just v}
@@ -442,7 +442,7 @@ instance (Abstract.CoWirthy l, Abstract.Nameable l, Abstract.Oberon l, Ord (Abst
           Abstract.Value l l ((,) Int) ((,) Int) ~ AST.Value l l ((,) Int) ((,) Int),
           Atts (Inherited ConstantFold) (Abstract.Expression l l Sem Sem) ~ InhCF l,
           Atts (Inherited ConstantFold) (Abstract.Designator l l Sem Sem) ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.Expression l l Sem Sem) ~ SynCFExp l,
+          Atts (Synthesized ConstantFold) (Abstract.Expression l l Sem Sem) ~ SynCFExp λ l,
           Atts (Synthesized ConstantFold) (Abstract.Designator l l Sem Sem)
           ~ SynCF (Abstract.Designator l l ((,) Int) ((,) Int), Maybe (Abstract.Value l l ((,) Int) ((,) Int)))) =>
          Attribution ConstantFold (AST.Designator l l) Sem ((,) Int) where
