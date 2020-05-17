@@ -1,5 +1,5 @@
 {-# Language FlexibleInstances, OverloadedStrings, Rank2Types, RecordWildCards, ScopedTypeVariables,
-             TypeFamilies, TypeSynonymInstances, TemplateHaskell #-}
+             TypeApplications, TypeFamilies, TypeSynonymInstances, TemplateHaskell #-}
 
 -- | Oberon grammar adapted from http://www.ethoberon.ethz.ch/EBNF.html
 -- Extracted from the book Programmieren in Oberon - Das neue Pascal by N. Wirth and M. Reiser and translated by J. Templ.
@@ -54,6 +54,7 @@ data OberonGrammar l f p = OberonGrammar {
    set :: p (Abstract.Expression l l f f),
    element :: p (Abstract.Element l l f f),
    designator :: p (f (Abstract.Designator l l f f)),
+   unguardedDesignator :: p (Abstract.Designator l l f f),
    expList :: p (NonEmpty (f (Abstract.Expression l l f f))),
    actualParameters :: p [f (Abstract.Expression l l f f)],
    mulOperator :: p (BinOp l f),
@@ -231,7 +232,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                                                       <|> Abstract.nil <$ keyword "NIL")
                            <|> set
                            <|> Abstract.read <$> designator
-                           <|> Abstract.functionCall <$> designator <*> actualParameters
+                           <|> Abstract.functionCall <$> wrapAmbiguous unguardedDesignator <*> actualParameters
                            <|> (Abstract.not <$ operator "~" <*> factor :: Parser (OberonGrammar l NodeWrap) Text (Abstract.Expression l l NodeWrap NodeWrap)))
             <|> parens expression,
    number  =  integer <|> real,
@@ -248,12 +249,12 @@ grammar OberonGrammar{..} = OberonGrammar{
    set = Abstract.set <$> braces (sepBy (wrap element) (delimiter ",")),
    element = Abstract.element <$> expression
              <|> Abstract.range <$> expression <* delimiter ".." <*> expression,
-   designator = wrapAmbiguous $
-                    Abstract.variable <$> qualident
-                <|> Abstract.field <$> designator <* delimiter "." <*> ident
-                <|> Abstract.index <$> designator <*> brackets expList
-                <|> Abstract.typeGuard <$> designator <*> parens qualident
-                <|> Abstract.dereference <$> designator <* operator "^",
+   designator = wrapAmbiguous (unguardedDesignator
+                               <|> Abstract.typeGuard <$> designator <*> parens qualident),
+   unguardedDesignator = Abstract.variable <$> qualident
+                         <|> Abstract.field <$> designator <* delimiter "." <*> ident
+                         <|> Abstract.index @l <$> designator <*> brackets expList
+                         <|> Abstract.dereference <$> designator <* operator "^",
    expList = sepByNonEmpty expression (delimiter ","),
    actualParameters = parens (sepBy expression (delimiter ",")),
    mulOperator = BinOp . wrapBinary
@@ -315,7 +316,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                <|> pure Abstract.emptyStatement
                <?> "statement",
    assignment  =  Abstract.assignment <$> designator <* delimiter ":=" <*> expression,
-   procedureCall = Abstract.procedureCall <$> designator <*> optional actualParameters,
+   procedureCall = Abstract.procedureCall <$> wrapAmbiguous unguardedDesignator <*> optional actualParameters,
    ifStatement = Abstract.ifStatement <$ keyword "IF"
        <*> sepByNonEmpty (wrap $ Abstract.conditionalBranch <$> expression <* keyword "THEN" <*> wrap statementSequence)
                          (keyword "ELSIF")
