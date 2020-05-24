@@ -140,7 +140,7 @@ comment = try (string "(*"
    where isCommentChar c = c /= '*' && c /= '('
 
 whiteSpace :: LexicalParsing (Parser g Text) => Parser g Text ()
-whiteSpace = tmap (first (\ws-> [concat ws])) ((\x-> lift [[WhiteSpace x]]) <$> takeCharsWhile isSpace)
+whiteSpace = ((takeCharsWhile1 isSpace >>= \ws-> lift ([[Left $ WhiteSpace ws]], ())) <<|> pure ())
              *> skipMany (lexicalComment *> takeCharsWhile isSpace)
 
 wrapAmbiguous, wrap :: Parser g Text a -> Parser g Text (NodeWrap a)
