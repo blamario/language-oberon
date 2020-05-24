@@ -1,15 +1,18 @@
-{-# Language FlexibleInstances, OverloadedStrings, Rank2Types, RecordWildCards, ScopedTypeVariables,
+{-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances,
+             OverloadedStrings, Rank2Types, RecordWildCards, ScopedTypeVariables,
              TypeApplications, TypeFamilies, TypeSynonymInstances, TemplateHaskell #-}
 
 -- | Oberon grammar adapted from http://www.ethoberon.ethz.ch/EBNF.html
 -- Extracted from the book Programmieren in Oberon - Das neue Pascal by N. Wirth and M. Reiser and translated by J. Templ.
 
-module Language.Oberon.Grammar (OberonGrammar(..), NodeWrap,
+module Language.Oberon.Grammar (OberonGrammar(..), Parser, NodeWrap, ParsedIgnorables(..), Comment(..), WhiteSpace(..),
                                 oberonGrammar, oberon2Grammar, oberonDefinitionGrammar, oberon2DefinitionGrammar) where
 
 import Control.Applicative
+import Control.Arrow (first)
 import Control.Monad (guard)
 import Data.Char
+import Data.Data (Data)
 import Data.Functor.Compose (Compose(..))
 import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe (catMaybes)
@@ -17,8 +20,8 @@ import Data.Monoid ((<>), Endo(Endo, appEndo))
 import Numeric (readDec, readHex, readFloat)
 import Data.Text (Text, unpack)
 import Text.Grampa
-import Text.Grampa.ContextFree.LeftRecursive (Parser)
 import Text.Parser.Combinators (sepBy, sepBy1, sepByNonEmpty, try)
+import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift, tmap)
 import Text.Parser.Token (braces, brackets, parens)
 
 import qualified Rank2.TH
@@ -104,23 +107,46 @@ instance Show (BinOp l f) where
 
 $(Rank2.TH.deriveAll ''OberonGrammar)
 
+type Parser = ParserT ((,) [Ignorables])
+type Ignorables = [Either WhiteSpace Comment]
+newtype Comment    = Comment{getComment :: Text} deriving (Data, Eq, Show)
+newtype WhiteSpace = WhiteSpace Text deriving (Data, Eq, Show)
+
+type NodeWrap = Compose ((,) (Position Text)) (Compose Ambiguous ((,) ParsedIgnorables))
+
+data ParsedIgnorables = Trailing Ignorables
+                      | OperatorTrailing [Ignorables]
+                      | ParenthesesTrailing Ignorables ParsedIgnorables Ignorables
+                      deriving (Data, Show)
+
 instance TokenParsing (Parser (OberonGrammar l f) Text) where
    someSpace = someLexicalSpace
+   token p = p <* lexicalWhiteSpace
 
 instance LexicalParsing (Parser (OberonGrammar l f) Text) where
-   lexicalComment = try (string "(*"
-                         *> skipMany (lexicalComment
-                                      <|> notFollowedBy (string "*)") <* anyToken <* takeCharsWhile isCommentChar)
-                         <* string "*)")
-      where isCommentChar c = c /= '*' && c /= '('
-   lexicalWhiteSpace = takeCharsWhile isSpace *> skipMany (lexicalComment *> takeCharsWhile isSpace)
+   lexicalComment = do c <- comment
+                       lift ([[Right $ Comment c]], ())
+   lexicalWhiteSpace = whiteSpace
    isIdentifierStartChar = isLetter
    isIdentifierFollowChar = isAlphaNum
    identifierToken word = lexicalToken (do w <- word
                                            guard (w `notElem` reservedWords)
                                            return w)
 
-type NodeWrap = Compose ((,) (Position Text)) Ambiguous
+comment :: Parser g Text Text
+comment = try (string "(*"
+               <> concatMany (comment <<|> notFollowedBy (string "*)") *> anyToken <> takeCharsWhile isCommentChar)
+               <> string "*)")
+   where isCommentChar c = c /= '*' && c /= '('
+
+whiteSpace :: LexicalParsing (Parser g Text) => Parser g Text ()
+whiteSpace = tmap (first (\ws-> [concat ws])) ((\x-> lift [[WhiteSpace x]]) <$> takeCharsWhile isSpace)
+             *> skipMany (lexicalComment *> takeCharsWhile isSpace)
+
+wrapAmbiguous, wrap :: Parser g Text a -> Parser g Text (NodeWrap a)
+wrapAmbiguous = wrap
+wrap = (Compose <$>) . ((,) <$> getSourcePos <*>) . (Compose <$>) . (ambiguous . tmap store) . ((,) (Trailing []) <$>)
+   where store (wss, (Trailing [], a)) = (mempty, (Trailing (concat wss), a))
 
 oberonGrammar, oberon2Grammar, oberonDefinitionGrammar, oberon2DefinitionGrammar
    :: Grammar (OberonGrammar AST.Language NodeWrap) Parser Text
@@ -339,12 +365,8 @@ grammar OberonGrammar{..} = OberonGrammar{
                              <* keyword "DO" <*> wrap statementSequence)
                    <* keyword "END"}
 
-wrapAmbiguous, wrap :: Abstract.Oberon l => Parser (OberonGrammar l f) Text a -> Parser (OberonGrammar l f) Text (NodeWrap a)
-wrapAmbiguous = (Compose <$>) . ((,) <$> getSourcePos <*>) . ambiguous
-wrap = wrapAmbiguous
-
 wrapBinary :: (NodeWrap a -> NodeWrap a -> a) -> (NodeWrap a -> NodeWrap a -> NodeWrap a)
-wrapBinary op a@(Compose (pos, _)) b = Compose (pos, pure (op a b))
+wrapBinary op a@(Compose (pos, _)) b = Compose (pos, Compose $ pure (Trailing [], op a b))
 
 moptional :: (Alternative f, Monoid (f a)) => f a -> f a
 moptional p = p <|> mempty

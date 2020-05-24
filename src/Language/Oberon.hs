@@ -29,8 +29,8 @@ import System.FilePath (FilePath, addExtension, combine, takeDirectory)
 
 import Prelude hiding (readFile)
 
-type NodeWrap = Compose ((,) Int) Ambiguous
-type Placed = ((,) Int)
+type NodeWrap = Compose ((,) Int) (Compose Ambiguous ((,) Grammar.ParsedIgnorables))
+type Placed = (,) (Int, Grammar.ParsedIgnorables)
 
 data LanguageVersion = Oberon1 | Oberon2 deriving (Eq, Ord, Show)
 
@@ -55,12 +55,12 @@ definitionGrammar Oberon2 = Grammar.oberon2DefinitionGrammar
 -- | Parse the given text of a single module, without resolving the syntactic ambiguities.
 parseModule :: LanguageVersion -> Text -> ParseResults Text [Module Language Language NodeWrap NodeWrap]
 parseModule version src =
-  getCompose (resolvePositions src <$> Grammar.module_prod (parseComplete (moduleGrammar version) src))
+  getCompose (resolvePositions src . snd <$> (getCompose $ Grammar.module_prod $ parseComplete (moduleGrammar version) src))
 
 -- | Parse the given text of a single /definition/ module, without resolving the syntactic ambiguities.
 parseDefinitionModule :: LanguageVersion -> Text -> ParseResults Text [Module Language Language NodeWrap NodeWrap]
 parseDefinitionModule version src =
-  getCompose (resolvePositions src <$> Grammar.module_prod (parseComplete (definitionGrammar version) src))
+  getCompose (resolvePositions src . snd <$> (getCompose $ Grammar.module_prod $ parseComplete (definitionGrammar version) src))
 
 parseNamedModule :: LanguageVersion -> FilePath -> Text -> IO (ParseResults Text [Module Language Language NodeWrap NodeWrap])
 parseNamedModule version path name =
@@ -68,7 +68,7 @@ parseNamedModule version path name =
       isDefn <- doesFileExist (addExtension basePath "Def")
       let grammar = (if isDefn then definitionGrammar else moduleGrammar) version
       src <- readFile (addExtension basePath $ if isDefn then "Def" else "Mod")
-      return (getCompose $ resolvePositions src <$> Grammar.module_prod (parseComplete grammar src))
+      return (getCompose $ resolvePositions src . snd <$> (getCompose $ Grammar.module_prod $ parseComplete grammar src))
 
 parseImportsOf :: LanguageVersion -> FilePath -> Map Text (Module Language Language NodeWrap NodeWrap)
                -> IO (Map Text (Module Language Language NodeWrap NodeWrap))

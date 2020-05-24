@@ -126,8 +126,9 @@ main' Opts{..} =
                                           Grammar.oberonDefinitionGrammar "<stdin>"
                 StatementMode       -> go pure Grammar.statement chosenGrammar "<stdin>"
                 StatementsMode      -> go pure Grammar.statementSequence chosenGrammar "<stdin>"
-                ExpressionMode      -> \src-> case getCompose ((resolvePosition src . (resolvePositions src <$>))
-                                                               <$> Grammar.expression (parseComplete chosenGrammar src))
+                ExpressionMode      -> \src-> case getCompose ((resolvePosition src . (resolvePositions src <$>) . snd)
+                                                                <$> getCompose (Grammar.expression
+                                                                                $ parseComplete chosenGrammar src))
                                               of Right [x] -> succeed optsOutput (error "no type checking") 
                                                                       Left (pure x)
                                                  Right l -> putStrLn ("Ambiguous: " ++ show optsIndex ++ "/"
@@ -146,16 +147,16 @@ main' Opts{..} =
            Deep.Functor (Rank2.Map Grammar.NodeWrap NodeWrap) g) =>
           (g NodeWrap NodeWrap -> Validation (NonEmpty (Resolver.Error Language)) a)
        -> (forall p. Grammar.OberonGrammar AST.Language Grammar.NodeWrap p -> p (g Grammar.NodeWrap Grammar.NodeWrap))
-       -> (Grammar (Grammar.OberonGrammar AST.Language Grammar.NodeWrap) LeftRecursive.Parser Text)
+       -> (Grammar (Grammar.OberonGrammar AST.Language Grammar.NodeWrap) Grammar.Parser Text)
        -> String -> Text -> IO ()
     go resolve production grammar filename contents =
-       case getCompose (resolvePositions contents <$> production (parseComplete grammar contents))
+       case getCompose (resolvePositions contents . snd <$> getCompose (production $ parseComplete grammar contents))
        of Right [x] -> succeed optsOutput (reportTypeErrorIn $ takeDirectory filename) Left (resolve x)
           Right l -> putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
                      >> succeed optsOutput (reportTypeErrorIn $ takeDirectory filename) Left (resolve $ l !! optsIndex)
           Left err -> Text.putStrLn (failureDescription contents err 4)
 
-type NodeWrap = Compose ((,) Int) Ambiguous
+type NodeWrap = Compose ((,) Int) (Compose Ambiguous ((,) Grammar.ParsedIgnorables))
 
 succeed :: (Data a, Pretty a, Show a)
         => Output -> (TypeChecker.Error Language -> IO ())
@@ -170,7 +171,7 @@ succeed out reportTypeError prepare x = either (reportFailure . prepare) showSuc
                           Tree -> putStrLn . reprTreeString
                           Plain -> print
 
-reportTypeErrorIn directory (moduleName, pos, err) =
+reportTypeErrorIn directory (moduleName, (pos, _), err) =
    do contents <- readFile (combine directory $ addExtension (unpack moduleName) "Mod")
       putStrLn ("Type error: " ++ TypeChecker.errorMessage err)
       Text.putStrLn (offsetContext contents pos 4)
