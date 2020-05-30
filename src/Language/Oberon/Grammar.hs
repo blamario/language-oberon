@@ -111,9 +111,10 @@ type Parser = ParserT ((,) [Ignorables])
 type Ignorables = [Ignorable]
 data Ignorable = WhiteSpace Text
                | Comment{getComment :: Text}
-               | Keyword Text
-               | Operator Text
-               | Delimiter Text
+               | Token TokenType Text
+               deriving (Data, Eq, Show)
+
+data TokenType = Delimiter | Keyword | Operator | Other
                deriving (Data, Eq, Show)
 
 type NodeWrap = Compose ((,) (Position Text)) (Compose Ambiguous ((,) ParsedIgnorables))
@@ -138,7 +139,7 @@ instance LexicalParsing (Parser (OberonGrammar l f) Text) where
                                            return w)
    keyword s = lexicalToken (string s
                              *> notSatisfyChar (isIdentifierFollowChar @(Parser (OberonGrammar l f) Text))
-                             <* lift ([[Keyword s]], ()))
+                             <* lift ([[Token Keyword s]], ()))
                <?> ("keyword " <> show s)
 
 comment :: Parser g Text Text
@@ -385,8 +386,8 @@ moptional p = p <|> mempty
 
 delimiter, operator :: Abstract.Oberon l => Text -> Parser (OberonGrammar l f) Text Text
 
-delimiter s = lexicalToken (string s <* lift ([[Delimiter s]], ())) <?> ("delimiter " <> show s)
-operator s = lexicalToken (string s <* lift ([[Operator s]], ())) <?> ("operator " <> show s)
+delimiter s = lexicalToken (string s <* lift ([[Token Delimiter s]], ())) <?> ("delimiter " <> show s)
+operator s = lexicalToken (string s <* lift ([[Token Operator s]], ())) <?> ("operator " <> show s)
 
 reservedWords :: [Text]
 reservedWords = ["ARRAY", "IMPORT", "RETURN",
