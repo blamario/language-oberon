@@ -233,7 +233,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                     delimiter ";"
                     imports <- moptional importList
                     body <- wrap (Abstract.block <$> declarationSequence
-                                                 <*> optional (keyword "BEGIN" *> wrap statementSequence))
+                                                 <*> optional (wrap (keyword "BEGIN" *> statementSequence)))
                     keyword "END"
                     lexicalToken (string name)
                     delimiter "."
@@ -243,13 +243,17 @@ grammar OberonGrammar{..} = OberonGrammar{
    digit = satisfyCharInput isDigit,
    importList = keyword "IMPORT" *> sepBy1 import_prod (delimiter ",") <* delimiter ";",
    import_prod = Abstract.moduleImport <$> optional (ident <* delimiter ":=") <*> ident,
-   declarationSequence = concatMany (keyword "CONST" *> many (wrap constantDeclaration <* delimiter ";")
-                                     <|> keyword "TYPE" *> many (wrap typeDeclaration <* delimiter ";")
-                                     <|> keyword "VAR" *> many (wrap variableDeclaration <* delimiter ";"))
-                         <> many (wrap procedureDeclaration <* delimiter ";"
-                                  <|> wrap forwardDeclaration <* delimiter ";")
+   declarationSequence = concatMany (((:) <$> wrap (keyword "CONST" *> constantDeclaration)
+                                          <*> many (wrap constantDeclaration)
+                                      <|> (:) <$> wrap (keyword "TYPE" *> typeDeclaration)
+                                              <*> many (wrap typeDeclaration)
+                                      <|> (:) <$> wrap (keyword "VAR" *> variableDeclaration)
+                                              <*> many (wrap variableDeclaration))
+                                     <<|> [] <$ (keyword "CONST" <|> keyword "TYPE" <|> keyword "VAR"))
+                         <> many (wrap (procedureDeclaration <* delimiter ";")
+                                  <|> wrap (forwardDeclaration <* delimiter ";"))
                          <?> "declarations",
-   constantDeclaration = Abstract.constantDeclaration <$> identdef <* delimiter "=" <*> constExpression,
+   constantDeclaration = Abstract.constantDeclaration <$> identdef <* delimiter "=" <*> constExpression <* delimiter ";",
    identdef = ident <**> (Abstract.exported <$ delimiter "*" <|> pure Abstract.identDef),
    constExpression = expression,
    expression = simpleExpression
@@ -302,7 +306,7 @@ grammar OberonGrammar{..} = OberonGrammar{
               <|> Abstract.Less <$ operator "<" <|> Abstract.LessOrEqual <$ operator "<=" 
               <|> Abstract.Greater <$ operator ">" <|> Abstract.GreaterOrEqual <$ operator ">=" 
               <|> Abstract.In <$ keyword "IN",
-   typeDeclaration = Abstract.typeDeclaration <$> identdef <* delimiter "=" <*> wrap type_prod,
+   typeDeclaration = Abstract.typeDeclaration <$> identdef <* delimiter "=" <*> wrap type_prod <* delimiter ";",
    type_prod = Abstract.typeReference <$> qualident 
                <|> arrayType 
                <|> recordType 
@@ -320,7 +324,7 @@ grammar OberonGrammar{..} = OberonGrammar{
    identList = sepByNonEmpty identdef (delimiter ","),
    pointerType = Abstract.pointerType <$ keyword "POINTER" <* keyword "TO" <*> wrap type_prod,
    procedureType = Abstract.procedureType <$ keyword "PROCEDURE" <*> optional (wrap formalParameters),
-   variableDeclaration = Abstract.variableDeclaration <$> identList <* delimiter ":" <*> wrap type_prod,
+   variableDeclaration = Abstract.variableDeclaration <$> identList <* delimiter ":" <*> wrap type_prod <* delimiter ";",
    procedureDeclaration = do (procedureName, heading) <- sequenceA <$> wrap procedureHeading
                              delimiter ";"
                              body <- wrap procedureBody
