@@ -5,7 +5,7 @@
 -- | Oberon grammar adapted from http://www.ethoberon.ethz.ch/EBNF.html
 -- Extracted from the book Programmieren in Oberon - Das neue Pascal by N. Wirth and M. Reiser and translated by J. Templ.
 
-module Language.Oberon.Grammar (OberonGrammar(..), Parser, NodeWrap, ParsedIgnorables(..), Comment(..), WhiteSpace(..),
+module Language.Oberon.Grammar (OberonGrammar(..), Parser, NodeWrap, ParsedIgnorables(..), Ignorable(..),
                                 oberonGrammar, oberon2Grammar, oberonDefinitionGrammar, oberon2DefinitionGrammar) where
 
 import Control.Applicative
@@ -108,9 +108,13 @@ instance Show (BinOp l f) where
 $(Rank2.TH.deriveAll ''OberonGrammar)
 
 type Parser = ParserT ((,) [Ignorables])
-type Ignorables = [Either WhiteSpace Comment]
-newtype Comment    = Comment{getComment :: Text} deriving (Data, Eq, Show)
-newtype WhiteSpace = WhiteSpace Text deriving (Data, Eq, Show)
+type Ignorables = [Ignorable]
+data Ignorable = WhiteSpace Text
+               | Comment{getComment :: Text}
+               | Keyword Text
+               | Operator Text
+               | Delimiter Text
+               deriving (Data, Eq, Show)
 
 type NodeWrap = Compose ((,) (Position Text)) (Compose Ambiguous ((,) ParsedIgnorables))
 
@@ -125,13 +129,17 @@ instance TokenParsing (Parser (OberonGrammar l f) Text) where
 
 instance LexicalParsing (Parser (OberonGrammar l f) Text) where
    lexicalComment = do c <- comment
-                       lift ([[Right $ Comment c]], ())
+                       lift ([[Comment c]], ())
    lexicalWhiteSpace = whiteSpace
    isIdentifierStartChar = isLetter
    isIdentifierFollowChar = isAlphaNum
    identifierToken word = lexicalToken (do w <- word
                                            guard (w `notElem` reservedWords)
                                            return w)
+   keyword s = lexicalToken (string s
+                             *> notSatisfyChar (isIdentifierFollowChar @(Parser (OberonGrammar l f) Text))
+                             <* lift ([[Keyword s]], ()))
+               <?> ("keyword " <> show s)
 
 comment :: Parser g Text Text
 comment = try (string "(*"
@@ -140,7 +148,7 @@ comment = try (string "(*"
    where isCommentChar c = c /= '*' && c /= '('
 
 whiteSpace :: LexicalParsing (Parser g Text) => Parser g Text ()
-whiteSpace = ((takeCharsWhile1 isSpace >>= \ws-> lift ([[Left $ WhiteSpace ws]], ())) <<|> pure ())
+whiteSpace = ((takeCharsWhile1 isSpace >>= \ws-> lift ([[WhiteSpace ws]], ())) <<|> pure ())
              *> skipMany (lexicalComment *> takeCharsWhile isSpace)
 
 wrapAmbiguous, wrap :: Parser g Text a -> Parser g Text (NodeWrap a)
@@ -373,8 +381,8 @@ moptional p = p <|> mempty
 
 delimiter, operator :: Abstract.Oberon l => Text -> Parser (OberonGrammar l f) Text Text
 
-delimiter s = lexicalToken (string s) <?> ("delimiter " <> show s)
-operator s = lexicalToken (string s) <?> ("operator " <> show s)
+delimiter s = lexicalToken (string s <* lift ([[Delimiter s]], ())) <?> ("delimiter " <> show s)
+operator s = lexicalToken (string s <* lift ([[Operator s]], ())) <?> ("operator " <> show s)
 
 reservedWords :: [Text]
 reservedWords = ["ARRAY", "IMPORT", "RETURN",
