@@ -126,7 +126,7 @@ data ParsedIgnorables = Trailing Ignorables
 
 instance TokenParsing (Parser (OberonGrammar l f) Text) where
    someSpace = someLexicalSpace
-   token p = p <* lexicalWhiteSpace
+   token = lexicalToken
 
 instance LexicalParsing (Parser (OberonGrammar l f) Text) where
    lexicalComment = do c <- comment
@@ -137,6 +137,9 @@ instance LexicalParsing (Parser (OberonGrammar l f) Text) where
    identifierToken word = lexicalToken (do w <- word
                                            guard (w `notElem` reservedWords)
                                            return w)
+   lexicalToken p = snd <$> tmap addOtherToken (match p) <* lexicalWhiteSpace
+      where addOtherToken ([], (i, x)) = ([[Token Other i]], (i, x))
+            addOtherToken (t, (i, x)) = (t, (i, x))
    keyword s = lexicalToken (string s
                              *> notSatisfyChar (isIdentifierFollowChar @(Parser (OberonGrammar l f) Text))
                              <* lift ([[Token Keyword s]], ()))
