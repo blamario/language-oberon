@@ -5,7 +5,7 @@
 -- | Oberon grammar adapted from http://www.ethoberon.ethz.ch/EBNF.html
 -- Extracted from the book Programmieren in Oberon - Das neue Pascal by N. Wirth and M. Reiser and translated by J. Templ.
 
-module Language.Oberon.Grammar (OberonGrammar(..), Parser, NodeWrap, ParsedIgnorables(..), Ignorable(..),
+module Language.Oberon.Grammar (OberonGrammar(..), Parser, NodeWrap, ParsedLexemes(..), Lexeme(..),
                                 oberonGrammar, oberon2Grammar, oberonDefinitionGrammar, oberon2DefinitionGrammar) where
 
 import Control.Applicative
@@ -107,21 +107,18 @@ instance Show (BinOp l f) where
 
 $(Rank2.TH.deriveAll ''OberonGrammar)
 
-type Parser = ParserT ((,) [Ignorables])
-type Ignorables = [Ignorable]
-data Ignorable = WhiteSpace Text
-               | Comment{getComment :: Text}
-               | Token TokenType Text
-               deriving (Data, Eq, Show)
+type Parser = ParserT ((,) [[Lexeme]])
+data Lexeme = WhiteSpace Text
+            | Comment{getComment :: Text}
+            | Token TokenType Text
+            deriving (Data, Eq, Show)
 
 data TokenType = Delimiter | Keyword | Operator | Other
                deriving (Data, Eq, Show)
 
-type NodeWrap = Compose ((,) (Position Text)) (Compose Ambiguous ((,) ParsedIgnorables))
+type NodeWrap = Compose ((,) (Position Text)) (Compose Ambiguous ((,) ParsedLexemes))
 
-data ParsedIgnorables = Trailing Ignorables
-                      | OperatorTrailing [Ignorables]
-                      | ParenthesesTrailing Ignorables ParsedIgnorables Ignorables
+newtype ParsedLexemes = Trailing [Lexeme]
                       deriving (Data, Show)
 
 instance TokenParsing (Parser (OberonGrammar l f) Text) where

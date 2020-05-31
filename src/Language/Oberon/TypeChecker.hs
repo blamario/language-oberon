@@ -26,7 +26,7 @@ import Transformation.AG (Attribution(..), Atts, Inherited(..), Synthesized(..),
 
 import qualified Language.Oberon.Abstract as Abstract
 import qualified Language.Oberon.AST as AST
-import Language.Oberon.Grammar (ParsedIgnorables(Trailing))
+import Language.Oberon.Grammar (ParsedLexemes(Trailing))
 
 data Type l = NominalType (Abstract.QualIdent l) (Maybe (Type l))
             | RecordType{ancestry :: [Abstract.QualIdent l],
@@ -61,7 +61,7 @@ data ErrorType l = ArgumentCountMismatch Int Int
                  | UnknownName (Abstract.QualIdent l)
                  | UnknownField AST.Ident (Type l)
 
-type Error l = (AST.Ident, (Int, ParsedIgnorables), ErrorType l)
+type Error l = (AST.Ident, (Int, ParsedLexemes), ErrorType l)
 
 instance Eq (Abstract.QualIdent l) => Eq (Type l) where
   NominalType q1 (Just t1) == t2@(NominalType q2 _) = q1 == q2 || t1 == t2
@@ -882,7 +882,7 @@ binaryBooleanSynthesis inheritance pos left right =
    SynTCExp{expressionErrors= binaryBooleanOperatorErrors inheritance pos (syn left) (syn right),
             inferredType= BuiltinType "BOOLEAN"}
 
-unaryNumericOrSetOperatorErrors :: Abstract.Nameable l => InhTC l -> (Int, ParsedIgnorables) -> SynTCExp l -> [Error l]
+unaryNumericOrSetOperatorErrors :: Abstract.Nameable l => InhTC l -> (Int, ParsedLexemes) -> SynTCExp l -> [Error l]
 unaryNumericOrSetOperatorErrors _ _ SynTCExp{expressionErrors= [], inferredType= IntegerType{}} = []
 unaryNumericOrSetOperatorErrors _ _ SynTCExp{expressionErrors= [],
                                              inferredType= BuiltinType name}
@@ -897,7 +897,7 @@ unaryNumericOrSetOperatorType f SynTCExp{inferredType= IntegerType x} = IntegerT
 unaryNumericOrSetOperatorType _ SynTCExp{inferredType= t} = t
 
 binarySetOrNumericOperatorErrors :: (Abstract.Nameable l, Eq (Abstract.QualIdent l))
-                                 => InhTC l -> (Int, ParsedIgnorables) -> SynTCExp l -> SynTCExp l -> [Error l]
+                                 => InhTC l -> (Int, ParsedLexemes) -> SynTCExp l -> SynTCExp l -> [Error l]
 binarySetOrNumericOperatorErrors _ _
   SynTCExp{expressionErrors= [], inferredType= BuiltinType name1}
   SynTCExp{expressionErrors= [], inferredType= BuiltinType name2}
@@ -930,7 +930,7 @@ binaryNumericOperatorType SynTCExp{inferredType= t1} SynTCExp{inferredType= t2}
   | otherwise = t1
 
 binaryIntegerOperatorErrors :: Abstract.Nameable l =>
-                               InhTC l -> (Int, ParsedIgnorables) ->  SynTCExp l -> SynTCExp l -> [Error l]
+                               InhTC l -> (Int, ParsedLexemes) ->  SynTCExp l -> SynTCExp l -> [Error l]
 binaryIntegerOperatorErrors inheritance pos syn1 syn2 = integerExpressionErrors inheritance pos syn1 
                                                       <> integerExpressionErrors inheritance pos syn2
 
@@ -952,7 +952,7 @@ booleanExpressionErrors inheritance pos SynTCExp{expressionErrors= [], inferredT
 booleanExpressionErrors _ _ SynTCExp{expressionErrors= errs} = errs
 
 binaryBooleanOperatorErrors :: (Abstract.Nameable l, Eq (Abstract.QualIdent l))
-                            => InhTC l -> (Int, ParsedIgnorables) -> SynTCExp l -> SynTCExp l -> [Error l]
+                            => InhTC l -> (Int, ParsedLexemes) -> SynTCExp l -> SynTCExp l -> [Error l]
 binaryBooleanOperatorErrors _inh _pos
   SynTCExp{expressionErrors= [], inferredType= BuiltinType "BOOLEAN"}
   SynTCExp{expressionErrors= [], inferredType= BuiltinType "BOOLEAN"} = []
@@ -964,7 +964,7 @@ binaryBooleanOperatorErrors inheritance pos
 binaryBooleanOperatorErrors _ _ SynTCExp{expressionErrors= errs1} SynTCExp{expressionErrors= errs2} = errs1 <> errs2
 
 parameterCompatible :: (Abstract.Nameable l, Eq (Abstract.QualIdent l))
-                    => InhTC l -> (Int, ParsedIgnorables) -> (Bool, Type l) -> Type l -> [Error l]
+                    => InhTC l -> (Int, ParsedLexemes) -> (Bool, Type l) -> Type l -> [Error l]
 parameterCompatible _ _ (_, expected@(ArrayType [] _)) actual
   | arrayCompatible expected actual = []
 parameterCompatible inheritance pos (True, expected) actual
@@ -975,7 +975,7 @@ parameterCompatible inheritance pos (False, expected) actual
   | otherwise = assignmentCompatible inheritance pos expected actual
 
 assignmentCompatible :: (Abstract.Nameable l, Eq (Abstract.QualIdent l))
-                     => InhTC l -> (Int, ParsedIgnorables) -> Type l -> Type l -> [Error l]
+                     => InhTC l -> (Int, ParsedLexemes) -> Type l -> Type l -> [Error l]
 assignmentCompatible inheritance pos expected actual
    | expected == actual = []
    | BuiltinType name1 <- expected, BuiltinType name2 <- actual,
@@ -1039,7 +1039,7 @@ instance Rank2.Apply (AST.Module l l f') where
    AST.Module name1 imports1 body1 <*> ~(AST.Module name2 imports2 body2) =
       AST.Module name1 imports1 (Rank2.apply body1 body2)
 
-type Placed = (,) (Int, ParsedIgnorables)
+type Placed = (,) (Int, ParsedLexemes)
 
 checkModules :: (Abstract.Oberon l, Abstract.Nameable l,
                  Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),

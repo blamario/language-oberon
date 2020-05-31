@@ -36,7 +36,7 @@ import Text.Grampa (Ambiguous(..))
 
 import qualified Language.Oberon.Abstract as Abstract
 import Language.Oberon.AST
-import Language.Oberon.Grammar (ParsedIgnorables(Trailing))
+import Language.Oberon.Grammar (ParsedLexemes(Trailing))
 
 data DeclarationRHS l f' f = DeclaredConstant (f (Abstract.ConstExpression l l f' f'))
                            | DeclaredType (f (Abstract.Type l l f' f'))
@@ -73,8 +73,8 @@ deriving instance (Show (Abstract.QualIdent l),
                    Show (Expression l l NodeWrap NodeWrap), Show (Abstract.Expression l l NodeWrap NodeWrap),
                    Show (Designator l l NodeWrap NodeWrap)) => Show (Error l)
 
-type Placed = (,) (Int, ParsedIgnorables)
-type NodeWrap = Compose ((,) Int) (Compose Ambiguous ((,) ParsedIgnorables))
+type Placed = (,) (Int, ParsedLexemes)
+type NodeWrap = Compose ((,) Int) (Compose Ambiguous ((,) ParsedLexemes))
 
 type Scope l = Map Ident (Validation (NonEmpty (Error l)) (DeclarationRHS l Placed Placed))
 

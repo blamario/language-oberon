@@ -156,7 +156,7 @@ main' Opts{..} =
                      >> succeed optsOutput (reportTypeErrorIn $ takeDirectory filename) Left (resolve $ l !! optsIndex)
           Left err -> Text.putStrLn (failureDescription contents err 4)
 
-type NodeWrap = Compose ((,) Int) (Compose Ambiguous ((,) Grammar.ParsedIgnorables))
+type NodeWrap = Compose ((,) Int) (Compose Ambiguous ((,) Grammar.ParsedLexemes))
 
 succeed :: (Data a, Pretty a, Show a)
         => Output -> (TypeChecker.Error Language -> IO ())

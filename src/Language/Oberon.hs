@@ -29,8 +29,8 @@ import System.FilePath (FilePath, addExtension, combine, takeDirectory)
 
 import Prelude hiding (readFile)
 
-type NodeWrap = Compose ((,) Int) (Compose Ambiguous ((,) Grammar.ParsedIgnorables))
-type Placed = (,) (Int, Grammar.ParsedIgnorables)
+type NodeWrap = Compose ((,) Int) (Compose Ambiguous ((,) Grammar.ParsedLexemes))
+type Placed = (,) (Int, Grammar.ParsedLexemes)
 
 data LanguageVersion = Oberon1 | Oberon2 deriving (Eq, Ord, Show)
 
