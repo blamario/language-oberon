@@ -17,11 +17,12 @@ import qualified Transformation.Deep as Deep
 import Data.Text.Prettyprint.Doc (Pretty(pretty))
 import Data.Text.Prettyprint.Doc.Util (putDocW)
 
+import Control.Arrow (second)
 import Control.Monad
 import Data.Data (Data)
 import Data.Either.Validation (Validation(..), validationToEither)
 import Data.Functor.Identity (Identity(Identity))
-import Data.Functor.Compose (Compose, getCompose)
+import Data.Functor.Compose (Compose(..))
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
@@ -37,7 +38,7 @@ import System.FilePath (FilePath, addExtension, combine, takeDirectory)
 import Prelude hiding (getLine, getContents, readFile)
 
 data GrammarMode = ModuleWithImportsMode | ModuleMode | AmbiguousModuleMode | DefinitionMode
-                 | StatementsMode | StatementMode | ExpressionMode
+                 | StatementMode | ExpressionMode
     deriving Show
 
 data Output = Plain | Pretty Int | Tree
@@ -125,17 +126,8 @@ main' Opts{..} =
                 DefinitionMode      -> go (Resolver.resolveModule predefined mempty) Grammar.module_prod
                                           Grammar.oberonDefinitionGrammar "<stdin>"
                 StatementMode       -> go pure Grammar.statement chosenGrammar "<stdin>"
-                StatementsMode      -> go pure Grammar.statementSequence chosenGrammar "<stdin>"
-                ExpressionMode      -> \src-> case getCompose ((resolvePosition src . (resolvePositions src <$>) . snd)
-                                                                <$> getCompose (Grammar.expression
-                                                                                $ parseComplete chosenGrammar src))
-                                              of Right [x] -> succeed optsOutput (error "no type checking") 
-                                                                      Left (pure x)
-                                                 Right l -> putStrLn ("Ambiguous: " ++ show optsIndex ++ "/"
-                                                                      ++ show (length l) ++ " parses")
-                                                            >> succeed optsOutput (error "no type checking") 
-                                                                       Left (pure $ l !! optsIndex)
-                                                 Left err -> Text.putStrLn (failureDescription src err 4)
+                ExpressionMode      -> go pure Grammar.expression chosenGrammar "<stdin>"
+
   where
     chosenGrammar = case optsVersion 
                     of Oberon1 -> Grammar.oberonGrammar
@@ -143,17 +135,18 @@ main' Opts{..} =
     predefined = case optsVersion 
                  of Oberon1 -> Resolver.predefined
                     Oberon2 -> Resolver.predefined2
-    go :: (Show a, Data a, Pretty a, a ~ g f f,
+    go :: (Show a, Data a, Pretty a, a ~ f (g f f),
            Deep.Functor (Rank2.Map Grammar.NodeWrap NodeWrap) g) =>
-          (g NodeWrap NodeWrap -> Validation (NonEmpty (Resolver.Error Language)) a)
-       -> (forall p. Grammar.OberonGrammar AST.Language Grammar.NodeWrap p -> p (g Grammar.NodeWrap Grammar.NodeWrap))
+          (NodeWrap (g NodeWrap NodeWrap) -> Validation (NonEmpty (Resolver.Error Language)) a)
+       -> (forall p. Grammar.OberonGrammar AST.Language Grammar.NodeWrap p
+                  -> p (Grammar.NodeWrap (g Grammar.NodeWrap Grammar.NodeWrap)))
        -> (Grammar (Grammar.OberonGrammar AST.Language Grammar.NodeWrap) Grammar.Parser Text)
        -> String -> Text -> IO ()
     go resolve production grammar filename contents =
-       case getCompose (resolvePositions contents . snd <$> getCompose (production $ parseComplete grammar contents))
-       of Right [x] -> succeed optsOutput (reportTypeErrorIn $ takeDirectory filename) Left (resolve x)
+       case getCompose (second (resolvePositions contents) <$> getCompose (production $ parseComplete grammar contents))
+       of Right [(s, x)] -> succeed optsOutput (reportTypeErrorIn $ takeDirectory filename) Left (resolve x)
           Right l -> putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
-                     >> succeed optsOutput (reportTypeErrorIn $ takeDirectory filename) Left (resolve $ l !! optsIndex)
+                     >> succeed optsOutput (reportTypeErrorIn $ takeDirectory filename) Left (resolve . snd $ l !! optsIndex)
           Left err -> Text.putStrLn (failureDescription contents err 4)
 
 type NodeWrap = Compose ((,) Int) (Compose Ambiguous ((,) Grammar.ParsedLexemes))
@@ -176,17 +169,17 @@ reportTypeErrorIn directory (moduleName, (pos, _), err) =
       putStrLn ("Type error: " ++ TypeChecker.errorMessage err)
       Text.putStrLn (offsetContext contents pos 4)
 
+instance {-# overlaps #-} Pretty a => Pretty (Placed a) where
+   pretty = pretty . snd
 instance Pretty (Module Language Language Placed Placed) where
    pretty m = pretty ((Identity . snd) Rank2.<$> m)
 instance Pretty (Module Language Language NodeWrap NodeWrap) where
    pretty _ = error "Disambiguate before pretty-printing"
 instance Pretty (StatementSequence Language Language NodeWrap NodeWrap) where
    pretty _ = error "Disambiguate before pretty-printing"
-instance Pretty (NodeWrap (Statement Language Language NodeWrap NodeWrap)) where
-   pretty _ = error "Disambiguate before pretty-printing"
 instance Pretty (Statement Language Language NodeWrap NodeWrap) where
    pretty _ = error "Disambiguate before pretty-printing"
 instance Pretty (Expression Language Language NodeWrap NodeWrap) where
    pretty _ = error "Disambiguate before pretty-printing"
-instance Pretty (NodeWrap (Expression Language Language NodeWrap NodeWrap)) where
+instance Pretty (NodeWrap a) where
    pretty _ = error "Disambiguate before pretty-printing"

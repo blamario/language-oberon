@@ -33,7 +33,7 @@ import Prelude hiding (length, takeWhile)
 
 -- | All the productions of the Oberon grammar
 data OberonGrammar l f p = OberonGrammar {
-   module_prod :: p (Abstract.Module l l f f),
+   module_prod :: p (f (Abstract.Module l l f f)),
    ident :: p Abstract.Ident,
    letter :: p Text,
    digit :: p Text,
@@ -84,7 +84,7 @@ data OberonGrammar l f p = OberonGrammar {
    procedureBody :: p (Abstract.Block l l f f),
    forwardDeclaration :: p (Abstract.Declaration l l f f),
    statementSequence :: p (Abstract.StatementSequence l l f f),
-   statement :: p (Abstract.Statement l l f f),
+   statement :: p (f (Abstract.Statement l l f f)),
    assignment :: p (Abstract.Statement l l f f),
    procedureCall :: p (Abstract.Statement l l f f),
    ifStatement :: p (Abstract.Statement l l f f),
@@ -179,7 +179,8 @@ definitionGrammar2 g@OberonGrammar{..} = definitionMixin (grammar2 g)
 
 definitionMixin :: Abstract.Oberon l => GrammarBuilder (OberonGrammar l NodeWrap) (OberonGrammar l NodeWrap) Parser Text
 definitionMixin g@OberonGrammar{..} = g{
-   module_prod = do lexicalWhiteSpace 
+   module_prod = wrap $
+                 do lexicalWhiteSpace 
                     keyword "DEFINITION"
                     name <- ident
                     delimiter ";"
@@ -228,7 +229,8 @@ grammar2 g@OberonGrammar{..} = g1{
                                                     <*  keyword "DO" <*> wrap statementSequence
 
 grammar OberonGrammar{..} = OberonGrammar{
-   module_prod = do lexicalWhiteSpace
+   module_prod = wrap $
+                 do lexicalWhiteSpace
                     keyword "MODULE"
                     name <- ident
                     delimiter ";"
@@ -347,12 +349,13 @@ grammar OberonGrammar{..} = OberonGrammar{
                    <*> optional (keyword "BEGIN" *> wrap statementSequence) <* keyword "END",
    forwardDeclaration = Abstract.forwardDeclaration <$ keyword "PROCEDURE" <* delimiter "^"
                         <*> identdef <*> optional (wrap formalParameters),
-   statementSequence = Abstract.statementSequence <$> sepBy1 (wrapAmbiguous statement) (delimiter ";"),
-   statement = assignment <|> procedureCall <|> ifStatement <|> caseStatement 
-               <|> whileStatement <|> repeatStatement <|> loopStatement <|> forStatement <|> withStatement 
-               <|> Abstract.exitStatement <$ keyword "EXIT" 
-               <|> Abstract.returnStatement <$ keyword "RETURN" <*> optional expression
-               <|> pure Abstract.emptyStatement
+   statementSequence = Abstract.statementSequence <$> sepBy1 statement (delimiter ";"),
+   statement = wrapAmbiguous (assignment <|> procedureCall <|> ifStatement <|> caseStatement 
+                              <|> whileStatement <|> repeatStatement <|> loopStatement
+                              <|> forStatement <|> withStatement 
+                              <|> Abstract.exitStatement <$ keyword "EXIT" 
+                              <|> Abstract.returnStatement <$ keyword "RETURN" <*> optional expression
+                              <|> pure Abstract.emptyStatement)
                <?> "statement",
    assignment  =  Abstract.assignment <$> designator <* delimiter ":=" <*> expression,
    procedureCall = Abstract.procedureCall <$> wrapAmbiguous unguardedDesignator <*> optional actualParameters,

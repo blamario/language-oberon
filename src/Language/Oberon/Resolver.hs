@@ -323,8 +323,8 @@ resolveModules :: forall l. (BindableDeclaration l, CoFormalParameters l, Abstra
                              Full.Traversable (Resolution l) (Abstract.Block l l),
                              Full.Traversable (Resolution l) (Abstract.StatementSequence l l),
                              Resolution l `Transformation.At` Abstract.Block l l NodeWrap NodeWrap) =>
-                  Predefined l -> Map Ident (Module l l NodeWrap NodeWrap)
-                -> Validation (NonEmpty (Ident, NonEmpty (Error l))) (Map Ident (Module l l Placed Placed))
+                  Predefined l -> Map Ident (NodeWrap (Module l l NodeWrap NodeWrap))
+                -> Validation (NonEmpty (Ident, NonEmpty (Error l))) (Map Ident (Placed (Module l l Placed Placed)))
 resolveModules predefinedScope modules = traverseWithKey extractErrors modules'
    where modules' = resolveModule predefinedScope modules' <$> modules
          extractErrors moduleKey (Failure e)   = Failure ((moduleKey, e) :| [])
@@ -344,10 +344,11 @@ resolveModule :: forall l. (BindableDeclaration l, CoFormalParameters l,
                             Deep.Traversable (Resolution l) (Abstract.FormalParameters l l),
                             Deep.Traversable (Resolution l) (Abstract.ConstExpression l l),
                             Resolution l `Transformation.At` Abstract.Block l l NodeWrap NodeWrap) =>
-                 Scope l -> Map Ident (Validation (NonEmpty (Error l)) (Module l l Placed Placed))
-              -> Module l l NodeWrap NodeWrap -> Validation (NonEmpty (Error l)) (Module l l Placed Placed)
-resolveModule predefined modules m@(Module moduleName imports body) =
-   evalStateT (Deep.traverse res m) (moduleGlobalScope, ModuleState)
+                 Scope l -> Map Ident (Validation (NonEmpty (Error l)) (Placed (Module l l Placed Placed)))
+              -> NodeWrap (Module l l NodeWrap NodeWrap)
+              -> Validation (NonEmpty (Error l)) (Placed (Module l l Placed Placed))
+resolveModule predefined modules m@(Compose (pos, Compose (Ambiguous ((ls, Module moduleName imports body) :| [])))) =
+   evalStateT (Full.traverse res m) (moduleGlobalScope, ModuleState)
    where res = Resolution moduleExports
          importedModules = Map.delete mempty (Map.mapKeysWith clashingRenames importedAs modules)
             where importedAs moduleName = case List.find ((== moduleName) . snd) imports
@@ -357,7 +358,7 @@ resolveModule predefined modules m@(Module moduleName imports body) =
                   clashingRenames _ _ = Failure (ClashingImports :| [])
          resolveDeclaration :: NodeWrap (Declaration l l NodeWrap NodeWrap) -> Resolved l (Declaration l l Placed Placed)
          resolveDeclaration d = snd <$> (traverse (Deep.traverse res) d >>= getCompose . (res Transformation.$))
-         moduleExports = foldMap exportsOfModule <$> importedModules
+         moduleExports = foldMap (exportsOfModule . snd) <$> importedModules
          Success (_, body') = evalStateT (getCompose $ res Transformation.$ body) (predefined, ModuleState)
          moduleGlobalScope = localScope res moduleName (getLocalDeclarations body') predefined
 
@@ -524,7 +525,7 @@ $(Transformation.Deep.TH.deriveTraversable ''DeclarationRHS)
 $(do l <- varT <$> newName "l"
      mconcat <$> mapM (\t-> Transformation.Full.TH.deriveDownTraversable (conT ''Resolution `appT` l)
                             $ conT t `appT` l `appT` l)
-        [''Declaration, ''Type, ''FieldList,
+        [''Module, ''Declaration, ''Type, ''FieldList,
          ''ProcedureHeading, ''FormalParameters, ''FPSection,
          ''Expression, ''Element, ''Designator,
          ''Block, ''StatementSequence, ''Statement,

@@ -35,16 +35,14 @@ foldConstants :: (Abstract.Oberon l, Abstract.Nameable l,
                   Atts (Synthesized ConstantFold) (Abstract.Block l l Sem Sem) ~ SynCFMod' l (Abstract.Block l l),
                   Full.Functor ConstantFold (Abstract.Block l l),
                   Deep.Functor ConstantFold (Abstract.Block l l))
-              => Environment l -> Map AST.Ident (AST.Module l l Placed Placed)
-              -> Map AST.Ident (AST.Module l l Placed Placed)
+              => Environment l -> Map AST.Ident (Placed (AST.Module l l Placed Placed))
+              -> Map AST.Ident (Placed (AST.Module l l Placed Placed))
 foldConstants predef modules =
-   runIdentity <$>
    getModules (modulesFolded $
-               syn (Transformation.apply ConstantFold (wrap (ConstantFold Deep.<$> Modules modules'))
+               syn (Transformation.apply ConstantFold (wrap (ConstantFold Deep.<$> Modules modules))
                     `Rank2.apply`
                     Inherited (InhCFRoot predef)))
-   where modules' = wrap <$> modules
-         wrap = (,) (0, Trailing [])
+   where wrap = (,) (0, Trailing [])
 
 type Placed = (,) (Int, ParsedLexemes)
 
@@ -76,10 +74,10 @@ data InhCFRoot l = InhCFRoot{rootEnv :: Environment l}
 data InhCF l = InhCF{env           :: Environment l,
                      currentModule :: AST.Ident}
 
-data SynCF a = SynCF{folded :: ((Int, ParsedLexemes), a)}
+data SynCF a = SynCF{folded :: Placed a}
 
 data SynCFMod l a = SynCFMod{moduleEnv    :: Environment l,
-                             moduleFolded :: ((Int, ParsedLexemes), a)}
+                             moduleFolded :: Placed a}
 
 data SynCFExp λ l = SynCFExp{foldedExp   :: ((Int, ParsedLexemes), Abstract.Expression λ l Placed Placed),
                              foldedValue :: Maybe (Abstract.Value l l Placed Placed)}
@@ -100,7 +98,7 @@ instance Rank2.Apply (Modules l f') where
    ~(Modules fs) <*> ~(Modules ms) = Modules (Map.intersectionWith Rank2.apply fs ms)
 
 -- * Boring attribute types
-type instance Atts (Synthesized ConstantFold) (Modules l _ _) = SynCFRoot (Modules l Placed Identity)
+type instance Atts (Synthesized ConstantFold) (Modules l _ _) = SynCFRoot (Modules l Placed Placed)
 type instance Atts (Synthesized ConstantFold) (AST.Module l l _ _) = SynCFMod' l (AST.Module l l)
 type instance Atts (Synthesized ConstantFold) (AST.Declaration l l _ _) = SynCFMod' l (AST.Declaration l l)
 type instance Atts (Synthesized ConstantFold) (AST.ProcedureHeading l l _ _) = SynCF' (AST.ProcedureHeading l l)
@@ -148,7 +146,7 @@ type SynCFMod' l node = SynCFMod l (node Placed Placed)
 
 instance Ord (Abstract.QualIdent l) => Attribution ConstantFold (Modules l) Sem Placed where
    attribution ConstantFold (_, Modules self) (Inherited inheritance, Modules ms) =
-     (Synthesized SynCFRoot{modulesFolded= Modules (pure . snd . moduleFolded . syn <$> ms)},
+     (Synthesized SynCFRoot{modulesFolded= Modules (moduleFolded . syn <$> ms)},
       Modules (Map.mapWithKey moduleInheritance self))
      where moduleInheritance name mod = Inherited InhCF{env= rootEnv inheritance <> foldMap (moduleEnv . syn) ms,
                                                         currentModule= name}

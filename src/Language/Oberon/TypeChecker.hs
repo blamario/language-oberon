@@ -1046,13 +1046,12 @@ checkModules :: (Abstract.Oberon l, Abstract.Nameable l,
                  Atts (Inherited TypeCheck) (Abstract.Block l l Sem Sem) ~ InhTC l,
                  Atts (Synthesized TypeCheck) (Abstract.Block l l Sem Sem) ~ SynTCMod l,
                  Full.Functor TypeCheck (Abstract.Block l l))
-             => Environment l -> Map AST.Ident (AST.Module l l Placed Placed) -> [Error l]
+             => Environment l -> Map AST.Ident (Placed (AST.Module l l Placed Placed)) -> [Error l]
 checkModules predef modules =
-   errors (syn (Transformation.apply TypeCheck (wrap $ TypeCheck Deep.<$> Modules modules')
+   errors (syn (Transformation.apply TypeCheck (wrap $ TypeCheck Deep.<$> Modules modules)
                 `Rank2.apply`
                 Inherited (InhTCRoot predef)))
-   where modules' = wrap <$> modules
-         wrap = (,) (0, Trailing [])
+   where wrap = (,) (0, Trailing [])
 
 predefined, predefined2 :: (Abstract.Wirthy l, Ord (Abstract.QualIdent l)) => Environment l
 -- | The set of 'Predefined' types and procedures defined in the Oberon Language Report.

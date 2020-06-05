@@ -56,5 +56,5 @@ prettyFile dirPath source = do
 
 onLastOfThree f (a, b, c) = (a, b, f c)
 
-instance Pretty (Module Language Language Placed Placed) where
-   pretty m = pretty ((Identity . snd) Rank2.<$> m)
+instance {-# overlaps #-} Pretty (Placed (Module Language Language Placed Placed)) where
+   pretty (_, m) = pretty ((Identity . snd) Rank2.<$> m)
