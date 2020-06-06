@@ -82,13 +82,12 @@ main = execParser opts >>= main'
               <> help "Oberon file to parse"))
 
     mode :: Parser GrammarMode
-    mode = ModuleWithImportsMode <$ switch (long "module-with-imports")
-       <|> ModuleMode          <$ switch (long "module")
-       <|> AmbiguousModuleMode <$ switch (long "module-ambiguous")
-       <|> DefinitionMode      <$ switch (long "definition")
-       <|> StatementMode       <$ switch (long "statement")
-       <|> StatementsMode      <$ switch (long "statements")
-       <|> ExpressionMode      <$ switch (long "expression")
+    mode = flag' ModuleWithImportsMode (long "module-with-imports")
+       <|> flag' ModuleMode            (long "module")
+       <|> flag' AmbiguousModuleMode   (long "module-ambiguous")
+       <|> flag' DefinitionMode        (long "definition")
+       <|> flag' StatementMode         (long "statement")
+       <|> flag' ExpressionMode        (long "expression")
 
 main' :: Opts -> IO ()
 main' Opts{..} =
