@@ -108,9 +108,10 @@ instance Show (BinOp l f) where
 $(Rank2.TH.deriveAll ''OberonGrammar)
 
 type Parser = ParserT ((,) [[Lexeme]])
-data Lexeme = WhiteSpace Text
-            | Comment{getComment :: Text}
-            | Token TokenType Text
+data Lexeme = WhiteSpace{lexemeText :: Text}
+            | Comment{lexemeText :: Text}
+            | Token{lexemeType :: TokenType,
+                    lexemeText :: Text}
             deriving (Data, Eq, Show)
 
 data TokenType = Delimiter | Keyword | Operator | Other
@@ -149,8 +150,11 @@ comment = try (string "(*"
    where isCommentChar c = c /= '*' && c /= '('
 
 whiteSpace :: LexicalParsing (Parser g Text) => Parser g Text ()
-whiteSpace = ((takeCharsWhile1 isSpace >>= \ws-> lift ([[WhiteSpace ws]], ())) <<|> pure ())
-             *> skipMany (lexicalComment *> takeCharsWhile isSpace)
+whiteSpace = spaceChars *> skipMany (lexicalComment *> spaceChars)
+   where spaceChars = (takeCharsWhile1 isSpace >>= \ws-> lift ([[WhiteSpace ws]], ())) <<|> pure ()
+
+clearConsumed = tmap clear
+   where clear (_, x) = ([], x)
 
 wrapAmbiguous, wrap :: Parser g Text a -> Parser g Text (NodeWrap a)
 wrapAmbiguous = wrap
@@ -211,7 +215,7 @@ grammar2 g@OberonGrammar{..} = g1{
                           <*> ident
                           <* delimiter ")"
                           <*> (True <$ delimiter "*" <|> pure False)
-                          <**> do n <- lookAhead ident
+                          <**> do n <- clearConsumed (lookAhead ident)
                                   idd <- identdef
                                   params <- optional (wrap formalParameters)
                                   pure (\proc-> (n, proc idd params)),
@@ -334,7 +338,7 @@ grammar OberonGrammar{..} = OberonGrammar{
                              lexicalToken (string procedureName)
                              return (Abstract.procedureDeclaration heading body),
    procedureHeading = Abstract.procedureHeading <$ keyword "PROCEDURE" <*> (True <$ delimiter "*" <|> pure False)
-                      <**> do n <- lookAhead ident
+                      <**> do n <- clearConsumed (lookAhead ident)
                               idd <- identdef
                               params <- optional (wrap formalParameters)
                               return (\proc-> (n, proc idd params)),

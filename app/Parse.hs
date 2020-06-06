@@ -7,9 +7,10 @@ import Language.Oberon (Placed, LanguageVersion(Oberon1, Oberon2), Options(..),
 import Language.Oberon.AST (Language, Module(..), StatementSequence, Statement, Expression)
 import qualified Language.Oberon.AST as AST
 import qualified Language.Oberon.Grammar as Grammar
+import qualified Language.Oberon.Pretty ()
+import qualified Language.Oberon.Reserializer as Reserializer
 import qualified Language.Oberon.Resolver as Resolver
 import qualified Language.Oberon.TypeChecker as TypeChecker
-import qualified Language.Oberon.Pretty ()
 
 import qualified Transformation.Rank2 as Rank2
 import qualified Transformation.Deep as Deep
@@ -41,7 +42,7 @@ data GrammarMode = ModuleWithImportsMode | ModuleMode | AmbiguousModuleMode | De
                  | StatementMode | ExpressionMode
     deriving Show
 
-data Output = Plain | Pretty Int | Tree
+data Output = Original | Plain | Pretty Int | Tree
             deriving Show
 
 data Opts = Opts
@@ -74,6 +75,7 @@ main = execParser opts >>= main'
         <*> (option auto (long "index" <> help "Index of ambiguous parse" <> showDefault <> value 0 <> metavar "INT"))
         <*> (Pretty <$> option auto (long "pretty" <> help "Pretty-print output" <> metavar "WIDTH")
              <|> flag' Tree (long "tree" <> help "Print the output as an abstract syntax tree")
+             <|> flag' Original (long "original" <> help "Print the output with the original tokens and whitespace")
              <|> pure Plain)
         <*> optional (strOption (short 'i' <> long "include" <> metavar "DIRECTORY"
                                  <> help "Where to look for imports"))
@@ -134,7 +136,7 @@ main' Opts{..} =
     predefined = case optsVersion 
                  of Oberon1 -> Resolver.predefined
                     Oberon2 -> Resolver.predefined2
-    go :: (Show a, Data a, Pretty a, a ~ f (g f f),
+    go :: (Data a, Flattenable a, Pretty a, Show a, a ~ f (g f f),
            Deep.Functor (Rank2.Map Grammar.NodeWrap NodeWrap) g) =>
           (NodeWrap (g NodeWrap NodeWrap) -> Validation (NonEmpty (Resolver.Error Language)) a)
        -> (forall p. Grammar.OberonGrammar AST.Language Grammar.NodeWrap p
@@ -150,7 +152,7 @@ main' Opts{..} =
 
 type NodeWrap = Compose ((,) Int) (Compose Ambiguous ((,) Grammar.ParsedLexemes))
 
-succeed :: (Data a, Pretty a, Show a)
+succeed :: (Data a, Flattenable a, Pretty a, Show a)
         => Output -> (TypeChecker.Error Language -> IO ())
         -> (err -> Either (NonEmpty (Resolver.Error Language)) (NonEmpty (TypeChecker.Error Language)))
         -> Validation err a -> IO ()
@@ -159,7 +161,8 @@ succeed out reportTypeError prepare x = either (reportFailure . prepare) showSuc
          reportFailure (Left errs) = print errs
          reportFailure (Right errs) = mapM_ reportTypeError errs
          showSuccess = case out
-                       of Pretty width -> putDocW width . pretty
+                       of Original -> Text.putStr . flatten
+                          Pretty width -> putDocW width . pretty
                           Tree -> putStrLn . reprTreeString
                           Plain -> print
 
@@ -167,6 +170,21 @@ reportTypeErrorIn directory (moduleName, (pos, _), err) =
    do contents <- readFile (combine directory $ addExtension (unpack moduleName) "Mod")
       putStrLn ("Type error: " ++ TypeChecker.errorMessage err)
       Text.putStrLn (offsetContext contents pos 4)
+
+class Flattenable a where
+   flatten :: a -> Text
+
+instance Flattenable (Placed (Module Language Language Placed Placed)) where
+   flatten = Reserializer.reserialize
+instance Flattenable (Placed (StatementSequence Language Language Placed Placed)) where
+   flatten = Reserializer.reserialize
+instance Flattenable (Placed (Statement Language Language Placed Placed)) where
+   flatten = Reserializer.reserialize
+instance Flattenable (Placed (Expression Language Language Placed Placed)) where
+   flatten = Reserializer.reserialize
+
+instance Flattenable (NodeWrap a) where
+   flatten = error "Disambiguate before serializing"
 
 instance {-# overlaps #-} Pretty a => Pretty (Placed a) where
    pretty = pretty . snd
