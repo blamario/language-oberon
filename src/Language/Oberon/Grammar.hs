@@ -16,7 +16,7 @@ import Data.Data (Data)
 import Data.Functor.Compose (Compose(..))
 import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe (catMaybes)
-import Data.Monoid ((<>), Endo(Endo, appEndo))
+import Data.Monoid ((<>), Dual(Dual, getDual), Endo(Endo, appEndo))
 import Numeric (readDec, readHex, readFloat)
 import Data.Text (Text, unpack)
 import Text.Grampa
@@ -269,8 +269,8 @@ grammar OberonGrammar{..} = OberonGrammar{
                 <?> "expression",
    simpleExpression = 
       (wrap (Abstract.positive <$ operator "+" <*> term) <|> wrap (Abstract.negative <$ operator "-" <*> term :: Parser (OberonGrammar l NodeWrap) Text (Abstract.Expression l l NodeWrap NodeWrap)) <|> term)
-      <**> (appEndo <$> concatMany (Endo <$> (flip . applyBinOp <$> addOperator <*> term))),
-   term = factor <**> (appEndo <$> concatMany (Endo <$> (flip . applyBinOp <$> mulOperator <*> factor))),
+      <**> (appEndo . getDual <$> concatMany (Dual . Endo <$> (flip . applyBinOp <$> addOperator <*> term))),
+   term = factor <**> (appEndo . getDual <$> concatMany (Dual . Endo <$> (flip . applyBinOp <$> mulOperator <*> factor))),
    factor = wrapAmbiguous (Abstract.literal <$> wrap (number
                                                       <|> charConstant
                                                       <|> Abstract.string <$> string_prod
