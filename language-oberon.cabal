@@ -35,7 +35,7 @@ library
                         Language.Oberon.Abstract, Language.Oberon.AST, Language.Oberon.ConstantFolder,
                         Language.Oberon.Grammar, Language.Oberon.Pretty, Language.Oberon.Reserializer,
                         Language.Oberon.Resolver, Language.Oberon.TypeChecker
-  build-depends:        base >= 4.7 && < 5, base-orphans >= 0.8.2 && < 1.0,
+  build-depends:        base >= 4.12 && < 5, base-orphans >= 0.8.2 && < 1.0,
                         text < 1.3, containers >= 0.5 && < 1.0, filepath < 1.5, directory < 1.4,
                         parsers >= 0.12.7 && < 0.13, prettyprinter >= 1.2.1 && < 1.7, either == 5.*,
                         rank2classes >= 1.3 && < 1.5, grammatical-parsers >= 0.5 && < 0.6, deep-transformations < 0.2,
@@ -47,7 +47,7 @@ executable parse
   main-is:             app/Parse.hs
   -- other-modules:       
   other-extensions:    RankNTypes, RecordWildCards, ScopedTypeVariables, FlexibleInstances, DeriveDataTypeable
-  build-depends:       base >= 4.7 && < 5, text < 1.3, either == 5.*, containers >= 0.5 && < 1.0,
+  build-depends:       base >= 4.12 && < 5, text < 1.3, either == 5.*, containers >= 0.5 && < 1.0,
                        repr-tree-syb < 0.2, filepath < 1.5, prettyprinter,
                        rank2classes, grammatical-parsers, deep-transformations < 0.2,
                        language-oberon,
@@ -56,7 +56,7 @@ executable parse
 
 test-suite             examples
   type:                exitcode-stdio-1.0
-  build-depends:       base >= 4.7 && < 5, text < 1.3, grammatical-parsers,
+  build-depends:       base >= 4.12 && < 5, text < 1.3, grammatical-parsers,
                        either == 5.*, directory < 2, filepath < 1.5, prettyprinter,
                        deep-transformations < 0.2,
                        tasty >= 0.7, tasty-hunit,
