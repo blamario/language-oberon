@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses,
-             TemplateHaskell, TypeFamilies, TypeOperators, UndecidableInstances #-}
+             ScopedTypeVariables, TemplateHaskell, TypeFamilies, TypeOperators, UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 
 -- | This module exports functions for resolving the syntactic ambiguities in a parsed module. For example, an Oberon
@@ -15,7 +15,7 @@ import Data.Either.Validation (Validation(..), validationToEither)
 import Data.Foldable (toList)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Const (Const(..))
-import Data.Monoid (Ap(Ap, getAp))
+import Data.Monoid (Ap(Ap, getAp), Sum(Sum, getSum))
 import Data.Text (Text)
 import qualified Data.Text as Text
 
@@ -49,11 +49,11 @@ instance Transformation.Transformation PositionAdjustment where
     type Codomain PositionAdjustment = Compose (Ap (State (Int, Int, [Lexeme]))) Parsed
 
 instance Serialization `Transformation.At` g Parsed Parsed where
-   Serialization $ (s, _) = Const (Ap $ state $ f s)
-      where f :: (Int, ParsedLexemes) -> (Int, [Lexeme]) -> (Text, (Int, [Lexeme]))
-            f (pos, Trailing lexemes) s'@(pos', lexemes')
-               | pos > pos', l:ls <- lexemes', t <- lexemeText l = first (t <>) (f s (pos' + Text.length t, ls))
-               | otherwise = (mempty, (pos, lexemes <> lexemes'))
+   Serialization $ ((nodePos, Trailing nodeLexemes), _) = Const (Ap $ state f)
+      where f :: (Int, [Lexeme]) -> (Text, (Int, [Lexeme]))
+            f (pos, lexemes)
+               | nodePos > pos, l:ls <- lexemes, t <- lexemeText l = first (t <>) (f (pos + Text.length t, ls))
+               | otherwise = (mempty, (pos, nodeLexemes <> lexemes))
 
 instance PositionAdjustment `Transformation.At` g Parsed Parsed where
    PositionAdjustment $ ((nodePos, Trailing nodeLexemes), node) = Compose (Ap $ state f)
@@ -62,8 +62,22 @@ instance PositionAdjustment `Transformation.At` g Parsed Parsed where
                | otherwise = (((pos', Trailing nodeLexemes), node), (pos, pos', lexemes <> nodeLexemes))
 
 instance (Rank2.Foldable (g Parsed), Deep.Foldable Serialization g) => Full.Foldable Serialization g where
-   foldMap = Full.foldMapDownDefault
+   foldMap trans ((nodePos, Trailing nodeLexemes), node) = Ap (state f)
+      where f :: (Int, [Lexeme]) -> (Text, (Int, [Lexeme]))
+            f (pos, lexemes)
+               | nodePos > pos, l:ls <- lexemes, t <- lexemeText l = first (t <>) (f (pos + Text.length t, ls))
+               | otherwise = let (t, (pos', lexemes')) = runState (getAp $ Deep.foldMap trans node) (pos, nodeLexemes)
+                                 t' = foldMap lexemeText lexemes'
+                             in (t <> t', (pos' + Text.length t', lexemes))
 
 instance (Rank2.Foldable (g Parsed), Deep.Traversable PositionAdjustment g) =>
          Full.Traversable PositionAdjustment g where
-   traverse = Full.traverseDownDefault
+   traverse trans ((nodePos0, Trailing nodeLexemes), node) = Ap (state $ f nodePos0)
+      where f :: Int -> (Int, Int, [Lexeme]) -> (Parsed (g Parsed Parsed), (Int, Int, [Lexeme]))
+            f nodePos (pos, pos', lexemes)
+               | nodePos0 > pos, l:ls <- lexemes,
+                 len <- Text.length (lexemeText l) = f (nodePos + len) (pos + len, pos' + len, ls)
+               | otherwise = let (node', (pos1, pos1', lexemes')) =
+                                    runState (getAp $ Deep.traverse trans node) (pos, pos', nodeLexemes)
+                                 Sum len = foldMap (Sum . Text.length . lexemeText) lexemes'
+                             in (((pos', Trailing nodeLexemes), node'), (nodePos + len, pos1' + len, lexemes))
