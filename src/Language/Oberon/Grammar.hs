@@ -150,7 +150,7 @@ comment = try (string "(*"
    where isCommentChar c = c /= '*' && c /= '('
 
 whiteSpace :: LexicalParsing (Parser g Text) => Parser g Text ()
-whiteSpace = spaceChars *> skipMany (lexicalComment *> spaceChars)
+whiteSpace = spaceChars *> skipMany (lexicalComment *> spaceChars) <?> "whitespace"
    where spaceChars = (takeCharsWhile1 isSpace >>= \ws-> lift ([[WhiteSpace ws]], ())) <<|> pure ()
 
 clearConsumed = tmap clear
