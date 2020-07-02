@@ -23,7 +23,8 @@ import Data.Map.Lazy (Map)
 import Data.Monoid ((<>))
 import Data.Text (Text, unpack)
 import Data.Text.IO (readFile)
-import Text.Grampa (Ambiguous(Ambiguous), Grammar, ParseResults, parseComplete, failureDescription, positionOffset)
+import qualified Text.Parser.Input.Position as Position
+import Text.Grampa (Ambiguous(Ambiguous), Grammar, ParseResults, parseComplete, failureDescription)
 import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
 import System.Directory (doesFileExist)
 import System.FilePath (FilePath, addExtension, combine, takeDirectory)
@@ -45,7 +46,7 @@ resolvePositions :: (p ~ Grammar.NodeWrap, q ~ NodeWrap, Deep.Functor (Rank2.Map
 resolvePositions src t = Rank2.Map (resolvePosition src) Full.<$> t
 
 resolvePosition :: Text -> Grammar.NodeWrap a -> NodeWrap a
-resolvePosition src = \(Compose (pos, a))-> Compose (positionOffset src pos, a)
+resolvePosition src = \(Compose (pos, a))-> Compose (Position.offset src pos, a)
 
 moduleGrammar Oberon1 = Grammar.oberonGrammar
 moduleGrammar Oberon2 = Grammar.oberon2Grammar 

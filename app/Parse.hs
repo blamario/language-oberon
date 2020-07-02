@@ -31,7 +31,8 @@ import Data.Text (Text, unpack)
 import Data.Text.IO (getLine, readFile, getContents)
 import qualified Data.Text.IO as Text
 import Options.Applicative
-import Text.Grampa (Ambiguous, Grammar, parseComplete, failureDescription, offsetContext)
+import qualified Text.Parser.Input.Position as Position
+import Text.Grampa (Ambiguous, Grammar, parseComplete, failureDescription)
 import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
 import ReprTree
 import System.FilePath (FilePath, addExtension, combine, takeDirectory)
@@ -169,7 +170,7 @@ succeed out reportTypeError prepare x = either (reportFailure . prepare) showSuc
 reportTypeErrorIn directory (moduleName, (pos, _), err) =
    do contents <- readFile (combine directory $ addExtension (unpack moduleName) "Mod")
       putStrLn ("Type error: " ++ TypeChecker.errorMessage err)
-      Text.putStrLn (offsetContext contents pos 4)
+      Text.putStrLn (Position.context contents (Position.fromStart pos) 4)
 
 class Flattenable a where
    flatten :: a -> Text

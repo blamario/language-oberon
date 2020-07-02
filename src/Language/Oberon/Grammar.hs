@@ -117,7 +117,7 @@ data Lexeme = WhiteSpace{lexemeText :: Text}
 data TokenType = Delimiter | Keyword | Operator | Other
                deriving (Data, Eq, Show)
 
-type NodeWrap = Compose ((,) (Position Text)) (Compose Ambiguous ((,) ParsedLexemes))
+type NodeWrap = Compose ((,) Position) (Compose Ambiguous ((,) ParsedLexemes))
 
 newtype ParsedLexemes = Trailing [Lexeme]
                       deriving (Data, Show)
