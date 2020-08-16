@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings, RankNTypes,
+{-# LANGUAGE DeriveGeneric, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings, RankNTypes,
              ScopedTypeVariables, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
 module Language.Oberon.ConstantFolder where
@@ -15,6 +15,7 @@ import qualified Data.Map.Lazy as Map
 import Data.Semigroup (Semigroup(..))
 import qualified Data.Text as Text
 import Foreign.Storable (sizeOf)
+import GHC.Generics (Generic)
 import Language.Haskell.TH (appT, conT, varT, varE, newName)
 
 import qualified Rank2
@@ -22,8 +23,10 @@ import qualified Transformation
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 import qualified Transformation.Full.TH
+import qualified Transformation.Shallow as Shallow
 import qualified Transformation.AG as AG
-import Transformation.AG (Attribution(..), Atts, Inherited(..), Synthesized(..), Semantics)
+import Transformation.AG (Attribution(..), Synthesizer(..),
+                          Atts, Inherited(..), Synthesized(..), Semantics, Auto(Auto))
 
 import qualified Language.Oberon.Abstract as Abstract
 import qualified Language.Oberon.AST as AST
@@ -31,15 +34,16 @@ import Language.Oberon.Grammar (ParsedLexemes(Trailing))
 
 foldConstants :: (Abstract.Oberon l, Abstract.Nameable l,
                   Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
-                  Atts (Inherited ConstantFold) (Abstract.Block l l Sem Sem) ~ InhCF l,
-                  Atts (Synthesized ConstantFold) (Abstract.Block l l Sem Sem) ~ SynCFMod' l (Abstract.Block l l),
-                  Full.Functor ConstantFold (Abstract.Block l l),
-                  Deep.Functor ConstantFold (Abstract.Block l l))
+                  Atts (Inherited (Auto ConstantFold)) (Abstract.Block l l Sem Sem) ~ InhCF l,
+                  Atts (Synthesized (Auto ConstantFold)) (Abstract.Block l l Sem Sem) ~ SynCFMod' l (Abstract.Block l l),
+                  Full.Functor (Auto ConstantFold) (Abstract.Block l l),
+                  Deep.Functor (Auto ConstantFold) (Abstract.Block l l))
               => Environment l -> Map AST.Ident (Placed (AST.Module l l Placed Placed))
               -> Map AST.Ident (Placed (AST.Module l l Placed Placed))
 foldConstants predef modules =
    getModules (modulesFolded $
-               syn (Transformation.apply ConstantFold (wrap (ConstantFold Deep.<$> Modules modules))
+               syn (Transformation.apply (Auto ConstantFold)
+                                         (wrap (Auto ConstantFold Deep.<$> Modules modules))
                     `Rank2.apply`
                     Inherited (InhCFRoot predef)))
    where wrap = (,) (0, Trailing [])
@@ -52,27 +56,31 @@ newtype Modules l f' f = Modules {getModules :: Map AST.Ident (f (AST.Module l l
 
 data ConstantFold = ConstantFold
 
-type Sem = Semantics ConstantFold
+type Sem = Semantics (Auto ConstantFold)
 
 data ConstantFoldSyn l = ConstantFoldSyn (InhCF l)
 
-instance Transformation.Transformation ConstantFold where
-   type Domain ConstantFold = Placed
-   type Codomain ConstantFold = Semantics ConstantFold
+instance Transformation.Transformation (Auto ConstantFold) where
+   type Domain (Auto ConstantFold) = Placed
+   type Codomain (Auto ConstantFold) = Semantics (Auto ConstantFold)
+
+instance AG.Revelation (Auto ConstantFold) where
+  reveal = const snd
 
 instance Transformation.Transformation (ConstantFoldSyn l) where
-   type Domain (ConstantFoldSyn l) = Semantics ConstantFold
+   type Domain (ConstantFoldSyn l) = Semantics (Auto ConstantFold)
    type Codomain (ConstantFoldSyn l) = Placed
 
-instance (Atts (Synthesized ConstantFold) (f Placed Placed) ~ SynCF' f,
-          Atts (Inherited ConstantFold) (f Placed Placed) ~ InhCF l) =>
+instance (Atts (Synthesized (Auto ConstantFold)) (f Placed Placed) ~ SynCF' f,
+          Atts (Inherited (Auto ConstantFold)) (f Placed Placed) ~ InhCF l) =>
          Transformation.At (ConstantFoldSyn l) (f Placed Placed) where
    ConstantFoldSyn inheritance $ f = folded (syn $ Rank2.apply f $ Inherited inheritance)
 
-data InhCFRoot l = InhCFRoot{rootEnv :: Environment l}
+data InhCFRoot l = InhCFRoot{rootEnv :: Environment l} deriving Generic
 
 data InhCF l = InhCF{env           :: Environment l,
                      currentModule :: AST.Ident}
+               deriving Generic
 
 data SynCF a = SynCF{folded :: Placed a}
 
@@ -97,65 +105,72 @@ instance Rank2.Functor (Modules l f') where
 instance Rank2.Apply (Modules l f') where
    ~(Modules fs) <*> ~(Modules ms) = Modules (Map.intersectionWith Rank2.apply fs ms)
 
--- * Boring attribute types
-type instance Atts (Synthesized ConstantFold) (Modules l _ _) = SynCFRoot (Modules l Placed Placed)
-type instance Atts (Synthesized ConstantFold) (AST.Module l l _ _) = SynCFMod' l (AST.Module l l)
-type instance Atts (Synthesized ConstantFold) (AST.Declaration l l _ _) = SynCFMod' l (AST.Declaration l l)
-type instance Atts (Synthesized ConstantFold) (AST.ProcedureHeading l l _ _) = SynCF' (AST.ProcedureHeading l l)
-type instance Atts (Synthesized ConstantFold) (AST.Block l l _ _) = SynCFMod' l (AST.Block l l)
-type instance Atts (Synthesized ConstantFold) (AST.FormalParameters l l _ _) = SynCF' (AST.FormalParameters l l)
-type instance Atts (Synthesized ConstantFold) (AST.FPSection l l _ _) = SynCF' (AST.FPSection l l)
-type instance Atts (Synthesized ConstantFold) (AST.Type l l _ _) = SynCF' (AST.Type l l)
-type instance Atts (Synthesized ConstantFold) (AST.FieldList l l _ _) = SynCF' (AST.FieldList l l)
-type instance Atts (Synthesized ConstantFold) (AST.StatementSequence l l _ _) = SynCF' (AST.StatementSequence l l)
-type instance Atts (Synthesized ConstantFold) (AST.Expression λ l _ _) = SynCFExp λ l
-type instance Atts (Synthesized ConstantFold) (AST.Element l l _ _) = SynCF' (AST.Element l l)
-type instance Atts (Synthesized ConstantFold) (AST.Value l l _ _) = SynCF' (AST.Value l l)
-type instance Atts (Synthesized ConstantFold) (AST.Designator l l _ _) =
-   SynCF (AST.Designator l l Placed Placed, Maybe (AST.Value l l Placed Placed))
-type instance Atts (Synthesized ConstantFold) (AST.Statement l l _ _) = SynCF' (AST.Statement l l)
-type instance Atts (Synthesized ConstantFold) (AST.Case l l _ _) = SynCF' (AST.Case l l)
-type instance Atts (Synthesized ConstantFold) (AST.CaseLabels l l _ _) = SynCF' (AST.CaseLabels l l)
-type instance Atts (Synthesized ConstantFold) (AST.ConditionalBranch l l _ _) = SynCF' (AST.ConditionalBranch l l)
-type instance Atts (Synthesized ConstantFold) (AST.WithAlternative l l _ _) = SynCF' (AST.WithAlternative l l)
+instance (Transformation.Transformation t, Transformation.At t (AST.Module l l f f)) =>
+         Shallow.Functor t (Modules l f) where
+   t <$> ~(Modules ms) = Modules ((t Transformation.$) <$> ms)
 
-type instance Atts (Inherited ConstantFold) (Modules l _ _) = InhCFRoot l
-type instance Atts (Inherited ConstantFold) (AST.Module l l _ _) = InhCF l
-type instance Atts (Inherited ConstantFold) (AST.Declaration l l _ _) = InhCF l
-type instance Atts (Inherited ConstantFold) (AST.ProcedureHeading l l _ _) = InhCF l
-type instance Atts (Inherited ConstantFold) (AST.Block l l _ _) = InhCF l
-type instance Atts (Inherited ConstantFold) (AST.FormalParameters l l _ _) = InhCF l
-type instance Atts (Inherited ConstantFold) (AST.FPSection l l _ _) = InhCF l
-type instance Atts (Inherited ConstantFold) (AST.Type l l _ _) = InhCF l
-type instance Atts (Inherited ConstantFold) (AST.FieldList l l _ _) = InhCF l
-type instance Atts (Inherited ConstantFold) (AST.StatementSequence l l _ _) = InhCF l
-type instance Atts (Inherited ConstantFold) (AST.Expression l _ _ _) = InhCF l
-type instance Atts (Inherited ConstantFold) (AST.Element l l _ _) = InhCF l
-type instance Atts (Inherited ConstantFold) (AST.Value l l _ _) = InhCF l
-type instance Atts (Inherited ConstantFold) (AST.Designator l l _ _) = InhCF l
-type instance Atts (Inherited ConstantFold) (AST.Statement l l _ _) = InhCF l
-type instance Atts (Inherited ConstantFold) (AST.Case l l _ _) = InhCF l
-type instance Atts (Inherited ConstantFold) (AST.CaseLabels l l _ _) = InhCF l
-type instance Atts (Inherited ConstantFold) (AST.ConditionalBranch l l _ _) = InhCF l
-type instance Atts (Inherited ConstantFold) (AST.WithAlternative l l _ _) = InhCF l
+-- * Boring attribute types
+type instance Atts (Synthesized (Auto ConstantFold)) (Modules l _ _) = SynCFRoot (Modules l Placed Placed)
+type instance Atts (Synthesized (Auto ConstantFold)) (AST.Module l l _ _) = SynCFMod' l (AST.Module l l)
+type instance Atts (Synthesized (Auto ConstantFold)) (AST.Declaration l l _ _) = SynCFMod' l (AST.Declaration l l)
+type instance Atts (Synthesized (Auto ConstantFold)) (AST.ProcedureHeading l l _ _) = SynCF' (AST.ProcedureHeading l l)
+type instance Atts (Synthesized (Auto ConstantFold)) (AST.Block l l _ _) = SynCFMod' l (AST.Block l l)
+type instance Atts (Synthesized (Auto ConstantFold)) (AST.FormalParameters l l _ _) = SynCF' (AST.FormalParameters l l)
+type instance Atts (Synthesized (Auto ConstantFold)) (AST.FPSection l l _ _) = SynCF' (AST.FPSection l l)
+type instance Atts (Synthesized (Auto ConstantFold)) (AST.Type l l _ _) = SynCF' (AST.Type l l)
+type instance Atts (Synthesized (Auto ConstantFold)) (AST.FieldList l l _ _) = SynCF' (AST.FieldList l l)
+type instance Atts (Synthesized (Auto ConstantFold)) (AST.StatementSequence l l _ _) = SynCF' (AST.StatementSequence l l)
+type instance Atts (Synthesized (Auto ConstantFold)) (AST.Expression λ l _ _) = SynCFExp λ l
+type instance Atts (Synthesized (Auto ConstantFold)) (AST.Element l l _ _) = SynCF' (AST.Element l l)
+type instance Atts (Synthesized (Auto ConstantFold)) (AST.Value l l _ _) = SynCF' (AST.Value l l)
+type instance Atts (Synthesized (Auto ConstantFold)) (AST.Designator l l _ _) =
+   SynCF (AST.Designator l l Placed Placed, Maybe (AST.Value l l Placed Placed))
+type instance Atts (Synthesized (Auto ConstantFold)) (AST.Statement l l _ _) = SynCF' (AST.Statement l l)
+type instance Atts (Synthesized (Auto ConstantFold)) (AST.Case l l _ _) = SynCF' (AST.Case l l)
+type instance Atts (Synthesized (Auto ConstantFold)) (AST.CaseLabels l l _ _) = SynCF' (AST.CaseLabels l l)
+type instance Atts (Synthesized (Auto ConstantFold)) (AST.ConditionalBranch l l _ _) = SynCF' (AST.ConditionalBranch l l)
+type instance Atts (Synthesized (Auto ConstantFold)) (AST.WithAlternative l l _ _) = SynCF' (AST.WithAlternative l l)
+
+type instance Atts (Inherited (Auto ConstantFold)) (Modules l _ _) = InhCFRoot l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.Module l l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.Declaration l l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.ProcedureHeading l l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.Block l l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.FormalParameters l l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.FPSection l l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.Type l l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.FieldList l l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.StatementSequence l l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.Expression l _ _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.Element l l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.Value l l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.Designator l l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.Statement l l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.Case l l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.CaseLabels l l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.ConditionalBranch l l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.WithAlternative l l _ _) = InhCF l
 
 type SynCF' node = SynCF (node Placed Placed)
 type SynCFMod' l node = SynCFMod l (node Placed Placed)
 
 -- * Rules
 
-instance Ord (Abstract.QualIdent l) => Attribution ConstantFold (Modules l) Sem Placed where
-   attribution ConstantFold (_, Modules self) (Inherited inheritance, Modules ms) =
+instance {-# overlaps #-} Ord (Abstract.QualIdent l) =>
+                          Attribution (Auto ConstantFold) (Modules l) Sem Placed where
+   attribution _ (_, Modules self) (Inherited inheritance, Modules ms) =
      (Synthesized SynCFRoot{modulesFolded= Modules (moduleFolded . syn <$> ms)},
       Modules (Map.mapWithKey moduleInheritance self))
      where moduleInheritance name mod = Inherited InhCF{env= rootEnv inheritance <> foldMap (moduleEnv . syn) ms,
                                                         currentModule= name}
 
-instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
-          Atts (Synthesized ConstantFold) (Abstract.Block l l Sem Sem) ~ SynCFMod' l (Abstract.Block l l),
-          Atts (Inherited ConstantFold) (Abstract.Block l l Sem Sem) ~ InhCF l) =>
-         Attribution ConstantFold (AST.Module l l) Sem Placed where
-   attribution ConstantFold (_, AST.Module moduleName imports _body) (Inherited inheritance, AST.Module _ _ body) =
+instance {-# overlaps #-} (Abstract.Oberon l, Abstract.Nameable l,
+                           Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
+                           Atts (Synthesized (Auto ConstantFold)) (Abstract.Block l l Sem Sem)
+                           ~ SynCFMod' l (Abstract.Block l l),
+                           Atts (Inherited (Auto ConstantFold)) (Abstract.Block l l Sem Sem) ~ InhCF l) =>
+                          Attribution (Auto ConstantFold) (AST.Module l l) Sem Placed where
+   attribution _ (_, AST.Module moduleName imports _body) (Inherited inheritance, AST.Module _ _ body) =
       (Synthesized SynCFMod{moduleEnv= exportedEnv,
                             moduleFolded= ((0, Trailing []), AST.Module moduleName imports (moduleFolded $ syn body))},
        AST.Module moduleName imports (Inherited inheritance))
@@ -166,52 +181,51 @@ instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Sh
                | otherwise = q
 
 instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Atts (Inherited ConstantFold) (Abstract.Declaration l l Sem Sem) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Type l l Sem Sem) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Block l l Sem Sem) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.ProcedureHeading l l Sem Sem) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.FormalParameters l l Sem Sem) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.ConstExpression l l Sem Sem) ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.Declaration l l Sem Sem) ~ SynCFMod' l (Abstract.Declaration l l),
-          Atts (Synthesized ConstantFold) (Abstract.Type l l Sem Sem) ~ SynCF' (Abstract.Type l l),
-          Atts (Synthesized ConstantFold) (Abstract.ProcedureHeading l l Sem Sem)
+          Atts (Inherited (Auto ConstantFold)) (Abstract.Declaration l l Sem Sem) ~ InhCF l,
+          Atts (Inherited (Auto ConstantFold)) (Abstract.Type l l Sem Sem) ~ InhCF l,
+          Atts (Inherited (Auto ConstantFold)) (Abstract.Block l l Sem Sem) ~ InhCF l,
+          Atts (Inherited (Auto ConstantFold)) (Abstract.ProcedureHeading l l Sem Sem) ~ InhCF l,
+          Atts (Inherited (Auto ConstantFold)) (Abstract.FormalParameters l l Sem Sem) ~ InhCF l,
+          Atts (Inherited (Auto ConstantFold)) (Abstract.ConstExpression l l Sem Sem) ~ InhCF l,
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.Declaration l l Sem Sem) ~ SynCFMod' l (Abstract.Declaration l l),
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.Type l l Sem Sem) ~ SynCF' (Abstract.Type l l),
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.ProcedureHeading l l Sem Sem)
           ~ SynCF' (Abstract.ProcedureHeading l l),
-          Atts (Synthesized ConstantFold) (Abstract.FormalParameters l l Sem Sem)
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.FormalParameters l l Sem Sem)
           ~ SynCF' (Abstract.FormalParameters l l),
-          Atts (Synthesized ConstantFold) (Abstract.Block l l Sem Sem) ~ SynCFMod' l (Abstract.Block l l),
-          Atts (Synthesized ConstantFold) (Abstract.ConstExpression l l Sem Sem) ~ SynCFExp l l) =>
-         Attribution ConstantFold (AST.Declaration l l) Sem Placed where
-   bequest ConstantFold (pos, d) inheritance _ = AG.passDown (Inherited inheritance) d
-   synthesis ConstantFold (pos, AST.ConstantDeclaration namedef _) _ (AST.ConstantDeclaration _ expression) =
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.Block l l Sem Sem) ~ SynCFMod' l (Abstract.Block l l),
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.ConstExpression l l Sem Sem) ~ SynCFExp l l) =>
+         Synthesizer (Auto ConstantFold) (AST.Declaration l l) Sem Placed where
+   synthesis _ (pos, AST.ConstantDeclaration namedef _) _ (AST.ConstantDeclaration _ expression) =
       SynCFMod{moduleEnv= Map.singleton (Abstract.nonQualIdent name) val,
                moduleFolded = (pos,
                                AST.ConstantDeclaration namedef $
                                maybe (foldedExp $ syn expression) ((,) pos . Abstract.literal . (,) pos) val)}
       where name = Abstract.getIdentDefName namedef
             val = foldedValue (syn expression)
-   synthesis ConstantFold (pos, AST.TypeDeclaration namedef _) _ (AST.TypeDeclaration _ definition) =
+   synthesis _ (pos, AST.TypeDeclaration namedef _) _ (AST.TypeDeclaration _ definition) =
       SynCFMod{moduleEnv= mempty,
                moduleFolded = (pos, AST.TypeDeclaration namedef (folded $ syn definition))}
-   synthesis ConstantFold (pos, AST.VariableDeclaration names _declaredType) _
+   synthesis _ (pos, AST.VariableDeclaration names _declaredType) _
              (AST.VariableDeclaration _names declaredType) =
       SynCFMod{moduleEnv= mempty,
                moduleFolded= (pos, AST.VariableDeclaration names (folded $ syn declaredType))}
-   synthesis ConstantFold (pos, _) _ (AST.ProcedureDeclaration heading body) =
+   synthesis _ (pos, _) _ (AST.ProcedureDeclaration heading body) =
       SynCFMod{moduleEnv= mempty,
                moduleFolded= (pos, AST.ProcedureDeclaration (folded $ syn heading) (moduleFolded $ syn body))}
-   synthesis ConstantFold (pos, AST.ForwardDeclaration namedef _signature) _
+   synthesis _ (pos, AST.ForwardDeclaration namedef _signature) _
              (AST.ForwardDeclaration _namedef signature) =
       SynCFMod{moduleEnv= mempty,
                moduleFolded= (pos, AST.ForwardDeclaration namedef (folded . syn <$> signature))}
 
 instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
-          Atts (Synthesized ConstantFold) (Abstract.Declaration l l Sem Sem) ~ SynCFMod' l (Abstract.Declaration l l),
-          Atts (Inherited ConstantFold) (Abstract.StatementSequence l l Sem Sem) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Declaration l l Sem Sem) ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.StatementSequence l l Sem Sem)
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.Declaration l l Sem Sem) ~ SynCFMod' l (Abstract.Declaration l l),
+          Atts (Inherited (Auto ConstantFold)) (Abstract.StatementSequence l l Sem Sem) ~ InhCF l,
+          Atts (Inherited (Auto ConstantFold)) (Abstract.Declaration l l Sem Sem) ~ InhCF l,
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.StatementSequence l l Sem Sem)
           ~ SynCF' (Abstract.StatementSequence l l)) =>
-         Attribution ConstantFold (AST.Block l l) Sem Placed where
-   attribution ConstantFold (pos, AST.Block _decls _stats) (Inherited inheritance, AST.Block decls stats) =
+         Attribution (Auto ConstantFold) (AST.Block l l) Sem Placed where
+   attribution _ (pos, AST.Block _decls _stats) (Inherited inheritance, AST.Block decls stats) =
       (Synthesized SynCFMod{moduleEnv= newEnv,
                             moduleFolded= (pos, AST.Block (moduleFolded . syn <$> decls) (folded . syn <$> stats))},
        AST.Block (pure $ Inherited localEnv) (pure $ Inherited localEnv))
@@ -220,16 +234,15 @@ instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Sh
 
 instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Abstract.Value l ~ AST.Value l, InhCF l ~ InhCF λ,
-          Atts (Inherited ConstantFold) (Abstract.Expression l l Sem Sem) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Element l l Sem Sem) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Designator l l Sem Sem) ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.Expression l l Sem Sem) ~ SynCFExp λ l,
-          Atts (Synthesized ConstantFold) (Abstract.Element l l Sem Sem) ~ SynCF' (Abstract.Element l l),
-          Atts (Synthesized ConstantFold) (Abstract.Designator l l Sem Sem)
+          Atts (Inherited (Auto ConstantFold)) (Abstract.Expression l l Sem Sem) ~ InhCF l,
+          Atts (Inherited (Auto ConstantFold)) (Abstract.Element l l Sem Sem) ~ InhCF l,
+          Atts (Inherited (Auto ConstantFold)) (Abstract.Designator l l Sem Sem) ~ InhCF l,
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.Expression l l Sem Sem) ~ SynCFExp λ l,
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.Element l l Sem Sem) ~ SynCF' (Abstract.Element l l),
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.Designator l l Sem Sem)
           ~ SynCF (Abstract.Designator l l Placed Placed, Maybe (Abstract.Value l l Placed Placed))) =>
-         Attribution ConstantFold (AST.Expression λ l) Sem Placed where
-   bequest ConstantFold (pos, e) inheritance _ = AG.passDown (Inherited inheritance) e
-   synthesis ConstantFold (pos, AST.Relation op _ _) _ (AST.Relation _op left right) =
+         Synthesizer (Auto ConstantFold) (AST.Expression λ l) Sem Placed where
+   synthesis _ (pos, AST.Relation op _ _) _ (AST.Relation _op left right) =
       case join (compareValues <$> foldedValue (syn left) <*> foldedValue (syn right))
       of Just value -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, value)),
                                 foldedValue= Just value}
@@ -258,7 +271,7 @@ instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
             relate Abstract.GreaterOrEqual LT = Just Abstract.false
             relate Abstract.GreaterOrEqual _  = Just Abstract.true
             relate Abstract.In _              = Nothing
-   synthesis ConstantFold (pos, _) _ (AST.Positive expr) =
+   synthesis _ (pos, _) _ (AST.Positive expr) =
       case foldedValue (syn expr)
       of Just (AST.Integer n) -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, AST.Integer n)),
                                           foldedValue= Just (AST.Integer n)}
@@ -266,7 +279,7 @@ instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
                                        foldedValue= Just (AST.Real n)}
          _ -> SynCFExp{foldedExp= (pos, Abstract.positive $ foldedExp $ syn expr),
                        foldedValue= Nothing}
-   synthesis ConstantFold (pos, _) _ (AST.Negative expr) =
+   synthesis _ (pos, _) _ (AST.Negative expr) =
       case foldedValue (syn expr)
       of Just (AST.Integer n) -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, AST.Integer $ negate n)),
                                           foldedValue= Just (AST.Integer $ negate n)}
@@ -274,23 +287,23 @@ instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
                                        foldedValue= Just (AST.Real $ negate n)}
          _ -> SynCFExp{foldedExp= (pos, Abstract.negative $ foldedExp $ syn expr),
                        foldedValue= Nothing}
-   synthesis ConstantFold (pos, _) _ (AST.Add left right) =
+   synthesis _ (pos, _) _ (AST.Add left right) =
       foldBinaryArithmetic pos Abstract.add (+) (syn left) (syn right)
-   synthesis ConstantFold (pos, _) _ (AST.Subtract left right) =
+   synthesis _ (pos, _) _ (AST.Subtract left right) =
       foldBinaryArithmetic pos Abstract.subtract (-) (syn left) (syn right)
-   synthesis ConstantFold (pos, _) _ (AST.Or left right) =
+   synthesis _ (pos, _) _ (AST.Or left right) =
       foldBinaryBoolean pos Abstract.or (||) (syn left) (syn right)
-   synthesis ConstantFold (pos, _) _ (AST.Multiply left right) =
+   synthesis _ (pos, _) _ (AST.Multiply left right) =
       foldBinaryArithmetic pos Abstract.multiply (*) (syn left) (syn right)
-   synthesis ConstantFold (pos, _) _ (AST.Divide left right) =
+   synthesis _ (pos, _) _ (AST.Divide left right) =
       foldBinaryFractional pos Abstract.divide (/) (syn left) (syn right)
-   synthesis ConstantFold (pos, _) _ (AST.IntegerDivide left right) =
+   synthesis _ (pos, _) _ (AST.IntegerDivide left right) =
       foldBinaryInteger pos Abstract.integerDivide div (syn left) (syn right)
-   synthesis ConstantFold (pos, _) _ (AST.Modulo left right) =
+   synthesis _ (pos, _) _ (AST.Modulo left right) =
       foldBinaryInteger pos Abstract.modulo mod (syn left) (syn right)
-   synthesis ConstantFold (pos, _) _ (AST.And left right) =
+   synthesis _ (pos, _) _ (AST.And left right) =
       foldBinaryBoolean pos Abstract.and (&&) (syn left) (syn right)
-   synthesis ConstantFold (pos, _) _ (AST.Not expr) =
+   synthesis _ (pos, _) _ (AST.Not expr) =
       case foldedValue (syn expr)
       of Just (AST.Boolean True) -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.false)),
                                              foldedValue= Just Abstract.false}
@@ -298,19 +311,19 @@ instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
                                               foldedValue= Just Abstract.true}
          _ -> SynCFExp{foldedExp= (pos, Abstract.not $ foldedExp $ syn expr),
                        foldedValue= Nothing}
-   synthesis ConstantFold (pos, AST.IsA _ right) _ (AST.IsA left _) =
+   synthesis _ (pos, AST.IsA _ right) _ (AST.IsA left _) =
       SynCFExp{foldedExp= (pos, Abstract.is (foldedExp $ syn left) right),
                foldedValue= Nothing}
-   synthesis ConstantFold (pos, _) _ (AST.Set elements) =
+   synthesis _ (pos, _) _ (AST.Set elements) =
       SynCFExp{foldedExp= (pos, Abstract.set (folded . syn <$> getZipList elements)),
                foldedValue= Nothing}
-   synthesis ConstantFold (pos, _) _ (AST.Read des) =
+   synthesis _ (pos, _) _ (AST.Read des) =
       case folded (syn des)
       of (pos', (_, Just val)) -> SynCFExp{foldedExp= (pos, Abstract.literal (pos', val)),
                                            foldedValue= Just val}
          (pos', (des', Nothing)) -> SynCFExp{foldedExp= (pos, Abstract.read (pos', des')),
                                              foldedValue= Nothing}
-   synthesis ConstantFold (pos, _) _ (AST.FunctionCall fn args) =
+   synthesis _ (pos, _) _ (AST.FunctionCall fn args) =
       case (snd (snd $ folded $ syn fn), foldedValue . syn <$> getZipList args)
       of (Just (AST.Builtin "CAP"), [Just (AST.String s)])
             | Text.length s == 1, capital <- Text.toUpper s -> literalSynthesis (Abstract.string capital)
@@ -356,7 +369,7 @@ instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
                        foldedValue= Nothing}
       where literalSynthesis value = SynCFExp{foldedExp= (pos, Abstract.literal (pos, value)),
                                               foldedValue= Just value}
-   synthesis ConstantFold (pos, _) _ (AST.Literal val) =
+   synthesis _ (pos, _) _ (AST.Literal val) =
       SynCFExp{foldedExp= (pos, Abstract.literal (folded $ syn val)),
                foldedValue= Just (snd $ folded $ syn val)}
 
@@ -442,34 +455,33 @@ foldBinaryBoolean pos node op l r = case join (foldValues <$> foldedValue l <*> 
 instance (Abstract.CoWirthy l, Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
           Abstract.Expression l l Placed Placed ~ AST.Expression l l Placed Placed,
           Abstract.Value l l Placed Placed ~ AST.Value l l Placed Placed,
-          Atts (Inherited ConstantFold) (Abstract.Expression l l Sem Sem) ~ InhCF l,
-          Atts (Inherited ConstantFold) (Abstract.Designator l l Sem Sem) ~ InhCF l,
-          Atts (Synthesized ConstantFold) (Abstract.Expression l l Sem Sem) ~ SynCFExp λ l,
-          Atts (Synthesized ConstantFold) (Abstract.Designator l l Sem Sem)
+          Atts (Inherited (Auto ConstantFold)) (Abstract.Expression l l Sem Sem) ~ InhCF l,
+          Atts (Inherited (Auto ConstantFold)) (Abstract.Designator l l Sem Sem) ~ InhCF l,
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.Expression l l Sem Sem) ~ SynCFExp λ l,
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.Designator l l Sem Sem)
           ~ SynCF (Abstract.Designator l l Placed Placed, Maybe (Abstract.Value l l Placed Placed))) =>
-         Attribution ConstantFold (AST.Designator l l) Sem Placed where
-   bequest ConstantFold (pos, d) inheritance _ = AG.passDown (Inherited inheritance) d
-   synthesis ConstantFold (pos, AST.Variable q) inheritance _ =
+         Synthesizer (Auto ConstantFold) (AST.Designator l l) Sem Placed where
+   synthesis _ (pos, AST.Variable q) inheritance _ =
       SynCF{folded= (pos, (AST.Variable q, join (Map.lookup q $ env inheritance)))}
 --                                         >>= Abstract.coExpression :: Maybe (AST.Expression l l Placed Placed)))}
-   synthesis ConstantFold (pos, AST.Field _record fieldName) _ (AST.Field record _fieldName) =
+   synthesis _ (pos, AST.Field _record fieldName) _ (AST.Field record _fieldName) =
       SynCF{folded= (pos, (AST.Field (fmap fst $ folded $ syn record) fieldName, Nothing))}
-   synthesis ConstantFold (pos, AST.Index{}) _ (AST.Index array index indexes) =
+   synthesis _ (pos, AST.Index{}) _ (AST.Index array index indexes) =
       SynCF{folded= (pos, (AST.Index (fmap fst $ folded $ syn array)
                                      (foldedExp . syn $ index) (foldedExp . syn <$> indexes), Nothing))}
-   synthesis ConstantFold (pos, AST.TypeGuard _designator q) _ (AST.TypeGuard designator _q) =
+   synthesis _ (pos, AST.TypeGuard _designator q) _ (AST.TypeGuard designator _q) =
       SynCF{folded= (pos, (AST.TypeGuard (fmap fst $ folded $ syn designator) q, Nothing))}
-   synthesis ConstantFold (pos, _) _ (AST.Dereference pointer) =
+   synthesis _ (pos, _) _ (AST.Dereference pointer) =
       SynCF{folded= (pos, (AST.Dereference $ fmap fst $ folded $ syn pointer, Nothing))}
 
 -- * More boring Transformation.Functor instances, TH candidates
-instance Ord (Abstract.QualIdent l) => Transformation.At ConstantFold (Modules l Sem Sem) where
+instance Ord (Abstract.QualIdent l) => Transformation.At (Auto ConstantFold) (Modules l Sem Sem) where
    ($) = AG.applyDefault snd
 
 -- * Shortcuts
 
-instance Full.Functor ConstantFold (AST.Value l l) where
-   ConstantFold <$> (pos, val) = Rank2.Arrow sem
+instance Full.Functor (Auto ConstantFold) (AST.Value l l) where
+   Auto ConstantFold <$> (pos, val) = Rank2.Arrow sem
      where sem _inherited = Synthesized (SynCF (pos, val))
 
 instance Full.Functor (ConstantFoldSyn l) (AST.Declaration l l) where
@@ -499,16 +511,17 @@ predefined = Map.fromList $ map (first Abstract.nonQualIdent) $
 predefined2 = predefined
 
 $(do l <- varT  <$> newName "l"
-     mconcat <$> mapM (\g-> Transformation.Full.TH.deriveUpFunctor (conT ''ConstantFold) $ conT g `appT` l `appT` l)
+     mconcat <$> mapM (\g-> Transformation.Full.TH.deriveUpFunctor (conT ''Auto `appT` conT ''ConstantFold)
+                            $ conT g `appT` l `appT` l)
         [''AST.Declaration, ''AST.Type, ''AST.FieldList,
          ''AST.ProcedureHeading, ''AST.FormalParameters, ''AST.FPSection,
          ''AST.Expression, ''AST.Element, ''AST.Designator,
          ''AST.Block, ''AST.StatementSequence, ''AST.Statement,
          ''AST.Case, ''AST.CaseLabels, ''AST.ConditionalBranch, ''AST.WithAlternative])
 
-$(do let sem = [t|Semantics ConstantFold|]
-     let inst g = [d| instance Attribution ConstantFold ($g l l) Sem Placed =>
-                               Transformation.At ConstantFold ($g l l $sem $sem)
+$(do let sem = [t|Semantics (Auto ConstantFold)|]
+     let inst g = [d| instance Attribution (Auto ConstantFold) ($g l l) Sem Placed =>
+                               Transformation.At (Auto ConstantFold) ($g l l $sem $sem)
                          where ($) = AG.applyDefault snd |]
      mconcat <$> mapM (inst . conT)
         [''AST.Module, ''AST.Block, ''AST.Declaration, ''AST.Expression, ''AST.Designator])
@@ -520,10 +533,10 @@ $(do let inst g = [d| instance Full.Functor (ConstantFoldSyn l) ($g l l)
          ''AST.StatementSequence, ''AST.Statement,
          ''AST.Case, ''AST.CaseLabels, ''AST.ConditionalBranch, ''AST.WithAlternative])
 
-$(do let sem = [t|Semantics ConstantFold|]
+$(do let sem = [t|Semantics (Auto ConstantFold)|]
      let inst g = [d| instance Deep.Functor (ConstantFoldSyn l) ($g l l) =>
-                               Transformation.At ConstantFold ($g l l $sem $sem)
-                         where ConstantFold $ (pos, t) = Rank2.Arrow sem
+                               Transformation.At (Auto ConstantFold) ($g l l $sem $sem)
+                         where (Auto ConstantFold) $ (pos, t) = Rank2.Arrow sem
                                   where sem inherited =
                                            Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> t)) |]
      mconcat <$> mapM (inst . conT)
