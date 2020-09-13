@@ -23,8 +23,9 @@ import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 import qualified Transformation.Full.TH
 import qualified Transformation.AG as AG
-import Transformation.AG (Attribution(..), Bequether(..), Synthesizer(..),
-                          Atts, Inherited(..), Synthesized(..), Semantics, Auto(Auto))
+import qualified Transformation.AG.Generics as AG
+import Transformation.AG (Attribution(..), Atts, Inherited(..), Synthesized(..), Semantics)
+import Transformation.AG.Generics (Auto(Auto), Bequether(..), Synthesizer(..))
 
 import qualified Language.Oberon.Abstract as Abstract
 import qualified Language.Oberon.AST as AST
@@ -530,9 +531,9 @@ instance (Abstract.Nameable l,
                                          names},
        AST.FieldList names (Inherited inheritance))
 
-instance (Atts (Inherited (Auto TypeCheck)) (Abstract.Statement l l Sem Sem) ~ InhTC l,
-          TypeCheckErrors l `Transformation.At` Abstract.Statement l l Sem Sem) =>
-         Synthesizer (Auto TypeCheck) (AST.StatementSequence l l) Sem Placed where
+instance {-# overlaps #-} (Atts (Inherited (Auto TypeCheck)) (Abstract.Statement l l Sem Sem) ~ InhTC l,
+                           TypeCheckErrors l `Transformation.At` Abstract.Statement l l Sem Sem) =>
+                          Synthesizer (Auto TypeCheck) (AST.StatementSequence l l) Sem Placed where
    synthesis _ _ _ statements = SynTC{errors= Shallow.foldMap TypeCheckErrors statements}
 
 instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
@@ -570,23 +571,23 @@ instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
    bequest _ (_pos, AST.Exit{}) i _           = AST.Exit
    bequest _ (_pos, AST.Return{}) i _         = AST.Return (Just $ AG.Inherited i)
 
-instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Atts (Inherited (Auto TypeCheck)) (Abstract.StatementSequence l l Sem Sem) ~ InhTC l,
-          Atts (Inherited (Auto TypeCheck)) (Abstract.ConditionalBranch l l Sem Sem) ~ InhTC l,
-          Atts (Inherited (Auto TypeCheck)) (Abstract.Case l l Sem Sem) ~ (InhTC l, Type l),
-          Atts (Inherited (Auto TypeCheck)) (Abstract.WithAlternative l l Sem Sem) ~ InhTC l,
-          Atts (Inherited (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ InhTC l,
-          Atts (Inherited (Auto TypeCheck)) (Abstract.Designator l l Sem Sem) ~ InhTC l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.StatementSequence l l Sem Sem) ~ SynTC l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ SynTCExp l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Designator l l Sem Sem) ~ SynTCDes l,
-          TypeCheckErrors l `Transformation.At` Abstract.StatementSequence l l Sem Sem,
-          TypeCheckErrors l `Transformation.At` Abstract.ConditionalBranch l l Sem Sem,
-          TypeCheckErrors l `Transformation.At` Abstract.Case l l Sem Sem,
-          TypeCheckErrors l `Transformation.At` Abstract.WithAlternative l l Sem Sem,
-          TypeCheckErrors l `Transformation.At` Abstract.Designator l l Sem Sem,
-          TypeCheckErrors l `Transformation.At` Abstract.Expression l l Sem Sem) =>
-         Synthesizer (Auto TypeCheck) (AST.Statement l l) Sem Placed where
+instance {-# overlaps #-} (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
+                           Atts (Inherited (Auto TypeCheck)) (Abstract.StatementSequence l l Sem Sem) ~ InhTC l,
+                           Atts (Inherited (Auto TypeCheck)) (Abstract.ConditionalBranch l l Sem Sem) ~ InhTC l,
+                           Atts (Inherited (Auto TypeCheck)) (Abstract.Case l l Sem Sem) ~ (InhTC l, Type l),
+                           Atts (Inherited (Auto TypeCheck)) (Abstract.WithAlternative l l Sem Sem) ~ InhTC l,
+                           Atts (Inherited (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ InhTC l,
+                           Atts (Inherited (Auto TypeCheck)) (Abstract.Designator l l Sem Sem) ~ InhTC l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.StatementSequence l l Sem Sem) ~ SynTC l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ SynTCExp l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Designator l l Sem Sem) ~ SynTCDes l,
+                           TypeCheckErrors l `Transformation.At` Abstract.StatementSequence l l Sem Sem,
+                           TypeCheckErrors l `Transformation.At` Abstract.ConditionalBranch l l Sem Sem,
+                           TypeCheckErrors l `Transformation.At` Abstract.Case l l Sem Sem,
+                           TypeCheckErrors l `Transformation.At` Abstract.WithAlternative l l Sem Sem,
+                           TypeCheckErrors l `Transformation.At` Abstract.Designator l l Sem Sem,
+                           TypeCheckErrors l `Transformation.At` Abstract.Expression l l Sem Sem) =>
+                          Synthesizer (Auto TypeCheck) (AST.Statement l l) Sem Placed where
    synthesis (Auto TypeCheck) _ _ AST.EmptyStatement = SynTC{errors= []}
    synthesis _ (pos, _) inheritance statement@(AST.Assignment var value) = {-# SCC "Assignment" #-}
       SynTC{errors= assignmentCompatible inheritance pos (designatorType $ syn var) (inferredType $ syn value)
@@ -664,26 +665,26 @@ instance forall l. (Abstract.Nameable l, Eq (Abstract.QualIdent l),
    bequest _ (_, c) (inheritance, _) _ =
       AG.PassDown (inheritance :: Atts (Inherited (Auto TypeCheck)) (Abstract.ConstExpression l l Sem Sem)) Shallow.<$> c
 
-instance forall l. (Abstract.Nameable l, Eq (Abstract.QualIdent l),
-                    Atts (Inherited (Auto TypeCheck)) (Abstract.ConstExpression l l Sem Sem) ~ InhTC l,
-                    Atts (Synthesized (Auto TypeCheck)) (Abstract.ConstExpression l l Sem Sem) ~ SynTCExp l) =>
-         Synthesizer (Auto TypeCheck) (AST.CaseLabels l l) Sem Placed where
+instance {-# overlaps #-} (Abstract.Nameable l, Eq (Abstract.QualIdent l),
+                           Atts (Inherited (Auto TypeCheck)) (Abstract.ConstExpression l l Sem Sem) ~ InhTC l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.ConstExpression l l Sem Sem) ~ SynTCExp l) =>
+                          Synthesizer (Auto TypeCheck) (AST.CaseLabels l l) Sem Placed where
    synthesis _ (pos, _) inheritance (AST.SingleLabel value) =
       SynTC{errors= assignmentCompatible (fst inheritance) pos (snd inheritance) (inferredType $ syn value)}
    synthesis _ (pos, _) (inheritance, caseType) (AST.LabelRange start end) =
       SynTC{errors= assignmentCompatible inheritance pos caseType (inferredType $ syn start)
             <> assignmentCompatible inheritance pos caseType (inferredType $ syn end)}
 
-instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Atts (Inherited (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ InhTC l,
-          Atts (Inherited (Auto TypeCheck)) (Abstract.Element l l Sem Sem) ~ InhTC l,
-          Atts (Inherited (Auto TypeCheck)) (Abstract.Designator l l Sem Sem) ~ InhTC l,
-          Atts (Inherited (Auto TypeCheck)) (Abstract.Value l l Sem Sem) ~ InhTC l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ SynTCExp l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Element l l Sem Sem) ~ SynTCExp l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Value l l Sem Sem) ~ SynTCExp l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Designator l l Sem Sem) ~ SynTCDes l) =>
-         Synthesizer (Auto TypeCheck) (AST.Expression l l) Sem Placed where
+instance {-# overlaps #-} (Abstract.Nameable l, Ord (Abstract.QualIdent l),
+                           Atts (Inherited (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ InhTC l,
+                           Atts (Inherited (Auto TypeCheck)) (Abstract.Element l l Sem Sem) ~ InhTC l,
+                           Atts (Inherited (Auto TypeCheck)) (Abstract.Designator l l Sem Sem) ~ InhTC l,
+                           Atts (Inherited (Auto TypeCheck)) (Abstract.Value l l Sem Sem) ~ InhTC l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ SynTCExp l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Element l l Sem Sem) ~ SynTCExp l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Value l l Sem Sem) ~ SynTCExp l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Designator l l Sem Sem) ~ SynTCDes l) =>
+                          Synthesizer (Auto TypeCheck) (AST.Expression l l) Sem Placed where
    synthesis _ (pos, AST.Relation op _ _) inheritance (AST.Relation _op left right) =
       SynTCExp{expressionErrors= case expressionErrors (syn left) <> expressionErrors (syn right)
                                  of [] | t1 == t2 -> []
@@ -790,7 +791,7 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
       SynTCExp{expressionErrors= booleanExpressionErrors inheritance pos (syn expr),
                inferredType= BuiltinType "BOOLEAN"}
 
-instance (Abstract.Wirthy l) => Synthesizer (Auto TypeCheck) (AST.Value l l) Sem Placed where
+instance {-# overlaps #-} (Abstract.Wirthy l) => Synthesizer (Auto TypeCheck) (AST.Value l l) Sem Placed where
    synthesis _ (pos, AST.Integer x) _ _ =
       SynTCExp{expressionErrors= mempty, inferredType= IntegerType $ fromIntegral x}
    synthesis _ (pos, AST.Real x) _ _ =
@@ -804,10 +805,10 @@ instance (Abstract.Wirthy l) => Synthesizer (Auto TypeCheck) (AST.Value l l) Sem
    synthesis _ (pos, AST.Nil) _ _ = SynTCExp{expressionErrors= mempty, inferredType= NilType}
    synthesis _ (pos, AST.Builtin x) _ _ = SynTCExp{expressionErrors= mempty, inferredType= BuiltinType x}
 
-instance (Abstract.Wirthy l, Abstract.Nameable l,
-          Atts (Inherited (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ InhTC l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ SynTCExp l) =>
-         Synthesizer (Auto TypeCheck) (AST.Element l l) Sem Placed where
+instance {-# overlaps #-} (Abstract.Wirthy l, Abstract.Nameable l,
+                           Atts (Inherited (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ InhTC l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ SynTCExp l) =>
+                          Synthesizer (Auto TypeCheck) (AST.Element l l) Sem Placed where
    synthesis _ (pos, _) inheritance (AST.Element expr) =
       SynTCExp{expressionErrors= integerExpressionErrors inheritance pos (syn expr),
                inferredType= BuiltinType "SET"}
@@ -816,12 +817,13 @@ instance (Abstract.Wirthy l, Abstract.Nameable l,
                                  <> integerExpressionErrors inheritance pos (syn high),
                inferredType= BuiltinType "SET"}
 
-instance (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
-          Atts (Inherited (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ InhTC l,
-          Atts (Inherited (Auto TypeCheck)) (Abstract.Designator l l Sem Sem) ~ InhTC l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ SynTCExp l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Designator l l Sem Sem) ~ SynTCDes l) =>
-         Synthesizer (Auto TypeCheck) (AST.Designator l l) Sem Placed where
+instance {-# overlaps #-} (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
+                           Show (Abstract.QualIdent l),
+                           Atts (Inherited (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ InhTC l,
+                           Atts (Inherited (Auto TypeCheck)) (Abstract.Designator l l Sem Sem) ~ InhTC l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ SynTCExp l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Designator l l Sem Sem) ~ SynTCDes l) =>
+                          Synthesizer (Auto TypeCheck) (AST.Designator l l) Sem Placed where
    synthesis _ (pos, AST.Variable q) inheritance _ =
       SynTCDes{designatorErrors= case designatorType
                                  of Nothing -> [(currentModule inheritance, pos, UnknownName q)]
