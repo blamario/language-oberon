@@ -1,5 +1,6 @@
-{-# LANGUAGE DeriveGeneric, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
-             ScopedTypeVariables, TemplateHaskell, TypeFamilies, TypeOperators, UndecidableInstances, ViewPatterns #-}
+{-# LANGUAGE DeriveGeneric, DuplicateRecordFields, FlexibleContexts, FlexibleInstances,
+             MultiParamTypeClasses, OverloadedStrings, ScopedTypeVariables,
+             TemplateHaskell, TypeFamilies, TypeOperators, UndecidableInstances, ViewPatterns #-}
 
 module Language.Oberon.TypeChecker (Error, errorMessage, checkModules, predefined, predefined2) where
 
@@ -165,38 +166,35 @@ data InhTC l = InhTC{env           :: Environment l,
 
 data SynTC l = SynTC{errors :: [Error l]}
 
-data SynTC' l = SynTC'{errors' :: [Error l],
-                       env' :: Environment l}
-
-data SynTCMod l = SynTCMod{moduleErrors :: [Error l],
+data SynTCMod l = SynTCMod{errors :: [Error l],
                            moduleEnv :: Environment l,
                            pointerTargets :: Map AST.Ident AST.Ident}
 
-data SynTCType l = SynTCType{typeErrors :: [Error l],
+data SynTCType l = SynTCType{errors :: [Error l],
                              typeName   :: Maybe AST.Ident,
                              definedType :: Type l,
                              pointerTarget :: Maybe AST.Ident}
 
-data SynTCFields l = SynTCFields{fieldErrors :: [Error l],
+data SynTCFields l = SynTCFields{errors :: [Error l],
                                  fieldEnv :: Map AST.Ident (Type l)}
 
-data SynTCHead l = SynTCHead{headingErrors :: [Error l],
+data SynTCHead l = SynTCHead{errors :: [Error l],
                              insideEnv :: Environment l,
                              outsideEnv :: Environment l}
 
-data SynTCSig l = SynTCSig{signatureErrors :: [Error l],
+data SynTCSig l = SynTCSig{errors :: [Error l],
                            signatureEnv :: Environment l,
                            signatureType :: Type l}
 
-data SynTCSec l = SynTCSec{sectionErrors :: [Error l],
+data SynTCSec l = SynTCSec{errors :: [Error l],
                            sectionEnv :: Environment l,
                            sectionParameters :: [(Bool, Type l)]}
 
-data SynTCDes l = SynTCDes{designatorErrors :: [Error l],
+data SynTCDes l = SynTCDes{errors :: [Error l],
                            designatorName   :: Maybe (Maybe Abstract.Ident, Abstract.Ident),
                            designatorType :: Type l}
 
-data SynTCExp l = SynTCExp{expressionErrors :: [Error l],
+data SynTCExp l = SynTCExp{errors :: [Error l],
                            inferredType :: Type l}
 
 -- * Modules instances, TH candidates
@@ -207,19 +205,19 @@ instance (Transformation.Transformation t, Functor (Transformation.Domain t), De
       where mapModule m = t Transformation.$ ((t Deep.<$>) <$> m)
 
 instance Transformation.At (TypeCheckErrors l) (AST.StatementSequence l l Sem Sem) where
-   _ $ s = Const (errors $ syn s)
+   _ $ s = Const (errors (syn s :: SynTC l))
 instance Transformation.At (TypeCheckErrors l) (AST.Statement l l Sem Sem) where
-   _ $ s = Const (errors $ syn s)
+   _ $ s = Const (errors (syn s :: SynTC l))
 instance Transformation.At (TypeCheckErrors l) (AST.ConditionalBranch l l Sem Sem) where
-   _ $ s = Const (errors $ syn s)
+   _ $ s = Const (errors (syn s :: SynTC l))
 instance Transformation.At (TypeCheckErrors l) (AST.Case l l Sem Sem) where
-   _ $ s = Const (errors $ syn s)
+   _ $ s = Const (errors (syn s :: SynTC l))
 instance Transformation.At (TypeCheckErrors l) (AST.WithAlternative l l Sem Sem) where
-   _ $ s = Const (errors $ syn s)
+   _ $ s = Const (errors (syn s :: SynTC l))
 instance Transformation.At (TypeCheckErrors l) (AST.Designator l l Sem Sem) where
-   _ $ s = Const (designatorErrors $ syn s)
+   _ $ s = Const (errors (syn s :: SynTCDes l))
 instance Transformation.At (TypeCheckErrors l) (AST.Expression l l Sem Sem) where
-   _ $ s = Const (expressionErrors $ syn s)
+   _ $ s = Const (errors (syn s :: SynTCExp l))
 
 instance Rank2.Functor (Modules l f') where
    f <$> ~(Modules ms) = Modules (f <$> ms)
@@ -272,7 +270,7 @@ type instance Atts (Synthesized (Auto TypeCheck)) (AST.WithAlternative l l _ _) 
 instance {-# overlaps #-} Ord (Abstract.QualIdent l) =>
                           Attribution (Auto TypeCheck) (Modules l) Sem Placed where
    attribution _ (_, Modules self) (Inherited inheritance, Modules ms) =
-     (Synthesized SynTC{errors= foldMap (moduleErrors . syn) ms},
+     (Synthesized SynTC{errors= foldMap (\m-> errors (syn m :: SynTCMod l)) ms},
       Modules (Map.mapWithKey moduleInheritance self))
      where moduleInheritance name mod = Inherited InhTC{env= rootEnv inheritance <> foldMap (moduleEnv . syn) ms,
                                                         currentModule= name}
@@ -283,7 +281,7 @@ instance {-# overlaps #-} (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract
                           Attribution (Auto TypeCheck) (AST.Module l l) Sem Placed where
    attribution _ (pos, AST.Module moduleName imports body) 
                (Inherited inheritance, AST.Module _ _ body') =
-      (Synthesized SynTCMod{moduleErrors= moduleErrors (syn body'),
+      (Synthesized SynTCMod{errors= errors (syn body' :: SynTCMod l),
                             moduleEnv= exportedEnv,
                             pointerTargets= pointerTargets (syn body')},
        AST.Module moduleName imports (Inherited inheritance))
@@ -322,14 +320,14 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
          Attribution (Auto TypeCheck) (AST.Declaration l l) Sem Placed where
    attribution _ (pos, AST.ConstantDeclaration namedef _)
                (Inherited inheritance, AST.ConstantDeclaration _ expression) =
-      (Synthesized SynTCMod{moduleErrors= expressionErrors (syn expression),
+      (Synthesized SynTCMod{errors= errors (syn expression :: SynTCExp l),
                             moduleEnv= Map.singleton (Abstract.nonQualIdent name) (inferredType $ syn expression),
                             pointerTargets= mempty},
        AST.ConstantDeclaration namedef (Inherited $ fst inheritance))
       where name = Abstract.getIdentDefName namedef
    attribution _ (pos, AST.TypeDeclaration namedef _)
                (Inherited inheritance, AST.TypeDeclaration _ definition) =
-      (Synthesized SynTCMod{moduleErrors= typeErrors (syn definition),
+      (Synthesized SynTCMod{errors= errors (syn definition :: SynTCType l),
                             moduleEnv= Map.singleton qname (nominal $ definedType $ syn definition),
                             pointerTargets= foldMap (Map.singleton name) (pointerTarget $ syn definition)},
        AST.TypeDeclaration namedef (Inherited $ fst inheritance))
@@ -342,18 +340,20 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
             name = Abstract.getIdentDefName namedef
    attribution _ (pos, AST.VariableDeclaration names _declaredType)
                (Inherited inheritance, AST.VariableDeclaration _names declaredType) =
-      (Synthesized SynTCMod{moduleErrors= typeErrors (syn declaredType) 
-                                          <> case definedType (syn declaredType)
-                                             of ArrayType [] _ -> [(currentModule $ fst inheritance, pos, OpenArrayVariable)]
+      (Synthesized SynTCMod{errors= errors (syn declaredType :: SynTCType l)
+                                          <> case definedType (syn declaredType :: SynTCType l)
+                                             of ArrayType [] _ -> [(currentModule $ fst inheritance,
+                                                                    pos, OpenArrayVariable)]
                                                 _ -> [],
-                            moduleEnv= foldMap (\name-> Map.singleton (Abstract.nonQualIdent $ Abstract.getIdentDefName name)
+                            moduleEnv= foldMap (\name-> Map.singleton (Abstract.nonQualIdent
+                                                                       $ Abstract.getIdentDefName name)
                                                         (definedType $ syn declaredType))
                                        names,
                             pointerTargets= mempty},
        AST.VariableDeclaration names (Inherited $ fst inheritance))
    attribution _ (pos, AST.ProcedureDeclaration _heading _body)
                (Inherited inheritance, AST.ProcedureDeclaration heading body) =
-      (Synthesized SynTCMod{moduleErrors= headingErrors (syn heading) <> moduleErrors (syn body),
+      (Synthesized SynTCMod{errors= errors (syn heading :: SynTCHead l) <> errors (syn body :: SynTCMod l),
                             moduleEnv= outsideEnv (syn heading),
                             pointerTargets= mempty},
        AST.ProcedureDeclaration (Inherited inheritance) (Inherited bodyInherited))
@@ -361,7 +361,7 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
                                   (currentModule $ fst inheritance)
    attribution _ (pos, AST.ForwardDeclaration namedef _signature)
                (Inherited inheritance, AST.ForwardDeclaration _namedef signature) =
-      (Synthesized SynTCMod{moduleErrors= foldMap (signatureErrors . syn) signature,
+      (Synthesized SynTCMod{errors= foldMap (\s-> errors (syn s :: SynTCSig l)) signature,
                             moduleEnv= foldMap (Map.singleton (Abstract.nonQualIdent name) . signatureType . syn) signature,
                             pointerTargets= mempty},
        AST.ForwardDeclaration namedef (Just (Inherited $ fst inheritance)))
@@ -373,7 +373,7 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
          Attribution (Auto TypeCheck) (AST.ProcedureHeading l l) Sem Placed where
    attribution _ (pos, AST.ProcedureHeading indirect namedef _signature)
       (Inherited inheritance, AST.ProcedureHeading _indirect _ signature) =
-      (Synthesized SynTCHead{headingErrors= foldMap (signatureErrors . syn) signature,
+      (Synthesized SynTCHead{errors= foldMap (\s-> errors (syn s :: SynTCSig l)) signature,
                              outsideEnv= Map.singleton (Abstract.nonQualIdent name) $
                                          maybe (ProcedureType False [] Nothing) (signatureType . syn) signature,
                              insideEnv= foldMap (signatureEnv . syn) signature},
@@ -381,7 +381,7 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
       where name = Abstract.getIdentDefName namedef
    attribution _ (pos, AST.TypeBoundHeading var receiverName receiverType indirect namedef _signature)
       (Inherited inheritance, AST.TypeBoundHeading _var _name _type _indirect _ signature) =
-      (Synthesized SynTCHead{headingErrors= receiverError <> foldMap (signatureErrors . syn) signature,
+      (Synthesized SynTCHead{errors= receiverError <> foldMap (\s-> errors (syn s :: SynTCSig l)) signature,
                              outsideEnv=
                                 case Map.lookup receiverType (snd inheritance)
                                   of Just targetName -> Map.singleton (Abstract.nonQualIdent targetName) methodType
@@ -409,8 +409,8 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualId
           Atts (Synthesized (Auto TypeCheck)) (Abstract.StatementSequence l l Sem Sem) ~ SynTC l) =>
          Attribution (Auto TypeCheck) (AST.Block l l) Sem Placed where
    attribution _ (pos, AST.Block{}) (Inherited inheritance, AST.Block declarations statements) =
-      (Synthesized SynTCMod{moduleErrors= foldMap (moduleErrors . syn) declarations
-                                          <> foldMap (errors . syn) statements,
+      (Synthesized SynTCMod{errors= foldMap (\d-> errors (syn d :: SynTCMod l)) declarations
+                                    <> foldMap (\s-> errors (syn s :: SynTC l)) statements,
                             moduleEnv= newEnv,
                             pointerTargets= pointers},
        AST.Block (pure $ Inherited (localInherited, pointers)) (pure $ Inherited localInherited))
@@ -443,7 +443,8 @@ instance (Ord (Abstract.QualIdent l),
          Attribution (Auto TypeCheck) (AST.FormalParameters l l) Sem Placed where
    attribution _ (pos, AST.FormalParameters sections returnType)
                (Inherited inheritance, AST.FormalParameters sections' _returnType) =
-      (Synthesized SynTCSig{signatureErrors= foldMap (sectionErrors . syn) sections' <> foldMap typeRefErrors returnType,
+      (Synthesized SynTCSig{errors= foldMap (\s-> errors (syn s :: SynTCSec l)) sections'
+                                    <> foldMap typeRefErrors returnType,
                             signatureType= ProcedureType False (foldMap (sectionParameters . syn) sections')
                                            $ returnType >>= (`Map.lookup` env inheritance),
                             signatureEnv= foldMap (sectionEnv . syn) sections'},
@@ -457,7 +458,7 @@ instance (Abstract.Wirthy l, Ord (Abstract.QualIdent l),
           Atts (Synthesized (Auto TypeCheck)) (Abstract.Type l l Sem Sem) ~ SynTCType l) =>
          Attribution (Auto TypeCheck) (AST.FPSection l l) Sem Placed where
    attribution _ (pos, AST.FPSection var names _typeDef) (Inherited inheritance, AST.FPSection _var _names typeDef) =
-      (Synthesized SynTCSec{sectionErrors= typeErrors (syn typeDef),
+      (Synthesized SynTCSec{errors= errors (syn typeDef :: SynTCType l),
                             sectionParameters= (var, definedType (syn typeDef)) <$ names,
                             sectionEnv= Map.fromList (flip (,) (definedType $ syn typeDef) . Abstract.nonQualIdent
                                                       <$> names)},
@@ -474,18 +475,19 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Synthesized (Auto TypeCheck)) (Abstract.ConstExpression l l Sem Sem) ~ SynTCExp l) =>
          Attribution (Auto TypeCheck) (AST.Type l l) Sem Placed where
    attribution _ (pos, AST.TypeReference q) (Inherited inheritance, _) = 
-      (Synthesized SynTCType{typeErrors= if Map.member q (env inheritance) then []
+      (Synthesized SynTCType{errors= if Map.member q (env inheritance) then []
                                          else [(currentModule inheritance, pos, UnknownName q)],
                              typeName= Abstract.getNonQualIdentName q,
                              pointerTarget= Nothing,
                              definedType= fromMaybe UnknownType (Map.lookup q $ env inheritance)},
        AST.TypeReference q)
-   attribution _ (pos, AST.ArrayType dimensions _itemType) (Inherited inheritance, AST.ArrayType dimensions' itemType) = 
-      (Synthesized SynTCType{typeErrors= foldMap (expressionErrors . syn) dimensions' <> typeErrors (syn itemType)
-                                         <> foldMap (expectInteger . syn) dimensions',
+   attribution _ (pos, AST.ArrayType _dims _itemType) (Inherited inheritance, AST.ArrayType dimensions itemType) = 
+      (Synthesized SynTCType{errors= foldMap (\d-> errors (syn d :: SynTCExp l)) dimensions
+                                     <> errors (syn itemType :: SynTCType l)
+                                     <> foldMap (expectInteger . syn) dimensions,
                              typeName= Nothing,
                              pointerTarget= Nothing,
-                             definedType= ArrayType (integerValue . syn <$> getZipList dimensions')
+                             definedType= ArrayType (integerValue . syn <$> getZipList dimensions)
                                                     (definedType $ syn itemType)},
        AST.ArrayType (ZipList [Inherited inheritance]) (Inherited inheritance))
      where expectInteger SynTCExp{inferredType= IntegerType{}} = []
@@ -493,7 +495,7 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
            integerValue SynTCExp{inferredType= IntegerType n} = n
            integerValue _ = 0
    attribution _ (pos, AST.RecordType base fields) (Inherited inheritance, AST.RecordType _base fields') =
-      (Synthesized SynTCType{typeErrors= fst baseRecord <> foldMap (fieldErrors . syn) fields',
+      (Synthesized SynTCType{errors= fst baseRecord <> foldMap (\f-> errors (syn f :: SynTCFields l)) fields',
                              typeName= Nothing,
                              pointerTarget= Nothing,
                              definedType= RecordType (maybe [] (maybe id (:) base . ancestry) $ snd baseRecord)
@@ -508,13 +510,13 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
                                             Nothing)
                            Nothing -> ([], Nothing)
    attribution (Auto TypeCheck) _self (Inherited inheritance, AST.PointerType targetType') =
-      (Synthesized SynTCType{typeErrors= typeErrors (syn targetType'),
+      (Synthesized SynTCType{errors= errors (syn targetType' :: SynTCType l),
                              typeName= Nothing,
                              pointerTarget= typeName (syn targetType'),
                              definedType= PointerType (definedType $ syn targetType')},
        AST.PointerType (Inherited inheritance))
    attribution _ (pos, AST.ProcedureType signature) (Inherited inheritance, AST.ProcedureType signature') = 
-      (Synthesized SynTCType{typeErrors= foldMap (signatureErrors . syn) signature',
+      (Synthesized SynTCType{errors= foldMap (\s-> errors (syn s :: SynTCSig l)) signature',
                              typeName= Nothing,
                              pointerTarget= Nothing,
                              definedType= maybe (ProcedureType False [] Nothing) (signatureType . syn) signature'},
@@ -525,7 +527,7 @@ instance (Abstract.Nameable l,
           Atts (Synthesized (Auto TypeCheck)) (Abstract.Type l l Sem Sem) ~ SynTCType l) =>
          Attribution (Auto TypeCheck) (AST.FieldList l l) Sem Placed where
    attribution _ (pos, AST.FieldList names _declaredType) (Inherited inheritance, AST.FieldList _names declaredType) =
-      (Synthesized SynTCFields{fieldErrors= typeErrors (syn declaredType),
+      (Synthesized SynTCFields{errors= errors (syn declaredType :: SynTCType l),
                                fieldEnv= foldMap (\name-> Map.singleton (Abstract.getIdentDefName name)
                                                           (definedType $ syn declaredType)) 
                                          names},
@@ -595,10 +597,10 @@ instance {-# overlaps #-} (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract
    synthesis _ (pos, AST.ProcedureCall _proc parameters)
              inheritance (AST.ProcedureCall procedure' parameters') =
       SynTC{errors= (case syn procedure'
-                     of SynTCDes{designatorErrors= [],
+                     of SynTCDes{errors= [],
                                  designatorType= t} -> procedureErrors t
-                        SynTCDes{designatorErrors= errs} -> errs)
-                    <> foldMap (foldMap (expressionErrors . syn)) parameters'}
+                        SynTCDes{errors= errs} -> errs)
+                    <> foldMap (foldMap (\p-> errors (syn p :: SynTCExp l))) parameters'}
      where procedureErrors (ProcedureType _ formalTypes Nothing)
              | length formalTypes /= maybe 0 (length . getZipList) parameters,
                not (length formalTypes == 2 && (length . getZipList <$> parameters) == Just 1
@@ -613,13 +615,13 @@ instance {-# overlaps #-} (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract
            procedureErrors (NominalType _ (Just t)) = procedureErrors t
            procedureErrors t = [(currentModule inheritance, pos, NonProcedureType t)]
    synthesis _ (pos, _) inheritance (AST.While condition body) =
-      SynTC{errors= booleanExpressionErrors inheritance pos (syn condition) <> errors (syn body)}
+      SynTC{errors= booleanExpressionErrors inheritance pos (syn condition) <> errors (syn body :: SynTC l)}
    synthesis _ (pos, _) inheritance (AST.Repeat body condition) =
-      SynTC{errors= booleanExpressionErrors inheritance pos (syn condition) <> errors (syn body)}
+      SynTC{errors= booleanExpressionErrors inheritance pos (syn condition) <> errors (syn body :: SynTC l)}
    synthesis _ (pos, _) inheritance (AST.For _counter start end step body) =
       SynTC{errors= integerExpressionErrors inheritance pos (syn start) 
                     <> integerExpressionErrors inheritance pos (syn end)
-                    <> foldMap (integerExpressionErrors inheritance pos . syn) step <> errors (syn body)}
+                    <> foldMap (integerExpressionErrors inheritance pos . syn) step <> errors (syn body :: SynTC l)}
    synthesis (Auto TypeCheck) self _ statement = SynTC{errors= Shallow.foldMap TypeCheckErrors statement}
 
 instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
@@ -633,7 +635,7 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
                                  of (Just supertype, Just subtypeDef) -> assignmentCompatible inheritance pos supertype subtypeDef
                                     (Nothing, _) -> [(currentModule inheritance, pos, UnknownName var)]
                                     (_, Nothing) -> [(currentModule inheritance, pos, UnknownName subtype)]
-                                 <> errors (syn body)},
+                                 <> errors (syn body :: SynTC l)},
        AST.WithAlternative var subtype (Inherited $ 
                                         InhTC (maybe id (Map.insert var) (Map.lookup subtype $ env inheritance) 
                                                $ env inheritance)
@@ -646,7 +648,8 @@ instance (Abstract.Nameable l,
           Atts (Synthesized (Auto TypeCheck)) (Abstract.StatementSequence l l Sem Sem) ~ SynTC l) =>
          Attribution (Auto TypeCheck) (AST.ConditionalBranch l l) Sem Placed where
    attribution _ (pos, _) (Inherited inheritance, AST.ConditionalBranch condition body) =
-      (Synthesized SynTC{errors= booleanExpressionErrors inheritance pos (syn condition) <> errors (syn body)},
+      (Synthesized SynTC{errors= booleanExpressionErrors inheritance pos (syn condition)
+                                 <> errors (syn body :: SynTC l)},
        AST.ConditionalBranch (Inherited inheritance) (Inherited inheritance))
 
 instance (Atts (Inherited (Auto TypeCheck)) (Abstract.CaseLabels l l Sem Sem) ~ (InhTC l, Type l),
@@ -655,7 +658,8 @@ instance (Atts (Inherited (Auto TypeCheck)) (Abstract.CaseLabels l l Sem Sem) ~ 
           Atts (Synthesized (Auto TypeCheck)) (Abstract.StatementSequence l l Sem Sem) ~ SynTC l) =>
          Attribution (Auto TypeCheck) (AST.Case l l) Sem Placed where
    attribution _ self (Inherited inheritance, AST.Case label labels body) =
-      (Synthesized SynTC{errors= errors (syn label) <> foldMap (errors . syn) labels <> errors (syn body)},
+      (Synthesized SynTC{errors= errors (syn label :: SynTC l)
+                                 <> foldMap (\l-> errors (syn l :: SynTC l)) labels <> errors (syn body :: SynTC l)},
        AST.Case (Inherited inheritance) (pure $ Inherited inheritance) (Inherited $ fst inheritance))
 
 instance forall l. (Abstract.Nameable l, Eq (Abstract.QualIdent l),
@@ -686,7 +690,7 @@ instance {-# overlaps #-} (Abstract.Nameable l, Ord (Abstract.QualIdent l),
                            Atts (Synthesized (Auto TypeCheck)) (Abstract.Designator l l Sem Sem) ~ SynTCDes l) =>
                           Synthesizer (Auto TypeCheck) (AST.Expression l l) Sem Placed where
    synthesis _ (pos, AST.Relation op _ _) inheritance (AST.Relation _op left right) =
-      SynTCExp{expressionErrors= case expressionErrors (syn left) <> expressionErrors (syn right)
+      SynTCExp{errors= case errors (syn left :: SynTCExp l) <> errors (syn right :: SynTCExp l)
                                  of [] | t1 == t2 -> []
                                        | AST.In <- op -> membershipCompatible (ultimate t1) (ultimate t2)
                                        | equality op, [] <- assignmentCompatible inheritance pos t1 t2 -> []
@@ -718,15 +722,15 @@ instance {-# overlaps #-} (Abstract.Nameable l, Ord (Abstract.QualIdent l),
             membershipCompatible (BuiltinType t1) (BuiltinType "SET")
                | isNumerical t1 = []
    synthesis _ (pos, AST.IsA _ q) inheritance (AST.IsA left _) =
-      SynTCExp{expressionErrors= case Map.lookup q (env inheritance)
+      SynTCExp{errors= case Map.lookup q (env inheritance)
                                  of Nothing -> [(currentModule inheritance, pos, UnknownName q)]
                                     Just t -> assignmentCompatible inheritance pos (inferredType $ syn left) t,
                inferredType= BuiltinType "BOOLEAN"}
    synthesis _ (pos, _) inheritance (AST.Positive expr) =
-      SynTCExp{expressionErrors= unaryNumericOrSetOperatorErrors inheritance pos (syn expr),
+      SynTCExp{errors= unaryNumericOrSetOperatorErrors inheritance pos (syn expr),
                inferredType= inferredType (syn expr)}
    synthesis _ (pos, _) inheritance (AST.Negative expr) =
-      SynTCExp{expressionErrors= unaryNumericOrSetOperatorErrors inheritance pos (syn expr),
+      SynTCExp{errors= unaryNumericOrSetOperatorErrors inheritance pos (syn expr),
                inferredType= unaryNumericOrSetOperatorType negate (syn expr)}
    synthesis _ (pos, _) inheritance (AST.Add left right) =
       binaryNumericOrSetSynthesis inheritance pos left right
@@ -736,14 +740,14 @@ instance {-# overlaps #-} (Abstract.Nameable l, Ord (Abstract.QualIdent l),
    synthesis _ (pos, _) inheritance (AST.Multiply left right) =
       binaryNumericOrSetSynthesis inheritance pos left right
    synthesis _ (pos, _) inheritance (AST.Divide left right) =
-      SynTCExp{expressionErrors=
+      SynTCExp{errors=
                   case (syn left, syn right)
-                  of (SynTCExp{expressionErrors= [], inferredType= BuiltinType t1},
-                      SynTCExp{expressionErrors= [], inferredType= BuiltinType t2})
+                  of (SynTCExp{errors= [], inferredType= BuiltinType t1},
+                      SynTCExp{errors= [], inferredType= BuiltinType t2})
                         | t1 == "REAL", t2 == "REAL" -> []
                         | t1 == "SET", t2 == "SET" -> []
-                     (SynTCExp{expressionErrors= [], inferredType= t1},
-                      SynTCExp{expressionErrors= [], inferredType= t2})
+                     (SynTCExp{errors= [], inferredType= t1},
+                      SynTCExp{errors= [], inferredType= t2})
                        | t1 == t2 -> [(currentModule inheritance, pos, UnrealType t1)]
                        | otherwise -> [(currentModule inheritance, pos, TypeMismatch t1 t2)],
                inferredType= BuiltinType "REAL"}
@@ -752,19 +756,19 @@ instance {-# overlaps #-} (Abstract.Nameable l, Ord (Abstract.QualIdent l),
    synthesis _ (pos, _) inheritance (AST.Modulo left right) = binaryIntegerSynthesis inheritance pos left right
    synthesis _ (pos, _) inheritance (AST.And left right) = binaryBooleanSynthesis inheritance pos left right
    synthesis (Auto TypeCheck) _self _ (AST.Set elements) =
-      SynTCExp{expressionErrors= mempty,
+      SynTCExp{errors= mempty,
                inferredType= BuiltinType "SET"}
    synthesis (Auto TypeCheck) _self _ (AST.Read designator) =
-      SynTCExp{expressionErrors= designatorErrors (syn designator),
+      SynTCExp{errors= errors (syn designator :: SynTCDes l),
                inferredType= designatorType (syn designator)}
    synthesis (Auto TypeCheck) _self _ (AST.Literal value) =
-      SynTCExp{expressionErrors= expressionErrors (syn value),
+      SynTCExp{errors= errors (syn value :: SynTCExp l),
                inferredType= inferredType (syn value)}
    synthesis _ (pos, AST.FunctionCall _designator (ZipList parameters)) inheritance
              (AST.FunctionCall designator (ZipList parameters')) =
-      SynTCExp{expressionErrors=
+      SynTCExp{errors=
                    case {-# SCC "FunctionCall" #-} syn designator
-                   of SynTCDes{designatorErrors= [],
+                   of SynTCDes{errors= [],
                                designatorName= name,
                                designatorType= ultimate -> ProcedureType _ formalTypes Just{}}
                         | length formalTypes /= length parameters ->
@@ -774,10 +778,10 @@ instance {-# overlaps #-} (Abstract.Nameable l, Ord (Abstract.QualIdent l),
                         | name == Just (Just "SYSTEM", "VAL") -> []
                         | otherwise -> concat (zipWith (parameterCompatible inheritance pos) formalTypes
                                                $ inferredType . syn <$> parameters')
-                      SynTCDes{designatorErrors= [],
+                      SynTCDes{errors= [],
                                designatorType= t} -> [(currentModule inheritance, pos, NonFunctionType t)]
-                      SynTCDes{designatorErrors= errs} -> errs
-                   <> foldMap (expressionErrors . syn) parameters',
+                      SynTCDes{errors= errs} -> errs
+                   <> foldMap (\p-> errors (syn p :: SynTCExp l)) parameters',
                inferredType=
                    case syn designator
                    of SynTCDes{designatorName= Just (Just "SYSTEM", name)}
@@ -788,32 +792,32 @@ instance {-# overlaps #-} (Abstract.Nameable l, Ord (Abstract.QualIdent l),
      where systemCallType "VAL" [t1, t2] = Just t1
            systemCallType _ _ = Nothing
    synthesis _ (pos, _) inheritance (AST.Not expr) =
-      SynTCExp{expressionErrors= booleanExpressionErrors inheritance pos (syn expr),
+      SynTCExp{errors= booleanExpressionErrors inheritance pos (syn expr),
                inferredType= BuiltinType "BOOLEAN"}
 
 instance {-# overlaps #-} (Abstract.Wirthy l) => Synthesizer (Auto TypeCheck) (AST.Value l l) Sem Placed where
    synthesis _ (pos, AST.Integer x) _ _ =
-      SynTCExp{expressionErrors= mempty, inferredType= IntegerType $ fromIntegral x}
+      SynTCExp{errors= mempty, inferredType= IntegerType $ fromIntegral x}
    synthesis _ (pos, AST.Real x) _ _ =
-      SynTCExp{expressionErrors= mempty, inferredType= BuiltinType "REAL"}
+      SynTCExp{errors= mempty, inferredType= BuiltinType "REAL"}
    synthesis _ (pos, AST.Boolean x) _ _ =
-      SynTCExp{expressionErrors= mempty, inferredType= BuiltinType "BOOLEAN"}
+      SynTCExp{errors= mempty, inferredType= BuiltinType "BOOLEAN"}
    synthesis _ (pos, AST.CharCode x) _ _ =
-      SynTCExp{expressionErrors= mempty, inferredType= BuiltinType "CHAR"}
+      SynTCExp{errors= mempty, inferredType= BuiltinType "CHAR"}
    synthesis _ (pos, AST.String x) _ _ =
-      SynTCExp{expressionErrors= mempty, inferredType= StringType (Text.length x)}
-   synthesis _ (pos, AST.Nil) _ _ = SynTCExp{expressionErrors= mempty, inferredType= NilType}
-   synthesis _ (pos, AST.Builtin x) _ _ = SynTCExp{expressionErrors= mempty, inferredType= BuiltinType x}
+      SynTCExp{errors= mempty, inferredType= StringType (Text.length x)}
+   synthesis _ (pos, AST.Nil) _ _ = SynTCExp{errors= mempty, inferredType= NilType}
+   synthesis _ (pos, AST.Builtin x) _ _ = SynTCExp{errors= mempty, inferredType= BuiltinType x}
 
 instance {-# overlaps #-} (Abstract.Wirthy l, Abstract.Nameable l,
                            Atts (Inherited (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ InhTC l,
                            Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ SynTCExp l) =>
                           Synthesizer (Auto TypeCheck) (AST.Element l l) Sem Placed where
    synthesis _ (pos, _) inheritance (AST.Element expr) =
-      SynTCExp{expressionErrors= integerExpressionErrors inheritance pos (syn expr),
+      SynTCExp{errors= integerExpressionErrors inheritance pos (syn expr),
                inferredType= BuiltinType "SET"}
    synthesis _ (pos, _) inheritance (AST.Range low high) =
-      SynTCExp{expressionErrors= integerExpressionErrors inheritance pos (syn low)
+      SynTCExp{errors= integerExpressionErrors inheritance pos (syn low)
                                  <> integerExpressionErrors inheritance pos (syn high),
                inferredType= BuiltinType "SET"}
 
@@ -825,7 +829,7 @@ instance {-# overlaps #-} (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract
                            Atts (Synthesized (Auto TypeCheck)) (Abstract.Designator l l Sem Sem) ~ SynTCDes l) =>
                           Synthesizer (Auto TypeCheck) (AST.Designator l l) Sem Placed where
    synthesis _ (pos, AST.Variable q) inheritance _ =
-      SynTCDes{designatorErrors= case designatorType
+      SynTCDes{errors= case designatorType
                                  of Nothing -> [(currentModule inheritance, pos, UnknownName q)]
                                     Just{} -> [],
                designatorName= (,) Nothing <$> Abstract.getNonQualIdentName q
@@ -833,13 +837,13 @@ instance {-# overlaps #-} (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract
                designatorType= fromMaybe UnknownType designatorType}
       where designatorType = Map.lookup q (env inheritance)
    synthesis _ (pos, AST.Field _record fieldName) inheritance (AST.Field record _fieldName) =
-      SynTCDes{designatorErrors= case syn record
-                                 of SynTCDes{designatorErrors= [],
+      SynTCDes{errors= case syn record
+                                 of SynTCDes{errors= [],
                                              designatorType= t} ->
                                       maybe [(currentModule inheritance, pos, NonRecordType t)]
                                             (maybe [(currentModule inheritance, pos, UnknownField fieldName t)] $ const [])
                                             (access True t)
-                                    SynTCDes{designatorErrors= errors} -> errors,
+                                    SynTCDes{errors= errors} -> errors,
                designatorName= Nothing,
                designatorType= fromMaybe UnknownType (fromMaybe Nothing $ access True
                                                       $ designatorType $ syn record)}
@@ -851,11 +855,11 @@ instance {-# overlaps #-} (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract
            receive (ProcedureType _ params result) = ProcedureType True params result
            receive t = t
    synthesis _ (pos, AST.Index _array index indexes) inheritance (AST.Index array _index _indexes) =
-      SynTCDes{designatorErrors= case syn array
-                                 of SynTCDes{designatorErrors= [],
+      SynTCDes{errors= case syn array
+                                 of SynTCDes{errors= [],
                                              designatorType= t} ->
                                       either id (const []) (access True t)
-                                    SynTCDes{designatorErrors= errors} -> errors,
+                                    SynTCDes{errors= errors} -> errors,
                designatorType= either (const UnknownType) id (access True $ designatorType $ syn array)}
       where access _ (ArrayType dimensions t)
               | length dimensions == length indexes + 1 = Right t
@@ -867,26 +871,26 @@ instance {-# overlaps #-} (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract
             access True (PointerType t) = access False t
             access _ t = Left [(currentModule inheritance, pos, NonArrayType t)]
    synthesis _ (pos, AST.TypeGuard _designator q) inheritance (AST.TypeGuard designator _q) =
-      SynTCDes{designatorErrors= case (syn designator, targetType)
-                                 of (SynTCDes{designatorErrors= [],
+      SynTCDes{errors= case (syn designator, targetType)
+                                 of (SynTCDes{errors= [],
                                               designatorType= t}, 
                                      Just t') -> assignmentCompatible inheritance pos t t'
-                                    (SynTCDes{designatorErrors= errors}, 
+                                    (SynTCDes{errors= errors}, 
                                      Nothing) -> (currentModule inheritance, pos, UnknownName q) : errors
-                                    (SynTCDes{designatorErrors= errors}, _) -> errors,
+                                    (SynTCDes{errors= errors}, _) -> errors,
                designatorType= fromMaybe UnknownType targetType}
       where targetType = Map.lookup q (env inheritance)
    synthesis _ (pos, _) inheritance (AST.Dereference pointer) =
-      SynTCDes{designatorErrors= case syn pointer
-                                 of SynTCDes{designatorErrors= [],
+      SynTCDes{errors= case syn pointer
+                                 of SynTCDes{errors= [],
                                              designatorType= PointerType{}} -> []
-                                    SynTCDes{designatorErrors= [],
+                                    SynTCDes{errors= [],
                                              designatorType= NominalType _ (Just PointerType{})} -> []
-                                    SynTCDes{designatorErrors= [],
+                                    SynTCDes{errors= [],
                                              designatorType= ProcedureType True _ _} -> []
-                                    SynTCDes{designatorErrors= [],
+                                    SynTCDes{errors= [],
                                              designatorType= t} -> [(currentModule inheritance, pos, NonPointerType t)]
-                                    SynTCDes{designatorErrors= errors} -> errors,
+                                    SynTCDes{errors= es} -> es,
                designatorType= case designatorType (syn pointer)
                                of NominalType _ (Just (PointerType t)) -> t
                                   ProcedureType True params result -> ProcedureType False params result
@@ -894,26 +898,26 @@ instance {-# overlaps #-} (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract
                                   _ -> UnknownType}
 
 binaryNumericOrSetSynthesis inheritance pos left right =
-   SynTCExp{expressionErrors= binarySetOrNumericOperatorErrors inheritance pos (syn left) (syn right),
+   SynTCExp{errors= binarySetOrNumericOperatorErrors inheritance pos (syn left) (syn right),
             inferredType= binaryNumericOperatorType (syn left) (syn right)}
 
 binaryIntegerSynthesis inheritance pos left right =
-   SynTCExp{expressionErrors= binaryIntegerOperatorErrors inheritance pos (syn left) (syn right),
+   SynTCExp{errors= binaryIntegerOperatorErrors inheritance pos (syn left) (syn right),
             inferredType= binaryNumericOperatorType (syn left) (syn right)}
 
 binaryBooleanSynthesis inheritance pos left right =
-   SynTCExp{expressionErrors= binaryBooleanOperatorErrors inheritance pos (syn left) (syn right),
+   SynTCExp{errors= binaryBooleanOperatorErrors inheritance pos (syn left) (syn right),
             inferredType= BuiltinType "BOOLEAN"}
 
 unaryNumericOrSetOperatorErrors :: Abstract.Nameable l => InhTC l -> (Int, ParsedLexemes) -> SynTCExp l -> [Error l]
-unaryNumericOrSetOperatorErrors _ _ SynTCExp{expressionErrors= [], inferredType= IntegerType{}} = []
-unaryNumericOrSetOperatorErrors _ _ SynTCExp{expressionErrors= [],
+unaryNumericOrSetOperatorErrors _ _ SynTCExp{errors= [], inferredType= IntegerType{}} = []
+unaryNumericOrSetOperatorErrors _ _ SynTCExp{errors= [],
                                              inferredType= BuiltinType name}
   | isNumerical name = []
   | name == "SET" = []
-unaryNumericOrSetOperatorErrors inheritance pos SynTCExp{expressionErrors= [], inferredType= t} = 
+unaryNumericOrSetOperatorErrors inheritance pos SynTCExp{errors= [], inferredType= t} = 
    [(currentModule inheritance, pos, NonNumericType t)]
-unaryNumericOrSetOperatorErrors _ _ SynTCExp{expressionErrors= errs} = errs
+unaryNumericOrSetOperatorErrors _ _ SynTCExp{errors= errs} = errs
 
 unaryNumericOrSetOperatorType :: (Int -> Int) -> SynTCExp l -> Type l
 unaryNumericOrSetOperatorType f SynTCExp{inferredType= IntegerType x} = IntegerType (f x)
@@ -922,25 +926,25 @@ unaryNumericOrSetOperatorType _ SynTCExp{inferredType= t} = t
 binarySetOrNumericOperatorErrors :: (Abstract.Nameable l, Eq (Abstract.QualIdent l))
                                  => InhTC l -> (Int, ParsedLexemes) -> SynTCExp l -> SynTCExp l -> [Error l]
 binarySetOrNumericOperatorErrors _ _
-  SynTCExp{expressionErrors= [], inferredType= BuiltinType name1}
-  SynTCExp{expressionErrors= [], inferredType= BuiltinType name2}
+  SynTCExp{errors= [], inferredType= BuiltinType name1}
+  SynTCExp{errors= [], inferredType= BuiltinType name2}
   | isNumerical name1 && isNumerical name2 || name1 == "SET" && name2 == "SET" = []
 binarySetOrNumericOperatorErrors _ _
-  SynTCExp{expressionErrors= [], inferredType= IntegerType{}}
-  SynTCExp{expressionErrors= [], inferredType= BuiltinType name}
+  SynTCExp{errors= [], inferredType= IntegerType{}}
+  SynTCExp{errors= [], inferredType= BuiltinType name}
   | isNumerical name = []
 binarySetOrNumericOperatorErrors _ _
-  SynTCExp{expressionErrors= [], inferredType= BuiltinType name}
-  SynTCExp{expressionErrors= [], inferredType= IntegerType{}}
+  SynTCExp{errors= [], inferredType= BuiltinType name}
+  SynTCExp{errors= [], inferredType= IntegerType{}}
   | isNumerical name = []
 binarySetOrNumericOperatorErrors _ _
-  SynTCExp{expressionErrors= [], inferredType= IntegerType{}}
-  SynTCExp{expressionErrors= [], inferredType= IntegerType{}} = []
-binarySetOrNumericOperatorErrors inheritance pos SynTCExp{expressionErrors= [], inferredType= t1}
-                                 SynTCExp{expressionErrors= [], inferredType= t2}
+  SynTCExp{errors= [], inferredType= IntegerType{}}
+  SynTCExp{errors= [], inferredType= IntegerType{}} = []
+binarySetOrNumericOperatorErrors inheritance pos SynTCExp{errors= [], inferredType= t1}
+                                 SynTCExp{errors= [], inferredType= t2}
   | t1 == t2 = [(currentModule inheritance, pos, NonNumericType t1)]
   | otherwise = [(currentModule inheritance, pos, TypeMismatch t1 t2)]
-binarySetOrNumericOperatorErrors _ _ SynTCExp{expressionErrors= errs1} SynTCExp{expressionErrors= errs2} = errs1 <> errs2
+binarySetOrNumericOperatorErrors _ _ SynTCExp{errors= errs1} SynTCExp{errors= errs2} = errs1 <> errs2
 
 binaryNumericOperatorType :: (Abstract.Nameable l, Eq (Abstract.QualIdent l)) => SynTCExp l -> SynTCExp l -> Type l
 binaryNumericOperatorType SynTCExp{inferredType= t1} SynTCExp{inferredType= t2}
@@ -957,10 +961,10 @@ binaryIntegerOperatorErrors :: Abstract.Nameable l =>
 binaryIntegerOperatorErrors inheritance pos syn1 syn2 = integerExpressionErrors inheritance pos syn1 
                                                       <> integerExpressionErrors inheritance pos syn2
 
-integerExpressionErrors inheritance pos SynTCExp{expressionErrors= [], inferredType= t}
+integerExpressionErrors inheritance pos SynTCExp{errors= [], inferredType= t}
   | isIntegerType t = []
   | otherwise = [(currentModule inheritance, pos, NonIntegerType t)]
-integerExpressionErrors _ _ SynTCExp{expressionErrors= errs} = errs
+integerExpressionErrors _ _ SynTCExp{errors= errs} = errs
 
 isIntegerType IntegerType{} = True
 isIntegerType (BuiltinType "SHORTINT") = True
@@ -968,23 +972,23 @@ isIntegerType (BuiltinType "INTEGER") = True
 isIntegerType (BuiltinType "LONGINT") = True
 isIntegerType t = False
 
-booleanExpressionErrors _ _ SynTCExp{expressionErrors= [],
+booleanExpressionErrors _ _ SynTCExp{errors= [],
                                      inferredType= BuiltinType "BOOLEAN"} = []
-booleanExpressionErrors inheritance pos SynTCExp{expressionErrors= [], inferredType= t} = 
+booleanExpressionErrors inheritance pos SynTCExp{errors= [], inferredType= t} = 
    [(currentModule inheritance, pos, NonBooleanType t)]
-booleanExpressionErrors _ _ SynTCExp{expressionErrors= errs} = errs
+booleanExpressionErrors _ _ SynTCExp{errors= errs} = errs
 
 binaryBooleanOperatorErrors :: (Abstract.Nameable l, Eq (Abstract.QualIdent l))
                             => InhTC l -> (Int, ParsedLexemes) -> SynTCExp l -> SynTCExp l -> [Error l]
 binaryBooleanOperatorErrors _inh _pos
-  SynTCExp{expressionErrors= [], inferredType= BuiltinType "BOOLEAN"}
-  SynTCExp{expressionErrors= [], inferredType= BuiltinType "BOOLEAN"} = []
+  SynTCExp{errors= [], inferredType= BuiltinType "BOOLEAN"}
+  SynTCExp{errors= [], inferredType= BuiltinType "BOOLEAN"} = []
 binaryBooleanOperatorErrors inheritance pos
-  SynTCExp{expressionErrors= [], inferredType= t1}
-  SynTCExp{expressionErrors= [], inferredType= t2}
+  SynTCExp{errors= [], inferredType= t1}
+  SynTCExp{errors= [], inferredType= t2}
   | t1 == t2 = [(currentModule inheritance, pos, NonBooleanType t1)]
   | otherwise = [(currentModule inheritance, pos, TypeMismatch t1 t2)]
-binaryBooleanOperatorErrors _ _ SynTCExp{expressionErrors= errs1} SynTCExp{expressionErrors= errs2} = errs1 <> errs2
+binaryBooleanOperatorErrors _ _ SynTCExp{errors= errs1} SynTCExp{errors= errs2} = errs1 <> errs2
 
 parameterCompatible :: (Abstract.Nameable l, Eq (Abstract.QualIdent l))
                     => InhTC l -> (Int, ParsedLexemes) -> (Bool, Type l) -> Type l -> [Error l]
@@ -1067,16 +1071,16 @@ instance Rank2.Apply (AST.Module l l f') where
 
 type Placed = (,) (Int, ParsedLexemes)
 
-checkModules :: (Abstract.Oberon l, Abstract.Nameable l,
-                 Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
-                 Atts (Inherited (Auto TypeCheck)) (Abstract.Block l l Sem Sem) ~ InhTC l,
-                 Atts (Synthesized (Auto TypeCheck)) (Abstract.Block l l Sem Sem) ~ SynTCMod l,
-                 Full.Functor (Auto TypeCheck) (Abstract.Block l l))
+checkModules :: forall l. (Abstract.Oberon l, Abstract.Nameable l,
+                           Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
+                           Atts (Inherited (Auto TypeCheck)) (Abstract.Block l l Sem Sem) ~ InhTC l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Block l l Sem Sem) ~ SynTCMod l,
+                           Full.Functor (Auto TypeCheck) (Abstract.Block l l))
              => Environment l -> Map AST.Ident (Placed (AST.Module l l Placed Placed)) -> [Error l]
 checkModules predef modules =
-   errors (syn (Transformation.apply (Auto TypeCheck) (wrap $ (Auto TypeCheck) Deep.<$> Modules modules)
+   errors (syn (Transformation.apply (Auto TypeCheck) (wrap $ Auto TypeCheck Deep.<$> Modules modules)
                 `Rank2.apply`
-                Inherited (InhTCRoot predef)))
+                Inherited (InhTCRoot predef)) :: SynTC l)
    where wrap = (,) (0, Trailing [])
 
 predefined, predefined2 :: (Abstract.Wirthy l, Ord (Abstract.QualIdent l)) => Environment l
