@@ -171,44 +171,30 @@ instance {-# overlaps #-} Ord (Abstract.QualIdent l) =>
            foldedModule :: SynCFMod' l (AST.Module l l) -> Placed (AST.Module l l Placed Placed)
            foldedModule = folded
 
-instance {-# overlaps #-} (Abstract.Oberon l, Abstract.Nameable l,
-                           Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
-                           Atts (Synthesized (Auto ConstantFold)) (Abstract.Block l l Sem Sem)
-                           ~ SynCFMod' l (Abstract.Block l l),
-                           Atts (Inherited (Auto ConstantFold)) (Abstract.Block l l Sem Sem) ~ InhCF l) =>
-                          Attribution (Auto ConstantFold) (AST.Module l l) Sem Placed where
-   attribution _ (_, AST.Module moduleName imports _body) (Inherited inheritance, AST.Module _ _ body) =
-      (Synthesized SynCFMod{moduleEnv= exportedEnv,
-                            folded= ((0, Trailing []),
-                                     AST.Module moduleName imports
-                                     $ folded (syn body :: SynCFMod' l (Abstract.Block l l)))},
-       AST.Module moduleName imports (Inherited inheritance))
+instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.Block l l Sem Sem) ~ SynCFMod' l (Abstract.Block l l)) =>
+         Synthesizer (Auto ConstantFold) (AST.Module l l) Sem Placed where
+   synthesis _ (_, AST.Module moduleName imports _body) inheritance (AST.Module _ _ body) =
+      SynCFMod{moduleEnv= exportedEnv,
+               folded= ((0, Trailing []),
+                        AST.Module moduleName imports $ folded (syn body :: SynCFMod' l (Abstract.Block l l)))}
       where exportedEnv = Map.mapKeysMonotonic export newEnv
             newEnv = moduleEnv (syn body)
             export q
                | Just name <- Abstract.getNonQualIdentName q = Abstract.qualIdent moduleName name
                | otherwise = q
 
-instance {-# overlaps #-} (Abstract.Nameable l, Ord (Abstract.QualIdent l),
-                           Atts (Inherited (Auto ConstantFold)) (Abstract.Declaration l l Sem Sem) ~ InhCF l,
-                           Atts (Inherited (Auto ConstantFold)) (Abstract.Type l l Sem Sem) ~ InhCF l,
-                           Atts (Inherited (Auto ConstantFold)) (Abstract.Block l l Sem Sem) ~ InhCF l,
-                           Atts (Inherited (Auto ConstantFold)) (Abstract.ProcedureHeading l l Sem Sem) ~ InhCF l,
-                           Atts (Inherited (Auto ConstantFold)) (Abstract.FormalParameters l l Sem Sem) ~ InhCF l,
-                           Atts (Inherited (Auto ConstantFold)) (Abstract.ConstExpression l l Sem Sem) ~ InhCF l,
-                           Atts (Synthesized (Auto ConstantFold)) (Abstract.Declaration l l Sem Sem)
-                           ~ SynCFMod' l (Abstract.Declaration l l),
-                           Atts (Synthesized (Auto ConstantFold)) (Abstract.Type l l Sem Sem)
-                           ~ SynCF' (Abstract.Type l l),
-                           Atts (Synthesized (Auto ConstantFold)) (Abstract.ProcedureHeading l l Sem Sem)
-                           ~ SynCF' (Abstract.ProcedureHeading l l),
-                           Atts (Synthesized (Auto ConstantFold)) (Abstract.FormalParameters l l Sem Sem)
-                           ~ SynCF' (Abstract.FormalParameters l l),
-                           Atts (Synthesized (Auto ConstantFold)) (Abstract.Block l l Sem Sem)
-                           ~ SynCFMod' l (Abstract.Block l l),
-                           Atts (Synthesized (Auto ConstantFold)) (Abstract.ConstExpression l l Sem Sem)
-                           ~ SynCFExp l l) =>
-                          Synthesizer (Auto ConstantFold) (AST.Declaration l l) Sem Placed where
+instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.Declaration l l Sem Sem)
+          ~ SynCFMod' l (Abstract.Declaration l l),
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.Type l l Sem Sem) ~ SynCF' (Abstract.Type l l),
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.ProcedureHeading l l Sem Sem)
+          ~ SynCF' (Abstract.ProcedureHeading l l),
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.FormalParameters l l Sem Sem)
+          ~ SynCF' (Abstract.FormalParameters l l),
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.Block l l Sem Sem) ~ SynCFMod' l (Abstract.Block l l),
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.ConstExpression l l Sem Sem) ~ SynCFExp l l) =>
+         Synthesizer (Auto ConstantFold) (AST.Declaration l l) Sem Placed where
    synthesis _ (pos, AST.ConstantDeclaration namedef _) _ (AST.ConstantDeclaration _ expression) =
       SynCFMod{moduleEnv= Map.singleton (Abstract.nonQualIdent name) val,
                folded = (pos,
@@ -238,16 +224,12 @@ instance {-# overlaps #-} (Abstract.Nameable l, Ord (Abstract.QualIdent l),
 instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
           Atts (Synthesized (Auto ConstantFold)) (Abstract.Declaration l l Sem Sem)
           ~ SynCFMod' l (Abstract.Declaration l l),
-          Atts (Inherited (Auto ConstantFold)) (Abstract.StatementSequence l l Sem Sem) ~ InhCF l,
-          Atts (Inherited (Auto ConstantFold)) (Abstract.Declaration l l Sem Sem) ~ InhCF l,
           Atts (Synthesized (Auto ConstantFold)) (Abstract.StatementSequence l l Sem Sem)
           ~ SynCF' (Abstract.StatementSequence l l)) =>
-         Attribution (Auto ConstantFold) (AST.Block l l) Sem Placed where
-   attribution _ (pos, AST.Block _decls _stats) (Inherited inheritance, AST.Block decls stats) =
-      (Synthesized SynCFMod{moduleEnv= newEnv,
-                            folded= (pos,
-                                     AST.Block (foldedDeclaration . syn <$> decls) (foldedStatements . syn <$> stats))},
-       AST.Block (pure $ Inherited localEnv) (pure $ Inherited localEnv))
+         Synthesizer (Auto ConstantFold) (AST.Block l l) Sem Placed where
+   synthesis _ (pos, AST.Block _decls _stats) inheritance (AST.Block decls stats) =
+      SynCFMod{moduleEnv= newEnv,
+               folded= (pos, AST.Block (foldedDeclaration . syn <$> decls) (foldedStatements . syn <$> stats))}
       where newEnv = Map.unions (moduleEnv . syn <$> decls)
             localEnv = InhCF (newEnv `Map.union` env inheritance) (currentModule inheritance)
             foldedDeclaration :: SynCFMod' l (Abstract.Declaration l l)
@@ -257,17 +239,12 @@ instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Sh
                              -> Placed (Abstract.StatementSequence l l Placed Placed)
             foldedStatements = folded
 
-instance {-# overlaps #-} (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
-                           Abstract.Value l ~ AST.Value l, InhCF l ~ InhCF λ,
-                           Atts (Inherited (Auto ConstantFold)) (Abstract.Expression l l Sem Sem) ~ InhCF l,
-                           Atts (Inherited (Auto ConstantFold)) (Abstract.Element l l Sem Sem) ~ InhCF l,
-                           Atts (Inherited (Auto ConstantFold)) (Abstract.Designator l l Sem Sem) ~ InhCF l,
-                           Atts (Synthesized (Auto ConstantFold)) (Abstract.Expression l l Sem Sem) ~ SynCFExp λ l,
-                           Atts (Synthesized (Auto ConstantFold)) (Abstract.Element l l Sem Sem)
-                           ~ SynCF' (Abstract.Element l l),
-                           Atts (Synthesized (Auto ConstantFold)) (Abstract.Designator l l Sem Sem)
-                           ~ SynCFDesignator l) =>
-                          Synthesizer (Auto ConstantFold) (AST.Expression λ l) Sem Placed where
+instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
+          Abstract.Value l ~ AST.Value l, InhCF l ~ InhCF λ,
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.Expression l l Sem Sem) ~ SynCFExp λ l,
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.Element l l Sem Sem) ~ SynCF' (Abstract.Element l l),
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.Designator l l Sem Sem) ~ SynCFDesignator l) =>
+         Synthesizer (Auto ConstantFold) (AST.Expression λ l) Sem Placed where
    synthesis _ (pos, AST.Relation op _ _) _ (AST.Relation _op left right) =
       case join (compareValues <$> foldedValue (syn left) <*> foldedValue (syn right))
       of Just value -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, value)),
