@@ -7,6 +7,7 @@ module Language.Oberon.TypeChecker (Error, errorMessage, checkModules, predefine
 import Control.Applicative (liftA2, (<|>), ZipList(ZipList, getZipList))
 import Control.Arrow (first)
 import Data.Coerce (coerce)
+import Data.Proxy (Proxy(..))
 import qualified Data.List as List
 import Data.Functor.Const (Const(..))
 import Data.Maybe (fromMaybe)
@@ -150,12 +151,6 @@ newtype Modules l f' f = Modules (Map AST.Ident (f (AST.Module l l f' f')))
 
 data TypeCheck = TypeCheck
 
-data TypeCheckErrors l = TypeCheckErrors
-
-instance Transformation.Transformation (TypeCheckErrors l) where
-   type Domain (TypeCheckErrors l) = Synthesized (Auto TypeCheck)
-   type Codomain (TypeCheckErrors l) = Const (Accumulated [Error l])
-
 type Sem = Semantics (Auto TypeCheck)
 
 data InhTCRoot l = InhTCRoot{rootEnv :: Environment l}
@@ -237,21 +232,6 @@ instance Rank2.Foldable (Modules l f) where
    foldMap f ~(Modules ms) = foldMap f ms
 instance Rank2.Apply (Modules l f') where
    ~(Modules fs) <*> ~(Modules ms) = Modules (Map.intersectionWith Rank2.apply fs ms)
-
-instance Transformation.At (TypeCheckErrors l) (AST.StatementSequence l l Sem Sem) where
-   _ $ s = Const (errors (syn s :: SynTC l))
-instance Transformation.At (TypeCheckErrors l) (AST.Statement l l Sem Sem) where
-   _ $ s = Const (errors (syn s :: SynTC l))
-instance Transformation.At (TypeCheckErrors l) (AST.ConditionalBranch l l Sem Sem) where
-   _ $ s = Const (errors (syn s :: SynTC l))
-instance Transformation.At (TypeCheckErrors l) (AST.Case l l Sem Sem) where
-   _ $ s = Const (errors (syn s :: SynTC l))
-instance Transformation.At (TypeCheckErrors l) (AST.WithAlternative l l Sem Sem) where
-   _ $ s = Const (errors (syn s :: SynTC l))
-instance Transformation.At (TypeCheckErrors l) (AST.Designator l l Sem Sem) where
-   _ $ s = Const (errors (syn s :: SynTCDes l))
-instance Transformation.At (TypeCheckErrors l) (AST.Expression l l Sem Sem) where
-   _ $ s = Const (errors (syn s :: SynTCExp l))
 
 -- * Boring attribute types
 type instance Atts (Inherited (Auto TypeCheck)) (Modules l _ _) = InhTCRoot l
@@ -542,20 +522,15 @@ instance {-# overlaps #-} (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract
                            Atts (Synthesized (Auto TypeCheck)) (Abstract.StatementSequence l l Sem Sem) ~ SynTC l,
                            Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ SynTCExp l,
                            Atts (Synthesized (Auto TypeCheck)) (Abstract.Designator l l Sem Sem) ~ SynTCDes l,
-                           TypeCheckErrors l `Transformation.At` Abstract.StatementSequence l l Sem Sem,
-                           TypeCheckErrors l `Transformation.At` Abstract.ConditionalBranch l l Sem Sem,
-                           TypeCheckErrors l `Transformation.At` Abstract.Case l l Sem Sem,
-                           TypeCheckErrors l `Transformation.At` Abstract.WithAlternative l l Sem Sem,
-                           TypeCheckErrors l `Transformation.At` Abstract.Designator l l Sem Sem,
-                           TypeCheckErrors l `Transformation.At` Abstract.Expression l l Sem Sem) =>
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Case l l Sem Sem) ~ SynTC l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.ConditionalBranch l l Sem Sem) ~ SynTC l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.WithAlternative l l Sem Sem) ~ SynTC l) =>
                           Synthesizer (Auto TypeCheck) (AST.Statement l l) Sem Placed where
-   synthesis (Auto TypeCheck) _ _ AST.EmptyStatement = SynTC{errors= Accumulated []}
-   synthesis _ (pos, _) inheritance statement@(AST.Assignment var value) = {-# SCC "Assignment" #-}
+   synthesis t (pos, _) inheritance statement@(AST.Assignment var value) = {-# SCC "Assignment" #-}
       SynTC{errors= assignmentCompatible (currentModule (inheritance :: InhTC l)) pos
                                          (designatorType $ syn var) (inferredType $ syn value)
-                    <> Shallow.foldMap TypeCheckErrors statement}
-   synthesis _ (pos, AST.ProcedureCall _proc parameters)
-             inheritance (AST.ProcedureCall procedure' parameters') =
+                    <> AG.accumulate (Proxy :: Proxy "errors") t statement}
+   synthesis _ (pos, AST.ProcedureCall _proc parameters) inheritance (AST.ProcedureCall procedure' parameters') =
       SynTC{errors= (case syn procedure'
                      of SynTCDes{errors= Accumulated [],
                                  designatorType= t} -> procedureErrors t
@@ -582,7 +557,7 @@ instance {-# overlaps #-} (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract
       SynTC{errors= integerExpressionErrors inheritance pos (syn start) 
                     <> integerExpressionErrors inheritance pos (syn end)
                     <> foldMap (integerExpressionErrors inheritance pos . syn) step <> errors (syn body :: SynTC l)}
-   synthesis (Auto TypeCheck) self _ statement = SynTC{errors= Shallow.foldMap TypeCheckErrors statement}
+   synthesis t self _ statement = SynTC{errors= AG.accumulate (Proxy :: Proxy "errors") t statement}
 
 instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Inherited (Auto TypeCheck)) (Abstract.StatementSequence l l Sem Sem) ~ InhTC l,
