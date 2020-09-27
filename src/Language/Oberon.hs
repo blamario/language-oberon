@@ -110,10 +110,10 @@ parseAndResolveModule Options{..} path source =
                 addLeft (Failure resolutionErrors) = Failure (Left resolutionErrors)
                 addLeft (Success result) = Success result
                 constantFolded = ConstantFolder.foldConstants
-                                (case version
-                                 of Oberon1 -> ConstantFolder.predefined
-                                    Oberon2 -> ConstantFolder.predefined2)
-                                (Map.mapMaybe successful resolvedImportMap)
+                                    (case version
+                                     of Oberon1 -> ConstantFolder.predefined
+                                        Oberon2 -> ConstantFolder.predefined2)
+                                    (Map.mapMaybe successful resolvedImportMap)
                 typeErrors = TypeChecker.checkModules
                                 (case version 
                                  of Oberon1 -> TypeChecker.predefined

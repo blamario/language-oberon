@@ -27,7 +27,7 @@ import qualified Transformation.Full.TH
 import qualified Transformation.Shallow as Shallow
 import qualified Transformation.AG as AG
 import Transformation.AG (Attribution(..), Atts, Inherited(..), Synthesized(..), Semantics)
-import Transformation.AG.Generics (Auto(Auto), Bequether(..), Synthesizer(..), Revelation(..))
+import Transformation.AG.Generics (Auto(Auto), Bequether(..), Synthesizer(..), Revelation(..), Replicated(..))
 
 import qualified Language.Oberon.Abstract as Abstract
 import qualified Language.Oberon.AST as AST
@@ -36,7 +36,8 @@ import Language.Oberon.Grammar (ParsedLexemes(Trailing))
 foldConstants :: (Abstract.Oberon l, Abstract.Nameable l,
                   Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
                   Atts (Inherited (Auto ConstantFold)) (Abstract.Block l l Sem Sem) ~ InhCF l,
-                  Atts (Synthesized (Auto ConstantFold)) (Abstract.Block l l Sem Sem) ~ SynCFMod' l (Abstract.Block l l),
+                  Atts (Synthesized (Auto ConstantFold)) (Abstract.Block l l Sem Sem)
+                  ~ SynCFMod' l (Abstract.Block l l),
                   Full.Functor (Auto ConstantFold) (Abstract.Block l l),
                   Deep.Functor (Auto ConstantFold) (Abstract.Block l l))
               => Environment l -> Map AST.Ident (Placed (AST.Module l l Placed Placed))
@@ -59,8 +60,6 @@ data ConstantFold = ConstantFold
 
 type Sem = Semantics (Auto ConstantFold)
 
-data ConstantFoldSyn l = ConstantFoldSyn (InhCF l)
-
 instance Transformation.Transformation (Auto ConstantFold) where
    type Domain (Auto ConstantFold) = Placed
    type Codomain (Auto ConstantFold) = Semantics (Auto ConstantFold)
@@ -68,30 +67,21 @@ instance Transformation.Transformation (Auto ConstantFold) where
 instance Revelation (Auto ConstantFold) where
   reveal = const snd
 
-instance Transformation.Transformation (ConstantFoldSyn l) where
-   type Domain (ConstantFoldSyn l) = Semantics (Auto ConstantFold)
-   type Codomain (ConstantFoldSyn l) = Placed
-
-instance (Atts (Synthesized (Auto ConstantFold)) (f Placed Placed) ~ SynCF' f,
-          Atts (Inherited (Auto ConstantFold)) (f Placed Placed) ~ InhCF l) =>
-         Transformation.At (ConstantFoldSyn l) (f Placed Placed) where
-   ConstantFoldSyn inheritance $ f = folded (syn $ Rank2.apply f $ Inherited inheritance :: SynCF' f)
-
 data InhCFRoot l = InhCFRoot{rootEnv :: Environment l} deriving Generic
 
 data InhCF l = InhCF{env           :: Environment l,
                      currentModule :: AST.Ident}
                deriving Generic
 
-data SynCF a = SynCF{folded :: Placed a}
+data SynCF a = SynCF{folded :: Replicated Placed a} deriving Generic
 
 data SynCFMod l a = SynCFMod{moduleEnv :: Environment l,
-                             folded    :: Placed a}
+                             folded    :: Replicated Placed a}
 
-data SynCFExp λ l = SynCFExp{foldedExp   :: ((Int, ParsedLexemes), Abstract.Expression λ l Placed Placed),
+data SynCFExp λ l = SynCFExp{folded   :: Replicated Placed (Abstract.Expression λ l Placed Placed),
                              foldedValue :: Maybe (Abstract.Value l l Placed Placed)}
 
-data SynCFDesignator l = SynCFDesignator{folded :: Placed (Abstract.Designator l l Placed Placed),
+data SynCFDesignator l = SynCFDesignator{folded :: Replicated Placed (Abstract.Designator l l Placed Placed),
                                          designatorValue :: Maybe (AST.Value l l Placed Placed)}
 
 data SynCFRoot a = SynCFRoot{modulesFolded :: a}
@@ -146,7 +136,7 @@ type instance Atts (Inherited (Auto ConstantFold)) (AST.FPSection l l _ _) = Inh
 type instance Atts (Inherited (Auto ConstantFold)) (AST.Type l l _ _) = InhCF l
 type instance Atts (Inherited (Auto ConstantFold)) (AST.FieldList l l _ _) = InhCF l
 type instance Atts (Inherited (Auto ConstantFold)) (AST.StatementSequence l l _ _) = InhCF l
-type instance Atts (Inherited (Auto ConstantFold)) (AST.Expression l _ _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.Expression l l _ _) = InhCF l
 type instance Atts (Inherited (Auto ConstantFold)) (AST.Element l l _ _) = InhCF l
 type instance Atts (Inherited (Auto ConstantFold)) (AST.Value l l _ _) = InhCF l
 type instance Atts (Inherited (Auto ConstantFold)) (AST.Designator l l _ _) = InhCF l
@@ -159,97 +149,113 @@ type instance Atts (Inherited (Auto ConstantFold)) (AST.WithAlternative l l _ _)
 type SynCF' node = SynCF (node Placed Placed)
 type SynCFMod' l node = SynCFMod l (node Placed Placed)
 
+
+-- Disambiguation
+foldedExp  :: SynCFExp λ l -> Replicated Placed (Abstract.Expression λ l Placed Placed)
+foldedExp' :: SynCFExp λ l -> Placed (Abstract.Expression λ l Placed Placed)
+foldedExp = folded
+foldedExp' = getReplicated . foldedExp
+
 -- * Rules
 
 instance {-# overlaps #-} Ord (Abstract.QualIdent l) =>
-                          Attribution (Auto ConstantFold) (Modules l) Sem Placed where
-   attribution _ (_, Modules self) (Inherited inheritance, Modules ms) =
-     (Synthesized SynCFRoot{modulesFolded= Modules (foldedModule . syn <$> ms)},
-      Modules (Map.mapWithKey moduleInheritance self))
-     where moduleInheritance name mod = Inherited InhCF{env= rootEnv inheritance <> foldMap (moduleEnv . syn) ms,
-                                                        currentModule= name}
-           foldedModule :: SynCFMod' l (AST.Module l l) -> Placed (AST.Module l l Placed Placed)
-           foldedModule = folded
+                          Synthesizer (Auto ConstantFold) (Modules l) Sem Placed where
+   synthesis _ (_, Modules self) inheritance (Modules ms) =
+      SynCFRoot{modulesFolded= (Modules (getReplicated . foldedModule . syn <$> ms))}
+      where foldedModule :: SynCFMod' l (AST.Module l l) -> Replicated Placed (AST.Module l l Placed Placed)
+            foldedModule = folded
 
-instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
-          Atts (Synthesized (Auto ConstantFold)) (Abstract.Block l l Sem Sem) ~ SynCFMod' l (Abstract.Block l l)) =>
-         Synthesizer (Auto ConstantFold) (AST.Module l l) Sem Placed where
+instance {-# overlaps #-} Ord (Abstract.QualIdent l) =>
+                          Bequether (Auto ConstantFold) (Modules l) Sem Placed where
+   bequest _ (_, Modules self) inheritance (Modules ms) = Modules (Map.mapWithKey moduleInheritance self)
+      where moduleInheritance name mod = Inherited InhCF{env= rootEnv inheritance <> foldMap (moduleEnv . syn) ms,
+                                                         currentModule= name}
+
+instance {-# overlaps #-} (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
+                           Atts (Synthesized (Auto ConstantFold)) (Abstract.Block l l Sem Sem) ~ SynCFMod' l (Abstract.Block l l)) =>
+                          Synthesizer (Auto ConstantFold) (AST.Module l l) Sem Placed where
    synthesis _ (_, AST.Module moduleName imports _body) inheritance (AST.Module _ _ body) =
       SynCFMod{moduleEnv= exportedEnv,
-               folded= ((0, Trailing []),
-                        AST.Module moduleName imports $ folded (syn body :: SynCFMod' l (Abstract.Block l l)))}
+               folded= Replicated ((0, Trailing []),
+                                   AST.Module moduleName imports $ getReplicated
+                                   $ folded (syn body :: SynCFMod' l (Abstract.Block l l)))}
       where exportedEnv = Map.mapKeysMonotonic export newEnv
             newEnv = moduleEnv (syn body)
             export q
                | Just name <- Abstract.getNonQualIdentName q = Abstract.qualIdent moduleName name
                | otherwise = q
 
-instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Atts (Synthesized (Auto ConstantFold)) (Abstract.Declaration l l Sem Sem)
-          ~ SynCFMod' l (Abstract.Declaration l l),
-          Atts (Synthesized (Auto ConstantFold)) (Abstract.Type l l Sem Sem) ~ SynCF' (Abstract.Type l l),
-          Atts (Synthesized (Auto ConstantFold)) (Abstract.ProcedureHeading l l Sem Sem)
-          ~ SynCF' (Abstract.ProcedureHeading l l),
-          Atts (Synthesized (Auto ConstantFold)) (Abstract.FormalParameters l l Sem Sem)
-          ~ SynCF' (Abstract.FormalParameters l l),
-          Atts (Synthesized (Auto ConstantFold)) (Abstract.Block l l Sem Sem) ~ SynCFMod' l (Abstract.Block l l),
-          Atts (Synthesized (Auto ConstantFold)) (Abstract.ConstExpression l l Sem Sem) ~ SynCFExp l l) =>
-         Synthesizer (Auto ConstantFold) (AST.Declaration l l) Sem Placed where
+instance {-# overlaps #-} (Abstract.Nameable l, Ord (Abstract.QualIdent l),
+                           Atts (Synthesized (Auto ConstantFold)) (Abstract.Declaration l l Sem Sem)
+                           ~ SynCFMod' l (Abstract.Declaration l l),
+                           Atts (Synthesized (Auto ConstantFold)) (Abstract.Type l l Sem Sem) ~ SynCF' (Abstract.Type l l),
+                           Atts (Synthesized (Auto ConstantFold)) (Abstract.ProcedureHeading l l Sem Sem)
+                           ~ SynCF' (Abstract.ProcedureHeading l l),
+                           Atts (Synthesized (Auto ConstantFold)) (Abstract.FormalParameters l l Sem Sem)
+                           ~ SynCF' (Abstract.FormalParameters l l),
+                           Atts (Synthesized (Auto ConstantFold)) (Abstract.Block l l Sem Sem) ~ SynCFMod' l (Abstract.Block l l),
+                           Atts (Synthesized (Auto ConstantFold)) (Abstract.ConstExpression l l Sem Sem) ~ SynCFExp l l) =>
+                          Synthesizer (Auto ConstantFold) (AST.Declaration l l) Sem Placed where
    synthesis _ (pos, AST.ConstantDeclaration namedef _) _ (AST.ConstantDeclaration _ expression) =
       SynCFMod{moduleEnv= Map.singleton (Abstract.nonQualIdent name) val,
-               folded = (pos,
-                         AST.ConstantDeclaration namedef $
-                         maybe (foldedExp $ syn expression) ((,) pos . Abstract.literal . (,) pos) val)}
+               folded = Replicated (pos,
+                                    AST.ConstantDeclaration namedef $
+                                    maybe (foldedExp' $ syn expression) ((,) pos . Abstract.literal . (,) pos) val)}
       where name = Abstract.getIdentDefName namedef
             val = foldedValue (syn expression)
    synthesis _ (pos, AST.TypeDeclaration namedef _) _ (AST.TypeDeclaration _ definition) =
       SynCFMod{moduleEnv= mempty,
-               folded = (pos, AST.TypeDeclaration namedef $ folded (syn definition :: SynCF' (Abstract.Type l l)))}
+               folded = Replicated (pos, AST.TypeDeclaration namedef
+                                         $ getReplicated $ folded (syn definition :: SynCF' (Abstract.Type l l)))}
    synthesis _ (pos, AST.VariableDeclaration names _declaredType) _
              (AST.VariableDeclaration _names declaredType) =
       SynCFMod{moduleEnv= mempty,
-               folded= (pos, AST.VariableDeclaration names $ folded (syn declaredType :: SynCF' (Abstract.Type l l)))}
+               folded= Replicated (pos, AST.VariableDeclaration names
+                                        $ getReplicated $ folded (syn declaredType :: SynCF' (Abstract.Type l l)))}
    synthesis _ (pos, _) _ (AST.ProcedureDeclaration heading body) =
       SynCFMod{moduleEnv= mempty,
-               folded= (pos, AST.ProcedureDeclaration (folded (syn heading :: SynCF' (Abstract.ProcedureHeading l l)))
-                                                      (folded (syn body :: SynCFMod' l (Abstract.Block l l))))}
+               folded= Replicated
+                       (pos, AST.ProcedureDeclaration
+                                (getReplicated $ folded (syn heading :: SynCF' (Abstract.ProcedureHeading l l)))
+                                (getReplicated $ folded (syn body :: SynCFMod' l (Abstract.Block l l))))}
    synthesis _ (pos, AST.ForwardDeclaration namedef _signature) _
              (AST.ForwardDeclaration _namedef signature) =
       SynCFMod{moduleEnv= mempty,
-               folded= (pos, AST.ForwardDeclaration namedef (foldedSignature . syn <$> signature))}
+               folded= Replicated (pos, AST.ForwardDeclaration namedef
+                                        $ getReplicated . foldedSignature . syn <$> signature)}
       where foldedSignature :: SynCF' (Abstract.FormalParameters l l)
-                            -> Placed (Abstract.FormalParameters l l Placed Placed)
+                            -> Replicated Placed (Abstract.FormalParameters l l Placed Placed)
             foldedSignature = folded
 
-instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
-          Atts (Synthesized (Auto ConstantFold)) (Abstract.Declaration l l Sem Sem)
-          ~ SynCFMod' l (Abstract.Declaration l l),
-          Atts (Synthesized (Auto ConstantFold)) (Abstract.StatementSequence l l Sem Sem)
-          ~ SynCF' (Abstract.StatementSequence l l)) =>
-         Synthesizer (Auto ConstantFold) (AST.Block l l) Sem Placed where
+instance {-# overlaps #-} (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
+                           Atts (Synthesized (Auto ConstantFold)) (Abstract.Declaration l l Sem Sem)
+                           ~ SynCFMod' l (Abstract.Declaration l l),
+                           Atts (Synthesized (Auto ConstantFold)) (Abstract.StatementSequence l l Sem Sem)
+                           ~ SynCF' (Abstract.StatementSequence l l)) =>
+                          Synthesizer (Auto ConstantFold) (AST.Block l l) Sem Placed where
    synthesis _ (pos, AST.Block _decls _stats) inheritance (AST.Block decls stats) =
-      SynCFMod{moduleEnv= newEnv,
-               folded= (pos, AST.Block (foldedDeclaration . syn <$> decls) (foldedStatements . syn <$> stats))}
-      where newEnv = Map.unions (moduleEnv . syn <$> decls)
-            localEnv = InhCF (newEnv `Map.union` env inheritance) (currentModule inheritance)
-            foldedDeclaration :: SynCFMod' l (Abstract.Declaration l l)
-                              -> Placed (Abstract.Declaration l l Placed Placed)
+      SynCFMod{moduleEnv= Map.unions (moduleEnv . syn <$> decls),
+               folded= Replicated (pos, AST.Block (getReplicated . foldedDeclaration . syn <$> decls)
+                                                  (getReplicated . foldedStatements . syn <$> stats))}
+      where foldedDeclaration :: SynCFMod' l (Abstract.Declaration l l)
+                              -> Replicated Placed (Abstract.Declaration l l Placed Placed)
             foldedDeclaration = folded
             foldedStatements :: SynCF' (Abstract.StatementSequence l l)
-                             -> Placed (Abstract.StatementSequence l l Placed Placed)
+                             -> Replicated Placed (Abstract.StatementSequence l l Placed Placed)
             foldedStatements = folded
 
-instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Abstract.Value l ~ AST.Value l, InhCF l ~ InhCF λ,
-          Atts (Synthesized (Auto ConstantFold)) (Abstract.Expression l l Sem Sem) ~ SynCFExp λ l,
-          Atts (Synthesized (Auto ConstantFold)) (Abstract.Element l l Sem Sem) ~ SynCF' (Abstract.Element l l),
-          Atts (Synthesized (Auto ConstantFold)) (Abstract.Designator l l Sem Sem) ~ SynCFDesignator l) =>
-         Synthesizer (Auto ConstantFold) (AST.Expression λ l) Sem Placed where
+instance {-# overlaps #-} (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
+                           Abstract.Value l ~ AST.Value l, InhCF l ~ InhCF λ,
+                           Atts (Synthesized (Auto ConstantFold)) (Abstract.Expression l l Sem Sem) ~ SynCFExp λ l,
+                           Atts (Synthesized (Auto ConstantFold)) (Abstract.Element l l Sem Sem) ~ SynCF' (Abstract.Element l l),
+                           Atts (Synthesized (Auto ConstantFold)) (Abstract.Designator l l Sem Sem) ~ SynCFDesignator l) =>
+                          Synthesizer (Auto ConstantFold) (AST.Expression λ l) Sem Placed where
    synthesis _ (pos, AST.Relation op _ _) _ (AST.Relation _op left right) =
       case join (compareValues <$> foldedValue (syn left) <*> foldedValue (syn right))
-      of Just value -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, value)),
+      of Just value -> SynCFExp{folded= Replicated (pos, Abstract.literal (pos, value)),
                                 foldedValue= Just value}
-         Nothing -> SynCFExp{foldedExp= (pos, Abstract.relation op (foldedExp $ syn left) (foldedExp $ syn right)),
+         Nothing -> SynCFExp{folded= Replicated $
+                                     (pos, Abstract.relation op (foldedExp' $ syn left) (foldedExp' $ syn right)),
                              foldedValue= Nothing}
       where compareValues (AST.Boolean l) (AST.Boolean r)   = relate op (compare l r)
             compareValues (AST.Integer l) (AST.Integer r)   = relate op (compare l r)
@@ -276,19 +282,19 @@ instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
             relate Abstract.In _              = Nothing
    synthesis _ (pos, _) _ (AST.Positive expr) =
       case foldedValue (syn expr)
-      of Just (AST.Integer n) -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, AST.Integer n)),
+      of Just (AST.Integer n) -> SynCFExp{folded= Replicated (pos, Abstract.literal (pos, AST.Integer n)),
                                           foldedValue= Just (AST.Integer n)}
-         Just (AST.Real n) -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, AST.Real n)),
+         Just (AST.Real n) -> SynCFExp{folded= Replicated (pos, Abstract.literal (pos, AST.Real n)),
                                        foldedValue= Just (AST.Real n)}
-         _ -> SynCFExp{foldedExp= (pos, Abstract.positive $ foldedExp $ syn expr),
+         _ -> SynCFExp{folded= Replicated (pos, Abstract.positive $ foldedExp' $ syn expr),
                        foldedValue= Nothing}
    synthesis _ (pos, _) _ (AST.Negative expr) =
       case foldedValue (syn expr)
-      of Just (AST.Integer n) -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, AST.Integer $ negate n)),
+      of Just (AST.Integer n) -> SynCFExp{folded= Replicated (pos, Abstract.literal (pos, AST.Integer $ negate n)),
                                           foldedValue= Just (AST.Integer $ negate n)}
-         Just (AST.Real n) -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, AST.Real $ negate n)),
+         Just (AST.Real n) -> SynCFExp{folded= Replicated (pos, Abstract.literal (pos, AST.Real $ negate n)),
                                        foldedValue= Just (AST.Real $ negate n)}
-         _ -> SynCFExp{foldedExp= (pos, Abstract.negative $ foldedExp $ syn expr),
+         _ -> SynCFExp{folded= Replicated (pos, Abstract.negative $ foldedExp' $ syn expr),
                        foldedValue= Nothing}
    synthesis _ (pos, _) _ (AST.Add left right) =
       foldBinaryArithmetic pos Abstract.add (+) (syn left) (syn right)
@@ -308,27 +314,27 @@ instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
       foldBinaryBoolean pos Abstract.and (&&) (syn left) (syn right)
    synthesis _ (pos, _) _ (AST.Not expr) =
       case foldedValue (syn expr)
-      of Just (AST.Boolean True) -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.false)),
+      of Just (AST.Boolean True) -> SynCFExp{folded= Replicated (pos, Abstract.literal (pos, Abstract.false)),
                                              foldedValue= Just Abstract.false}
-         Just (AST.Boolean False) -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, Abstract.true)),
+         Just (AST.Boolean False) -> SynCFExp{folded= Replicated (pos, Abstract.literal (pos, Abstract.true)),
                                               foldedValue= Just Abstract.true}
-         _ -> SynCFExp{foldedExp= (pos, Abstract.not $ foldedExp $ syn expr),
+         _ -> SynCFExp{folded= Replicated (pos, Abstract.not $ foldedExp' $ syn expr),
                        foldedValue= Nothing}
    synthesis _ (pos, AST.IsA _ right) _ (AST.IsA left _) =
-      SynCFExp{foldedExp= (pos, Abstract.is (foldedExp $ syn left) right),
+      SynCFExp{folded= Replicated (pos, Abstract.is (foldedExp' $ syn left) right),
                foldedValue= Nothing}
    synthesis _ (pos, _) _ (AST.Set elements) =
-      SynCFExp{foldedExp= (pos, Abstract.set (foldedElement . syn <$> getZipList elements)),
+      SynCFExp{folded= Replicated (pos, Abstract.set (getReplicated . foldedElement . syn <$> getZipList elements)),
                foldedValue= Nothing}
-      where foldedElement :: SynCF' (Abstract.Element l l) -> Placed (Abstract.Element l l Placed Placed)
+      where foldedElement :: SynCF' (Abstract.Element l l) -> Replicated Placed (Abstract.Element l l Placed Placed)
             foldedElement = folded
    synthesis _ (pos, _) _ (AST.Read des) =
       case syn des :: SynCFDesignator l
-      of SynCFDesignator{folded= (pos', _),
-                         designatorValue= Just val} -> SynCFExp{foldedExp= (pos, Abstract.literal (pos', val)),
+      of SynCFDesignator{folded= Replicated (pos', _),
+                         designatorValue= Just val} -> SynCFExp{folded= Replicated (pos, Abstract.literal (pos', val)),
                                                                 foldedValue= Just val}
-         SynCFDesignator{folded= (pos', des'),
-                         designatorValue= Nothing} -> SynCFExp{foldedExp= (pos, Abstract.read (pos', des')),
+         SynCFDesignator{folded= Replicated (pos', des'),
+                         designatorValue= Nothing} -> SynCFExp{folded= Replicated (pos, Abstract.read (pos', des')),
                                                                foldedValue= Nothing}
    synthesis _ (pos, _) _ (AST.FunctionCall fn args) =
       case (designatorValue (syn fn :: SynCFDesignator l), foldedValue . syn <$> getZipList args)
@@ -372,14 +378,15 @@ instance (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
          (Just (AST.Builtin "MIN"), [Just (AST.Builtin "SET")]) -> literalSynthesis (Abstract.integer minSet)
          (Just (AST.Builtin "MIN"), [Just (AST.Builtin "REAL")]) -> literalSynthesis (Abstract.real minReal)
          (Just (AST.Builtin "MIN"), [Just (AST.Builtin "LONGREAL")]) -> literalSynthesis (Abstract.real minReal)
-         _ -> SynCFExp{foldedExp= (pos, Abstract.functionCall (folded (syn fn :: SynCFDesignator l))
-                                                              (foldedExp . syn <$> getZipList args)),
+         _ -> SynCFExp{folded= Replicated (pos,
+                                           Abstract.functionCall (getReplicated $ folded (syn fn :: SynCFDesignator l))
+                                                                 (foldedExp' . syn <$> getZipList args)),
                        foldedValue= Nothing}
-      where literalSynthesis value = SynCFExp{foldedExp= (pos, Abstract.literal (pos, value)),
+      where literalSynthesis value = SynCFExp{folded= Replicated (pos, Abstract.literal (pos, value)),
                                               foldedValue= Just value}
    synthesis _ (pos, _) _ (AST.Literal val) =
-      SynCFExp{foldedExp= (pos, Abstract.literal $ folded (syn val :: SynCF' (AST.Value l l))),
-               foldedValue= Just (snd $ folded (syn val :: SynCF' (AST.Value l l)))}
+      SynCFExp{folded= Replicated (pos, Abstract.literal $ getReplicated $ folded (syn val :: SynCF' (AST.Value l l))),
+               foldedValue= Just (snd $ getReplicated $ folded (syn val :: SynCF' (AST.Value l l)))}
 
 maxInteger, minInteger, maxInt32, minInt32, maxSet, minSet :: Integer
 maxInteger = toInteger (maxBound :: Int)
@@ -407,9 +414,10 @@ foldBinaryArithmetic :: forall λ l f. (f ~ Placed, Abstract.Value l ~ AST.Value
                      -> (forall n. Num n => n -> n -> n)
                      -> SynCFExp λ l -> SynCFExp λ l -> SynCFExp λ l
 foldBinaryArithmetic pos node op l r = case join (foldValues <$> foldedValue l <*> foldedValue r)
-                                       of Just v -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, v)),
+                                       of Just v -> SynCFExp{folded= Replicated (pos, Abstract.literal (pos, v)),
                                                              foldedValue= Just v}
-                                          Nothing -> SynCFExp{foldedExp= (pos, node (foldedExp l) (foldedExp r)),
+                                          Nothing -> SynCFExp{folded= Replicated $
+                                                                      (pos, node (foldedExp' l) (foldedExp' r)),
                                                               foldedValue= Nothing}
    where foldValues :: AST.Value l l f f -> AST.Value l l f f -> Maybe (AST.Value l l f f)
          foldValues (AST.Integer l') (AST.Integer r') = Just (AST.Integer $ op l' r')
@@ -424,9 +432,10 @@ foldBinaryFractional :: forall λ l f. (f ~ Placed, Abstract.Value l ~ AST.Value
                      -> (forall n. Fractional n => n -> n -> n)
                      -> SynCFExp λ l -> SynCFExp λ l -> SynCFExp λ l
 foldBinaryFractional pos node op l r = case join (foldValues <$> foldedValue l <*> foldedValue r)
-                                       of Just v -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, v)),
+                                       of Just v -> SynCFExp{folded= Replicated (pos, Abstract.literal (pos, v)),
                                                              foldedValue= Just v}
-                                          Nothing -> SynCFExp{foldedExp= (pos, node (foldedExp l) (foldedExp r)),
+                                          Nothing -> SynCFExp{folded= Replicated $
+                                                                      (pos, node (foldedExp' l) (foldedExp' r)),
                                                               foldedValue= Nothing}
    where foldValues :: AST.Value l l f f -> AST.Value l l f f -> Maybe (AST.Value l l f f)
          foldValues (AST.Real l')    (AST.Real r')    = Just (AST.Real $ op l' r')
@@ -438,9 +447,9 @@ foldBinaryInteger :: forall λ l f. (f ~ Placed, Abstract.Value l ~ AST.Value l,
                      -> (forall n. Integral n => n -> n -> n)
                      -> SynCFExp λ l -> SynCFExp λ l -> SynCFExp λ l
 foldBinaryInteger pos node op l r = case join (foldValues <$> foldedValue l <*> foldedValue r)
-                                    of Just v -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, v)),
+                                    of Just v -> SynCFExp{folded= Replicated (pos, Abstract.literal (pos, v)),
                                                           foldedValue= Just v}
-                                       Nothing -> SynCFExp{foldedExp= (pos, node (foldedExp l) (foldedExp r)),
+                                       Nothing -> SynCFExp{folded= Replicated (pos, node (foldedExp' l) (foldedExp' r)),
                                                            foldedValue= Nothing}
    where foldValues :: AST.Value l l f f -> AST.Value l l f f -> Maybe (AST.Value l l f f)
          foldValues (AST.Integer l') (AST.Integer r') = Just (AST.Integer $ op l' r')
@@ -452,9 +461,9 @@ foldBinaryBoolean :: forall λ l f. (f ~ Placed, Abstract.Value l ~ AST.Value l,
                   -> (Bool -> Bool -> Bool)
                   -> SynCFExp λ l -> SynCFExp λ l -> SynCFExp λ l
 foldBinaryBoolean pos node op l r = case join (foldValues <$> foldedValue l <*> foldedValue r)
-                                    of Just v -> SynCFExp{foldedExp= (pos, Abstract.literal (pos, v)),
+                                    of Just v -> SynCFExp{folded= Replicated (pos, Abstract.literal (pos, v)),
                                                           foldedValue= Just v}
-                                       Nothing -> SynCFExp{foldedExp= (pos, node (foldedExp l) (foldedExp r)),
+                                       Nothing -> SynCFExp{folded= Replicated (pos, node (foldedExp' l) (foldedExp' r)),
                                                            foldedValue= Nothing}
    where foldValues :: AST.Value l l f f -> AST.Value l l f f -> Maybe (AST.Value l l f f)
          foldValues (AST.Boolean l') (AST.Boolean r') = Just (AST.Boolean $ op l' r')
@@ -471,42 +480,37 @@ instance {-# overlaps #-} (Abstract.CoWirthy l, Abstract.Nameable l, Abstract.Ob
                            ~ SynCFDesignator l) =>
                           Synthesizer (Auto ConstantFold) (AST.Designator l l) Sem Placed where
    synthesis _ (pos, AST.Variable q) inheritance _ =
-      SynCFDesignator{folded= (pos, AST.Variable q),
+      SynCFDesignator{folded= Replicated (pos, AST.Variable q),
                       designatorValue= join (Map.lookup q $ env inheritance)}
 --                                         >>= Abstract.coExpression :: Maybe (AST.Expression l l Placed Placed)))}
    synthesis _ (pos, AST.Field _record fieldName) _ (AST.Field record _fieldName) =
-      SynCFDesignator{folded= (pos, AST.Field (folded (syn record :: SynCFDesignator l)) fieldName),
+      SynCFDesignator{folded= Replicated (pos,
+                                          AST.Field (getReplicated
+                                                     $ folded (syn record :: SynCFDesignator l)) fieldName),
                       designatorValue= Nothing}
    synthesis _ (pos, AST.Index{}) _ (AST.Index array index indexes) =
-      SynCFDesignator{folded= (pos, AST.Index (folded (syn array :: SynCFDesignator l))
-                                              (foldedExp . syn $ index) (foldedExp . syn <$> indexes)),
+      SynCFDesignator{folded= Replicated (pos, AST.Index (getReplicated $ folded (syn array :: SynCFDesignator l))
+                                                         (getReplicated $ foldedExp $ syn index)
+                                                         (getReplicated . foldedExp . syn <$> indexes)),
                       designatorValue= Nothing}
    synthesis _ (pos, AST.TypeGuard _designator q) _ (AST.TypeGuard designator _q) =
-      SynCFDesignator{folded= (pos, AST.TypeGuard (folded (syn designator :: SynCFDesignator l)) q),
+      SynCFDesignator{folded= Replicated (pos,
+                                          AST.TypeGuard (getReplicated $ folded (syn designator :: SynCFDesignator l))
+                                                        q),
                       designatorValue= Nothing}
    synthesis _ (pos, _) _ (AST.Dereference pointer) =
-      SynCFDesignator{folded= (pos, AST.Dereference $ folded (syn pointer :: SynCFDesignator l)),
+      SynCFDesignator{folded= Replicated (pos,
+                                          AST.Dereference $ getReplicated $ folded (syn pointer :: SynCFDesignator l)),
                       designatorValue= Nothing}
 
--- * More boring Transformation.Functor instances, TH candidates
-instance Ord (Abstract.QualIdent l) => Transformation.At (Auto ConstantFold) (Modules l Sem Sem) where
+instance {-# overlaps #-} Ord (Abstract.QualIdent l) => Transformation.At (Auto ConstantFold) (Modules l Sem Sem) where
    ($) = AG.applyDefault snd
 
--- * Shortcuts
+--- * Shortcut
 
 instance Full.Functor (Auto ConstantFold) (AST.Value l l) where
    Auto ConstantFold <$> (pos, val) = Rank2.Arrow sem
-     where sem _inherited = Synthesized (SynCF (pos, val))
-
-instance Full.Functor (ConstantFoldSyn l) (AST.Declaration l l) where
-  ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance
-                                                :: SynCFMod' l (AST.Declaration l l))
-
-instance Abstract.Expression l l ~ AST.Expression l l => Full.Functor (ConstantFoldSyn l) (AST.Expression l l) where
-  ConstantFoldSyn inheritance <$> sem = foldedExp (syn $ Rank2.apply sem $ Inherited inheritance)
-
-instance Abstract.Designator l l ~ AST.Designator l l => Full.Functor (ConstantFoldSyn l) (AST.Designator l l) where
-  ConstantFoldSyn inheritance <$> sem = folded (syn $ Rank2.apply sem $ Inherited inheritance :: SynCFDesignator l)
+      where sem _inherited = Synthesized (SynCF $ Replicated (pos, val))
 
 -- * Unsafe Rank2 AST instances
 
@@ -539,48 +543,8 @@ $(do let sem = [t|Semantics (Auto ConstantFold)|]
                                Transformation.At (Auto ConstantFold) ($g l l $sem $sem)
                          where ($) = AG.applyDefault snd |]
      mconcat <$> mapM (inst . conT)
-        [''AST.Module, ''AST.Block, ''AST.Declaration, ''AST.Expression, ''AST.Designator])
-
-instance Full.Functor (ConstantFoldSyn l) (AST.Type l l) where
-  ConstantFoldSyn inheritance <$> sem =
-     folded (syn $ Rank2.apply sem $ Inherited inheritance :: SynCF' (AST.Type l l))
-instance Full.Functor (ConstantFoldSyn l) (AST.FieldList l l) where
-  ConstantFoldSyn inheritance <$> sem =
-     folded (syn $ Rank2.apply sem $ Inherited inheritance :: SynCF' (AST.FieldList l l))
-instance Full.Functor (ConstantFoldSyn l) (AST.FormalParameters l l) where
-  ConstantFoldSyn inheritance <$> sem =
-     folded (syn $ Rank2.apply sem $ Inherited inheritance :: SynCF' (AST.FormalParameters l l))
-instance Full.Functor (ConstantFoldSyn l) (AST.FPSection l l) where
-  ConstantFoldSyn inheritance <$> sem =
-     folded (syn $ Rank2.apply sem $ Inherited inheritance :: SynCF' (AST.FPSection l l))
-instance Full.Functor (ConstantFoldSyn l) (AST.StatementSequence l l) where
-  ConstantFoldSyn inheritance <$> sem =
-     folded (syn $ Rank2.apply sem $ Inherited inheritance :: SynCF' (AST.StatementSequence l l))
-instance Full.Functor (ConstantFoldSyn l) (AST.Statement l l) where
-  ConstantFoldSyn inheritance <$> sem =
-     folded (syn $ Rank2.apply sem $ Inherited inheritance :: SynCF' (AST.Statement l l))
-instance Full.Functor (ConstantFoldSyn l) (AST.Case l l) where
-  ConstantFoldSyn inheritance <$> sem =
-     folded (syn $ Rank2.apply sem $ Inherited inheritance :: SynCF' (AST.Case l l))
-instance Full.Functor (ConstantFoldSyn l) (AST.CaseLabels l l) where
-  ConstantFoldSyn inheritance <$> sem =
-     folded (syn $ Rank2.apply sem $ Inherited inheritance :: SynCF' (AST.CaseLabels l l))
-instance Full.Functor (ConstantFoldSyn l) (AST.ConditionalBranch l l) where
-  ConstantFoldSyn inheritance <$> sem =
-     folded (syn $ Rank2.apply sem $ Inherited inheritance :: SynCF' (AST.ConditionalBranch l l))
-instance Full.Functor (ConstantFoldSyn l) (AST.WithAlternative l l) where
-  ConstantFoldSyn inheritance <$> sem =
-     folded (syn $ Rank2.apply sem $ Inherited inheritance :: SynCF' (AST.WithAlternative l l))
-
-$(do let sem = [t|Semantics (Auto ConstantFold)|]
-     let inst g = [d| instance Deep.Functor (ConstantFoldSyn l) ($g l l) =>
-                               Transformation.At (Auto ConstantFold) ($g l l $sem $sem)
-                         where (Auto ConstantFold) $ (pos, t) = Rank2.Arrow sem
-                                  where sem inherited =
-                                           Synthesized (SynCF (pos, ConstantFoldSyn (inh inherited) Deep.<$> t)) |]
-     mconcat <$> mapM (inst . conT)
-        [''AST.Type, ''AST.FieldList,
+        [''AST.Module, ''AST.Block, ''AST.Declaration, ''AST.Type, ''AST.FieldList,
          ''AST.ProcedureHeading, ''AST.FormalParameters, ''AST.FPSection,
          ''AST.StatementSequence, ''AST.Statement,
          ''AST.Case, ''AST.CaseLabels, ''AST.ConditionalBranch, ''AST.WithAlternative,
-         ''AST.Element])
+         ''AST.Element, ''AST.Expression, ''AST.Designator])
