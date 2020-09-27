@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveGeneric, DuplicateRecordFields, FlexibleContexts, FlexibleInstances,
              MultiParamTypeClasses, OverloadedStrings, RankNTypes, ScopedTypeVariables,
-             TemplateHaskell, TypeApplications, TypeFamilies, UndecidableInstances #-}
+             TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
 module Language.Oberon.ConstantFolder where
 
@@ -150,9 +150,13 @@ type SynCF' node = SynCF (node Placed Placed)
 type SynCFMod' l node = SynCFMod l (node Placed Placed)
 
 
--- Disambiguation
+-- * Disambiguation
+
+folded' :: SynCF' node -> Mapped Placed (node Placed Placed)
 foldedExp  :: SynCFExp λ l -> Mapped Placed (Abstract.Expression λ l Placed Placed)
 foldedExp' :: SynCFExp λ l -> Placed (Abstract.Expression λ l Placed Placed)
+
+folded' = folded
 foldedExp = folded
 foldedExp' = getMapped . foldedExp
 
@@ -205,25 +209,19 @@ instance {-# overlaps #-} (Abstract.Nameable l, Ord (Abstract.QualIdent l),
             val = foldedValue (syn expression)
    synthesis _ (pos, AST.TypeDeclaration namedef _) _ (AST.TypeDeclaration _ definition) =
       SynCFMod{moduleEnv= mempty,
-               folded = Mapped (pos, AST.TypeDeclaration namedef
-                                     $ getMapped $ folded (syn definition :: SynCF' (Abstract.Type l l)))}
+               folded = Mapped (pos, AST.TypeDeclaration namedef $ getMapped $ folded' $ syn definition)}
    synthesis _ (pos, AST.VariableDeclaration names _declaredType) _
              (AST.VariableDeclaration _names declaredType) =
       SynCFMod{moduleEnv= mempty,
-               folded= Mapped (pos, AST.VariableDeclaration names
-                                    $ getMapped $ folded (syn declaredType :: SynCF' (Abstract.Type l l)))}
+               folded= Mapped (pos, AST.VariableDeclaration names $ getMapped $ folded' $ syn declaredType)}
    synthesis _ (pos, _) _ (AST.ProcedureDeclaration heading body) =
       SynCFMod{moduleEnv= mempty,
-               folded= Mapped (pos, AST.ProcedureDeclaration
-                                       (getMapped $ folded (syn heading :: SynCF' (Abstract.ProcedureHeading l l)))
+               folded= Mapped (pos, AST.ProcedureDeclaration (getMapped $ folded' $ syn heading)
                                        (getMapped $ folded (syn body :: SynCFMod' l (Abstract.Block l l))))}
    synthesis _ (pos, AST.ForwardDeclaration namedef _signature) _
              (AST.ForwardDeclaration _namedef signature) =
       SynCFMod{moduleEnv= mempty,
-               folded= Mapped (pos, AST.ForwardDeclaration namedef $ getMapped . foldedSignature . syn <$> signature)}
-      where foldedSignature :: SynCF' (Abstract.FormalParameters l l)
-                            -> Mapped Placed (Abstract.FormalParameters l l Placed Placed)
-            foldedSignature = folded
+               folded= Mapped (pos, AST.ForwardDeclaration namedef $ getMapped . folded' . syn <$> signature)}
 
 instance {-# overlaps #-} (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
                            Atts (Synthesized (Auto ConstantFold)) (Abstract.Declaration l l Sem Sem)
@@ -234,13 +232,10 @@ instance {-# overlaps #-} (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract
    synthesis _ (pos, AST.Block _decls _stats) inheritance (AST.Block decls stats) =
       SynCFMod{moduleEnv= Map.unions (moduleEnv . syn <$> decls),
                folded= Mapped (pos, AST.Block (getMapped . foldedDeclaration . syn <$> decls)
-                                              (getMapped . foldedStatements . syn <$> stats))}
+                                              (getMapped . folded' . syn <$> stats))}
       where foldedDeclaration :: SynCFMod' l (Abstract.Declaration l l)
                               -> Mapped Placed (Abstract.Declaration l l Placed Placed)
             foldedDeclaration = folded
-            foldedStatements :: SynCF' (Abstract.StatementSequence l l)
-                             -> Mapped Placed (Abstract.StatementSequence l l Placed Placed)
-            foldedStatements = folded
 
 instance {-# overlaps #-} (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
                            Abstract.Value l ~ AST.Value l, InhCF l ~ InhCF λ,
@@ -322,10 +317,8 @@ instance {-# overlaps #-} (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract
       SynCFExp{folded= Mapped (pos, Abstract.is (foldedExp' $ syn left) right),
                foldedValue= Nothing}
    synthesis _ (pos, _) _ (AST.Set elements) =
-      SynCFExp{folded= Mapped (pos, Abstract.set (getMapped . foldedElement . syn <$> getZipList elements)),
+      SynCFExp{folded= Mapped (pos, Abstract.set (getMapped . folded' . syn <$> getZipList elements)),
                foldedValue= Nothing}
-      where foldedElement :: SynCF' (Abstract.Element l l) -> Mapped Placed (Abstract.Element l l Placed Placed)
-            foldedElement = folded
    synthesis _ (pos, _) _ (AST.Read des) =
       case syn des :: SynCFDesignator l
       of SynCFDesignator{folded= Mapped (pos', _),
@@ -383,8 +376,8 @@ instance {-# overlaps #-} (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract
       where literalSynthesis value = SynCFExp{folded= Mapped (pos, Abstract.literal (pos, value)),
                                               foldedValue= Just value}
    synthesis _ (pos, _) _ (AST.Literal val) =
-      SynCFExp{folded= Mapped (pos, Abstract.literal $ getMapped $ folded (syn val :: SynCF' (AST.Value l l))),
-               foldedValue= Just (snd $ getMapped $ folded (syn val :: SynCF' (AST.Value l l)))}
+      SynCFExp{folded= Mapped (pos, Abstract.literal $ getMapped $ folded' $ syn val),
+               foldedValue= Just (snd $ getMapped $ folded' $ syn val)}
 
 maxInteger, minInteger, maxInt32, minInt32, maxSet, minSet :: Integer
 maxInteger = toInteger (maxBound :: Int)
