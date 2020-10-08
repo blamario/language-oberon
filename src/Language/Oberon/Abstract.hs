@@ -111,12 +111,12 @@ class Wirthy l where
    nonQualIdent :: Ident -> QualIdent l
 
 class CoWirthy l where
-   coDeclaration :: (Wirthy (l' :: *), Traversable f, Traversable f') => Declaration l l'' f' f -> Maybe (Declaration l' l'' f' f)
-   coType        :: (Wirthy (l' :: *), Traversable f, Traversable f') => Type l l'' f' f        -> Maybe (Type l' l'' f' f)
-   coStatement   :: (Wirthy (l' :: *), Traversable f, Traversable f') => Statement l l'' f' f   -> Maybe (Statement l' l'' f' f)
-   coExpression  :: (Wirthy (l' :: *), Traversable f, Traversable f') => Expression l l'' f' f  -> Maybe (Expression l' l'' f' f)
-   coDesignator  :: (Wirthy (l' :: *), Traversable f, Traversable f') => Designator l l'' f' f  -> Maybe (Designator l' l'' f' f)
-   coValue       :: (Wirthy (l' :: *), Traversable f, Traversable f') => Value l l'' f' f  -> Maybe (Value l' l'' f' f)
+   coDeclaration :: Wirthy (l' :: *) => Declaration l l'' f' f -> Maybe (Declaration l' l'' f' f)
+   coType        :: Wirthy (l' :: *) => Type l l'' f' f        -> Maybe (Type l' l'' f' f)
+   coStatement   :: Wirthy (l' :: *) => Statement l l'' f' f   -> Maybe (Statement l' l'' f' f)
+   coExpression  :: Wirthy (l' :: *) => Expression l l'' f' f  -> Maybe (Expression l' l'' f' f)
+   coDesignator  :: Wirthy (l' :: *) => Designator l l'' f' f  -> Maybe (Designator l' l'' f' f)
+   coValue       :: Wirthy (l' :: *) => Value l l'' f' f  -> Maybe (Value l' l'' f' f)
 
 class Wirthy l => Nameable l where
    getProcedureName :: Nameable l' => ProcedureHeading l l' f' f -> Ident
