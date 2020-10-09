@@ -125,63 +125,64 @@ instance Abstract.Wirthy Language where
    nonQualIdent = NonQualIdent
 
 instance Abstract.CoWirthy Language where
-   coDeclaration (ConstantDeclaration name value) = Just (Abstract.constantDeclaration name value)
-   coDeclaration (TypeDeclaration name ty) = Just (Abstract.typeDeclaration name ty)
-   coDeclaration (VariableDeclaration name ty) = Just (Abstract.variableDeclaration name ty)
---   coDeclaration (ProcedureDeclaration name ty) = Abstract.procedureDeclaration <$> Abstract.coIdentDef name <*> traverse Abstract.coType ty
-   coDeclaration (ProcedureDeclaration name ty) = Nothing
-   coDeclaration ForwardDeclaration{} = Nothing
+   type TargetClass Language = Abstract.Oberon2
+   coDeclaration (ConstantDeclaration name value) = Abstract.constantDeclaration name value
+   coDeclaration (TypeDeclaration name ty) = Abstract.typeDeclaration name ty
+   coDeclaration (VariableDeclaration name ty) = Abstract.variableDeclaration name ty
+   coDeclaration (ProcedureDeclaration heading body) = Abstract.procedureDeclaration heading body
+   coDeclaration (ForwardDeclaration name params) = Abstract.forwardDeclaration name params
    
---   coType (TypeReference q) = Just (Abstract.typeReference q)
---   coType (ProcedureType params) = Just (Abstract.procedureType params)
-   coType (PointerType destination) = Just (Abstract.pointerType destination)
-   coType _ = Nothing
+   coType (TypeReference q) = Abstract.typeReference q
+   coType (ProcedureType params) = Abstract.procedureType params
+   coType (PointerType destination) = Abstract.pointerType destination
+   coType (ArrayType dimensions itemType) = Abstract.arrayType (getZipList dimensions) itemType
+   coType (RecordType baseType fields) = Abstract.recordType baseType (getZipList fields)
    
-   coStatement EmptyStatement = Just Abstract.emptyStatement
-   coStatement (Assignment destination expression) = Just (Abstract.assignment destination expression)
-   coStatement (ProcedureCall procedure parameters) = Just (Abstract.procedureCall procedure $ getZipList <$> parameters)
-   coStatement (If branch elsifs fallback) = Just (Abstract.ifStatement (branch :| getZipList elsifs) fallback)
---   coStatement (CaseStatement scrutinee cases fallback) = Just (Abstract.caseStatement scrutinee cases fallback)
-   coStatement (CaseStatement scrutinee cases fallback) = Nothing
-   coStatement (While condition body) = Just (Abstract.whileStatement condition body)
-   coStatement (Repeat body condition) = Just (Abstract.repeatStatement body condition)
-   coStatement (For _index _from _to _by _body) = Nothing
-   coStatement (Loop body) = Just (Abstract.loopStatement body)
-   coStatement (With _alternative _alternatives _fallback) = Nothing
-   coStatement Exit = Just Abstract.exitStatement
-   coStatement (Return result) = Just (Abstract.returnStatement result)
+   coStatement EmptyStatement = Abstract.emptyStatement
+   coStatement (Assignment destination expression) = Abstract.assignment destination expression
+   coStatement (ProcedureCall procedure parameters) = Abstract.procedureCall procedure $ getZipList <$> parameters
+   coStatement (If branch elsifs fallback) = Abstract.ifStatement (branch :| getZipList elsifs) fallback
+   coStatement (CaseStatement scrutinee cases fallback) = Abstract.caseStatement scrutinee (getZipList cases) fallback
+   coStatement (While condition body) = Abstract.whileStatement condition body
+   coStatement (Repeat body condition) = Abstract.repeatStatement body condition
+   coStatement (For index from to by body) = Abstract.forStatement index from to by body
+   coStatement (Loop body) = Abstract.loopStatement body
+   coStatement (With alternative alternatives fallback) =
+      Abstract.variantWithStatement (alternative :| getZipList alternatives) fallback
+   coStatement Exit = Abstract.exitStatement
+   coStatement (Return result) = Abstract.returnStatement result
    
-   coExpression (Relation op left right) = Just (Abstract.relation op left right)
-   coExpression (IsA _left _right) = Nothing
-   coExpression (Positive e) = Just (Abstract.positive e)
-   coExpression (Negative e) = Just (Abstract.negative e)
-   coExpression (Add left right) = Just (Abstract.add left right)
-   coExpression (Subtract left right) = Just (Abstract.subtract left right)
-   coExpression (Or left right) = Just (Abstract.or left right)
-   coExpression (Multiply left right) = Just (Abstract.multiply left right)
-   coExpression (Divide left right) = Just (Abstract.divide left right)
-   coExpression (IntegerDivide left right) = Just (Abstract.integerDivide left right)
-   coExpression (Modulo left right) = Just (Abstract.modulo left right)
-   coExpression (And left right) = Just (Abstract.and left right)
-   coExpression (Set _elements) = Nothing
-   coExpression (Read var) = Just (Abstract.read var)
-   coExpression (FunctionCall function parameters) = Just (Abstract.functionCall function $ getZipList parameters)
-   coExpression (Not e) = Just (Abstract.not e)
+   coExpression (Relation op left right) = Abstract.relation op left right
+   coExpression (IsA scrutinee typeName) = Abstract.is scrutinee typeName
+   coExpression (Positive e) = Abstract.positive e
+   coExpression (Negative e) = Abstract.negative e
+   coExpression (Add left right) = Abstract.add left right
+   coExpression (Subtract left right) = Abstract.subtract left right
+   coExpression (Or left right) = Abstract.or left right
+   coExpression (Multiply left right) = Abstract.multiply left right
+   coExpression (Divide left right) = Abstract.divide left right
+   coExpression (IntegerDivide left right) = Abstract.integerDivide left right
+   coExpression (Modulo left right) = Abstract.modulo left right
+   coExpression (And left right) = Abstract.and left right
+   coExpression (Set elements) = Abstract.set (getZipList elements)
+   coExpression (Read var) = Abstract.read var
+   coExpression (FunctionCall function parameters) = Abstract.functionCall function $ getZipList parameters
+   coExpression (Not e) = Abstract.not e
 
-   coValue Nil = Just Abstract.nil
-   coValue (Boolean False) = Just Abstract.false
-   coValue (Boolean True) = Just Abstract.true
-   coValue (Builtin name) = Just (Abstract.builtin name)
-   coValue (Integer n) = Just (Abstract.integer n)
-   coValue (Real r) = Just (Abstract.real r)
-   coValue (String s) = Just (Abstract.string s)
-   coValue (CharCode c) = Just (Abstract.charCode c)
+   coValue Nil = Abstract.nil
+   coValue (Boolean False) = Abstract.false
+   coValue (Boolean True) = Abstract.true
+   coValue (Builtin name) = Abstract.builtin name
+   coValue (Integer n) = Abstract.integer n
+   coValue (Real r) = Abstract.real r
+   coValue (String s) = Abstract.string s
+   coValue (CharCode c) = Abstract.charCode c
    
-   coDesignator (Variable q) = Just (Abstract.variable q)
-   coDesignator (Field record name) = Just (Abstract.field record name)
-   coDesignator (Index array index indexes) = Just (Abstract.index array (index :| getZipList indexes))
-   coDesignator (TypeGuard _scrutinee _typeName) = Nothing
-   coDesignator (Dereference pointer) = Just (Abstract.dereference pointer)
+   coDesignator (Variable q) = Abstract.variable q
+   coDesignator (Field record name) = Abstract.field record name
+   coDesignator (Index array index indexes) = Abstract.index array (index :| getZipList indexes)
+   coDesignator (TypeGuard scrutinee typeName) = Abstract.typeGuard scrutinee typeName
+   coDesignator (Dereference pointer) = Abstract.dereference pointer
 
 instance Abstract.Nameable Language where
    getProcedureName (ProcedureHeading _ iddef _) = Abstract.getIdentDefName iddef

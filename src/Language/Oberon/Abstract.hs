@@ -6,6 +6,7 @@
 module Language.Oberon.Abstract where
 
 import Data.Data (Data)
+import Data.Kind (Constraint)
 import Data.List.NonEmpty
 import Data.Text (Text)
 
@@ -111,12 +112,14 @@ class Wirthy l where
    nonQualIdent :: Ident -> QualIdent l
 
 class CoWirthy l where
-   coDeclaration :: Wirthy (l' :: *) => Declaration l l'' f' f -> Maybe (Declaration l' l'' f' f)
-   coType        :: Wirthy (l' :: *) => Type l l'' f' f        -> Maybe (Type l' l'' f' f)
-   coStatement   :: Wirthy (l' :: *) => Statement l l'' f' f   -> Maybe (Statement l' l'' f' f)
-   coExpression  :: Wirthy (l' :: *) => Expression l l'' f' f  -> Maybe (Expression l' l'' f' f)
-   coDesignator  :: Wirthy (l' :: *) => Designator l l'' f' f  -> Maybe (Designator l' l'' f' f)
-   coValue       :: Wirthy (l' :: *) => Value l l'' f' f  -> Maybe (Value l' l'' f' f)
+   type TargetClass l :: * -> Constraint
+   type TargetClass l = Wirthy
+   coDeclaration :: TargetClass l l' => Declaration l l'' f' f -> Declaration l' l'' f' f
+   coType        :: TargetClass l l' => Type l l'' f' f        -> Type l' l'' f' f
+   coStatement   :: TargetClass l l' => Statement l l'' f' f   -> Statement l' l'' f' f
+   coExpression  :: TargetClass l l' => Expression l l'' f' f  -> Expression l' l'' f' f
+   coDesignator  :: TargetClass l l' => Designator l l'' f' f  -> Designator l' l'' f' f
+   coValue       :: TargetClass l l' => Value l l'' f' f       -> Value l' l'' f' f
 
 class Wirthy l => Nameable l where
    getProcedureName :: Nameable l' => ProcedureHeading l l' f' f -> Ident
