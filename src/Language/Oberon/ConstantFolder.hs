@@ -27,8 +27,7 @@ import qualified Transformation.Full.TH
 import qualified Transformation.Shallow as Shallow
 import qualified Transformation.AG as AG
 import Transformation.AG (Attribution(..), Atts, Inherited(..), Synthesized(..), Semantics)
-import Transformation.AG.Generics (Auto(Auto), Bequether(..), Synthesizer(..), SynthesizedField(..),
-                                   Revelation(..), Mapped(..))
+import Transformation.AG.Generics (Auto(Auto), Bequether(..), Synthesizer(..), SynthesizedField(..), Mapped(..))
 
 import qualified Language.Oberon.Abstract as Abstract
 import qualified Language.Oberon.AST as AST
@@ -64,9 +63,6 @@ type Sem = Semantics (Auto ConstantFold)
 instance Transformation.Transformation (Auto ConstantFold) where
    type Domain (Auto ConstantFold) = Placed
    type Codomain (Auto ConstantFold) = Semantics (Auto ConstantFold)
-
-instance Revelation (Auto ConstantFold) where
-  reveal = const snd
 
 data InhCFRoot l = InhCFRoot{rootEnv :: Environment l} deriving Generic
 

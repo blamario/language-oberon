@@ -983,9 +983,6 @@ instance Transformation.Transformation (Auto TypeCheck) where
    type Domain (Auto TypeCheck) = Placed
    type Codomain (Auto TypeCheck) = Semantics (Auto TypeCheck)
 
-instance AG.Revelation (Auto TypeCheck) where
-  reveal = const snd
-
 instance Ord (Abstract.QualIdent l) => Transformation.At (Auto TypeCheck) (Modules l Sem Sem) where
    ($) = AG.applyDefault snd
 
