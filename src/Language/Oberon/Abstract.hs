@@ -9,7 +9,10 @@ module Language.Oberon.Abstract (-- * Language classes
                                  -- * Type synonyms
                                  Ident, IdentList, BaseType, ReturnType, ConstExpression,
                                  -- * Auxiliary data types
-                                 RelOp(..), WirthySubsetOf(..), Maybe3(..)) where
+                                 RelOp(..), WirthySubsetOf(..), Maybe3(..),
+                                 -- * Utilities
+                                 just3, nothing3, maybe3, 
+                                 ) where
 
 import Data.Data (Data)
 import Data.Kind (Constraint)
@@ -134,6 +137,7 @@ data WirthySubsetOf l = WirthySubsetOf l
 newtype Maybe3 f a b c = Maybe3 (Maybe (f a b c)) deriving (Eq, Ord, Read, Show)
 
 just3 = Maybe3 . Just
+maybe3 n f (Maybe3 x) = maybe n f x
 nothing3 = Maybe3 Nothing
 
 instance Wirthy l => Wirthy (WirthySubsetOf l) where
