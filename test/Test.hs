@@ -22,6 +22,11 @@ import Language.Oberon.Pretty ()
 import qualified Language.Oberon.Resolver as Resolver
 import qualified Language.Oberon.TypeChecker as TypeChecker
 
+import qualified Language.Oberon.AST as AST
+import qualified Language.Oberon.Grammar as Grammar
+import qualified Language.Oberon.Reserializer as Reserializer
+import qualified Transformation.Deep as Deep
+
 import Prelude hiding (readFile)
 
 main = exampleTree "" "examples" >>= defaultMain . testGroup "Oberon"

@@ -306,6 +306,22 @@ instance (Abstract.Oberon l, Abstract.Nameable l, k ~ Abstract.QualIdent l, Ord 
                           (Map.lookup q exportedEnv)
             exportNominal' t = t
 
+instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
+          Atts (Inherited (Auto TypeCheck)) (Abstract.Declaration l l Sem Sem) ~ InhTCDecl l,
+          Atts (Inherited (Auto TypeCheck)) (Abstract.Type l l Sem Sem) ~ InhTC l,
+          Atts (Inherited (Auto TypeCheck)) (Abstract.ProcedureHeading l l Sem Sem) ~ InhTCDecl l,
+          Atts (Inherited (Auto TypeCheck)) (Abstract.Block l l Sem Sem) ~ InhTC l,
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.ProcedureHeading l l Sem Sem) ~ SynTCHead l,
+          Atts (Inherited (Auto TypeCheck)) (Abstract.FormalParameters l l Sem Sem) ~ InhTC l,
+          Atts (Inherited (Auto TypeCheck)) (Abstract.ConstExpression l l Sem Sem) ~ InhTC l,
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.Declaration l l Sem Sem) ~ SynTCMod l) =>
+         Bequether (Auto TypeCheck) (AST.Declaration l l) Sem Placed where
+   bequest _ (pos, AST.ProcedureDeclaration{})
+           inheritance@InhTCDecl{env= declEnv, currentModule= m} (AST.ProcedureDeclaration heading body) =
+      AST.ProcedureDeclaration (Inherited inheritance) (Inherited bodyInherited)
+      where bodyInherited = InhTC{env= insideEnv (syn heading) `Map.union` declEnv, currentModule= m}
+   bequest t local inheritance synthesized = AG.bequestDefault t local inheritance synthesized
+
 instance (Abstract.Nameable l, k ~ Abstract.QualIdent l, Ord k,
           Atts (Synthesized (Auto TypeCheck)) (Abstract.Declaration l l Sem Sem) ~ SynTCMod l,
           Atts (Synthesized (Auto TypeCheck)) (Abstract.Type l l Sem Sem) ~ SynTCType l,
@@ -333,6 +349,20 @@ instance (Abstract.Nameable l, k ~ Abstract.QualIdent l, Ord k,
       outsideEnv (syn heading)
    synthesizedField _ _ (pos, AST.ForwardDeclaration namedef _sig) _ (AST.ForwardDeclaration _namedef sig) =
       foldMap (Map.singleton (Abstract.nonQualIdent $ Abstract.getIdentDefName namedef) . signatureType . syn) sig
+
+instance (Abstract.Nameable l, k ~ Abstract.QualIdent l, Ord k,
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.Declaration l l Sem Sem) ~ SynTCMod l,
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.Type l l Sem Sem) ~ SynTCType l,
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.FormalParameters l l Sem Sem) ~ SynTCSig l,
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.ProcedureHeading l l Sem Sem) ~ SynTCHead l,
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.Block l l Sem Sem) ~ SynTCMod l,
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.ConstExpression l l Sem Sem) ~ SynTCExp l) =>
+         SynthesizedField "pointerTargets" (Folded (Map AST.Ident AST.Ident)) (Auto TypeCheck)
+                                           (AST.Declaration l l) Sem Placed where
+   synthesizedField _ _ (pos, AST.TypeDeclaration namedef _) _ (AST.TypeDeclaration _ definition) =
+      foldMap (Folded . Map.singleton name) (pointerTarget $ syn definition)
+      where name = Abstract.getIdentDefName namedef
+   synthesizedField _ _ _ _ _ = mempty
 
 instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Synthesized (Auto TypeCheck)) (Abstract.FormalParameters l l Sem Sem) ~ SynTCSig l) =>
