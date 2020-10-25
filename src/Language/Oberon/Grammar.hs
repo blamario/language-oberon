@@ -1,4 +1,4 @@
-{-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances,
+{-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving,
              OverloadedStrings, Rank2Types, RecordWildCards, ScopedTypeVariables,
              TypeApplications, TypeFamilies, TypeSynonymInstances, TemplateHaskell #-}
 
@@ -120,7 +120,7 @@ data TokenType = Delimiter | Keyword | Operator | Other
 type NodeWrap = Compose ((,) Position) (Compose Ambiguous ((,) ParsedLexemes))
 
 newtype ParsedLexemes = Trailing [Lexeme]
-                      deriving (Data, Show)
+                      deriving (Data, Show, Semigroup, Monoid)
 
 instance TokenParsing (Parser (OberonGrammar l f) Text) where
    someSpace = someLexicalSpace

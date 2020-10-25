@@ -177,9 +177,9 @@ instance {-# overlaps #-} Ord (Abstract.QualIdent l) =>
 instance {-# overlaps #-} (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
                            Atts (Synthesized (Auto ConstantFold)) (Abstract.Block l l Sem Sem) ~ SynCFMod' l (Abstract.Block l l)) =>
                           Synthesizer (Auto ConstantFold) (AST.Module l l) Sem Placed where
-   synthesis _ (_, AST.Module moduleName imports _body) inheritance (AST.Module _ _ body) =
+   synthesis _ (pos, AST.Module moduleName imports _body) inheritance (AST.Module _ _ body) =
       SynCFMod{moduleEnv= exportedEnv,
-               folded= Mapped ((0, Trailing []),
+               folded= Mapped (pos,
                                AST.Module moduleName imports $ getMapped
                                $ folded (syn body :: SynCFMod' l (Abstract.Block l l)))}
       where exportedEnv = Map.mapKeysMonotonic export newEnv
@@ -188,18 +188,28 @@ instance {-# overlaps #-} (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract
                | Just name <- Abstract.getNonQualIdentName q = Abstract.qualIdent moduleName name
                | otherwise = q
 
-instance (Abstract.Nameable l, k ~ Abstract.QualIdent l, v ~ Abstract.Value l l Placed Placed, Ord k,
-          Atts (Synthesized (Auto ConstantFold)) (Abstract.ConstExpression l l Sem Sem) ~ SynCFExp l l) =>
-         SynthesizedField "moduleEnv" (Map k (Maybe v)) (Auto ConstantFold) (AST.Declaration l l) Sem Placed where
-   synthesizedField _ _ (pos, AST.ConstantDeclaration namedef _) _ (AST.ConstantDeclaration _ expression) =
-      Map.singleton (Abstract.nonQualIdent $ Abstract.getIdentDefName namedef) (foldedValue $ syn expression)
-   synthesizedField _ _ _ _ _ = mempty
+instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.Declaration l l Sem Sem) ~ SynCFMod' l (Abstract.Declaration l l),
+          Atts (Inherited (Auto ConstantFold)) (Abstract.StatementSequence l l Sem Sem) ~ InhCF l,
+          Atts (Inherited (Auto ConstantFold)) (Abstract.Declaration l l Sem Sem) ~ InhCF l) =>
+         Bequether (Auto ConstantFold) (AST.Block l l) Sem Placed where
+   bequest _ (pos, AST.Block _decls _stats) inheritance (AST.Block decls stats) =
+      AST.Block (pure $ Inherited localEnv) (pure $ Inherited localEnv)
+      where newEnv = Map.unions (moduleEnv . syn <$> decls)
+            localEnv = InhCF (newEnv `Map.union` env inheritance) (currentModule inheritance)
 
 instance (Abstract.Nameable l, k ~ Abstract.QualIdent l, v ~ Abstract.Value l l Placed Placed, Ord k,
           Atts (Synthesized (Auto ConstantFold)) (Abstract.Declaration l l Sem Sem)
           ~ SynCFMod' l (Abstract.Declaration l l)) =>
          SynthesizedField "moduleEnv" (Map k (Maybe v)) (Auto ConstantFold) (AST.Block l l) Sem Placed where
-   synthesizedField _ _ (pos, AST.Block{}) _ (AST.Block decls _stats) = Map.unions (moduleEnv . syn <$> decls)
+   synthesizedField _ _ (_, AST.Block{}) _ (AST.Block decls _stats) = Map.unions (moduleEnv . syn <$> decls)
+
+instance (Abstract.Nameable l, k ~ Abstract.QualIdent l, v ~ Abstract.Value l l Placed Placed, Ord k,
+          Atts (Synthesized (Auto ConstantFold)) (Abstract.ConstExpression l l Sem Sem) ~ SynCFExp l l) =>
+         SynthesizedField "moduleEnv" (Map k (Maybe v)) (Auto ConstantFold) (AST.Declaration l l) Sem Placed where
+   synthesizedField _ _ (_, AST.ConstantDeclaration namedef _) _ (AST.ConstantDeclaration _ expression) =
+      Map.singleton (Abstract.nonQualIdent $ Abstract.getIdentDefName namedef) (foldedValue $ syn expression)
+   synthesizedField _ _ _ _ _ = mempty
 
 instance {-# overlaps #-}
    (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
