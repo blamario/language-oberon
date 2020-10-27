@@ -66,7 +66,7 @@ data ErrorType l = ArgumentCountMismatch Int Int
                  | UnknownName (Abstract.QualIdent l)
                  | UnknownField AST.Ident (Type l)
 
-type Error l = (AST.Ident, (Int, ParsedLexemes), ErrorType l)
+type Error l = (AST.Ident, (Int, ParsedLexemes, Int), ErrorType l)
 
 instance Eq (Abstract.QualIdent l) => Eq (Type l) where
   NominalType q1 (Just t1) == t2@(NominalType q2 _) = q1 == q2 || t1 == t2
@@ -858,7 +858,7 @@ binaryBooleanSynthesis inheritance pos left right =
             inferredType= BuiltinType "BOOLEAN"}
 
 unaryNumericOrSetOperatorErrors :: forall l. Abstract.Nameable l =>
-                                   InhTC l -> (Int, ParsedLexemes) -> SynTCExp l -> Folded [Error l]
+                                   InhTC l -> (Int, ParsedLexemes, Int) -> SynTCExp l -> Folded [Error l]
 unaryNumericOrSetOperatorErrors _ _ SynTCExp{errors= Folded [], inferredType= IntegerType{}} = mempty
 unaryNumericOrSetOperatorErrors _ _ SynTCExp{errors= Folded [],
                                              inferredType= BuiltinType name}
@@ -873,7 +873,7 @@ unaryNumericOrSetOperatorType f SynTCExp{inferredType= IntegerType x} = IntegerT
 unaryNumericOrSetOperatorType _ SynTCExp{inferredType= t} = t
 
 binarySetOrNumericOperatorErrors :: forall l. (Abstract.Nameable l, Eq (Abstract.QualIdent l))
-                                 => InhTC l -> (Int, ParsedLexemes) -> SynTCExp l -> SynTCExp l -> Folded [Error l]
+                                 => InhTC l -> (Int, ParsedLexemes, Int) -> SynTCExp l -> SynTCExp l -> Folded [Error l]
 binarySetOrNumericOperatorErrors _ _
   SynTCExp{errors= Folded [], inferredType= BuiltinType name1}
   SynTCExp{errors= Folded [], inferredType= BuiltinType name2}
@@ -906,11 +906,11 @@ binaryNumericOperatorType SynTCExp{inferredType= t1} SynTCExp{inferredType= t2}
   | otherwise = t1
 
 binaryIntegerOperatorErrors :: Abstract.Nameable l =>
-                               InhTC l -> (Int, ParsedLexemes) ->  SynTCExp l -> SynTCExp l -> Folded [Error l]
+                               InhTC l -> (Int, ParsedLexemes, Int) ->  SynTCExp l -> SynTCExp l -> Folded [Error l]
 binaryIntegerOperatorErrors inheritance pos syn1 syn2 = integerExpressionErrors inheritance pos syn1 
                                                       <> integerExpressionErrors inheritance pos syn2
 
-integerExpressionErrors :: forall l. InhTC l -> (Int, ParsedLexemes) -> SynTCExp l -> Folded [Error l]
+integerExpressionErrors :: forall l. InhTC l -> (Int, ParsedLexemes, Int) -> SynTCExp l -> Folded [Error l]
 integerExpressionErrors inheritance pos SynTCExp{errors= Folded [], inferredType= t}
   | isIntegerType t = mempty
   | otherwise = Folded [(currentModule (inheritance :: InhTC l), pos, NonIntegerType t)]
@@ -922,7 +922,7 @@ isIntegerType (BuiltinType "INTEGER") = True
 isIntegerType (BuiltinType "LONGINT") = True
 isIntegerType t = False
 
-booleanExpressionErrors :: forall l. InhTC l -> (Int, ParsedLexemes) -> SynTCExp l -> Folded [Error l]
+booleanExpressionErrors :: forall l. InhTC l -> (Int, ParsedLexemes, Int) -> SynTCExp l -> Folded [Error l]
 booleanExpressionErrors _ _ SynTCExp{errors= Folded [],
                                      inferredType= BuiltinType "BOOLEAN"} = mempty
 booleanExpressionErrors inheritance pos SynTCExp{errors= Folded [], inferredType= t} = 
@@ -930,7 +930,7 @@ booleanExpressionErrors inheritance pos SynTCExp{errors= Folded [], inferredType
 booleanExpressionErrors _ _ SynTCExp{errors= errs} = errs
 
 binaryBooleanOperatorErrors :: forall l. (Abstract.Nameable l, Eq (Abstract.QualIdent l))
-                            => InhTC l -> (Int, ParsedLexemes) -> SynTCExp l -> SynTCExp l -> Folded [Error l]
+                            => InhTC l -> (Int, ParsedLexemes, Int) -> SynTCExp l -> SynTCExp l -> Folded [Error l]
 binaryBooleanOperatorErrors _inh _pos
   SynTCExp{errors= Folded [], inferredType= BuiltinType "BOOLEAN"}
   SynTCExp{errors= Folded [], inferredType= BuiltinType "BOOLEAN"} = mempty
@@ -942,7 +942,7 @@ binaryBooleanOperatorErrors inheritance pos
 binaryBooleanOperatorErrors _ _ SynTCExp{errors= errs1} SynTCExp{errors= errs2} = errs1 <> errs2
 
 parameterCompatible :: forall l. (Abstract.Nameable l, Eq (Abstract.QualIdent l))
-                    => InhTC l -> (Int, ParsedLexemes) -> (Bool, Type l) -> Type l -> Folded [Error l]
+                    => InhTC l -> (Int, ParsedLexemes, Int) -> (Bool, Type l) -> Type l -> Folded [Error l]
 parameterCompatible _ _ (_, expected@(ArrayType [] _)) actual
   | arrayCompatible expected actual = mempty
 parameterCompatible inheritance pos (True, expected) actual
@@ -953,12 +953,12 @@ parameterCompatible inheritance pos (False, expected) actual
   | otherwise = assignmentCompatible (currentModule (inheritance :: InhTC l)) pos expected actual
 
 assignmentCompatibleIn :: forall l. (Abstract.Nameable l, Eq (Abstract.QualIdent l))
-                       => InhTCExp l -> (Int, ParsedLexemes) -> Type l -> Folded [Error l]
+                       => InhTCExp l -> (Int, ParsedLexemes, Int) -> Type l -> Folded [Error l]
 assignmentCompatibleIn inheritance pos =
   assignmentCompatible (currentModule (inheritance :: InhTCExp l)) pos (expectedType (inheritance :: InhTCExp l))
 
 assignmentCompatible :: forall l. (Abstract.Nameable l, Eq (Abstract.QualIdent l))
-                     => AST.Ident -> (Int, ParsedLexemes) -> Type l -> Type l -> Folded [Error l]
+                     => AST.Ident -> (Int, ParsedLexemes, Int) -> Type l -> Type l -> Folded [Error l]
 assignmentCompatible currModule pos expected actual
    | expected == actual = mempty
    | BuiltinType name1 <- expected, BuiltinType name2 <- actual,
@@ -1022,7 +1022,7 @@ instance Rank2.Apply (AST.Module l l f') where
    AST.Module name1 imports1 body1 <*> ~(AST.Module name2 imports2 body2) =
       AST.Module name1 imports1 (Rank2.apply body1 body2)
 
-type Placed = (,) (Int, ParsedLexemes)
+type Placed = (,) (Int, ParsedLexemes, Int)
 
 checkModules :: forall l. (Abstract.Oberon l, Abstract.Nameable l,
                            Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
@@ -1034,7 +1034,7 @@ checkModules predef modules =
    getFolded (errors (syn (Transformation.apply (Auto TypeCheck) (wrap $ Auto TypeCheck Deep.<$> Modules modules)
                            `Rank2.apply`
                            Inherited (InhTCRoot predef)) :: SynTC l))
-   where wrap = (,) (0, Trailing [])
+   where wrap = (,) (0, Trailing [], 0)
 
 predefined, predefined2 :: (Abstract.Wirthy l, Ord (Abstract.QualIdent l)) => Environment l
 -- | The set of 'Predefined' types and procedures defined in the Oberon Language Report.

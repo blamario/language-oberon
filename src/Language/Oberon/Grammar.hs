@@ -3,7 +3,9 @@
              TypeApplications, TypeFamilies, TypeSynonymInstances, TemplateHaskell #-}
 
 -- | Oberon grammar adapted from http://www.ethoberon.ethz.ch/EBNF.html
--- Extracted from the book Programmieren in Oberon - Das neue Pascal by N. Wirth and M. Reiser and translated by J. Templ.
+-- 
+-- Extracted from the book Programmieren in Oberon - Das neue Pascal by N. Wirth and M. Reiser and translated by
+-- J. Templ.
 
 module Language.Oberon.Grammar (OberonGrammar(..), Parser, NodeWrap, ParsedLexemes(..), Lexeme(..),
                                 oberonGrammar, oberon2Grammar, oberonDefinitionGrammar, oberon2DefinitionGrammar) where
@@ -117,7 +119,7 @@ data Lexeme = WhiteSpace{lexemeText :: Text}
 data TokenType = Delimiter | Keyword | Operator | Other
                deriving (Data, Eq, Show)
 
-type NodeWrap = Compose ((,) Position) (Compose Ambiguous ((,) ParsedLexemes))
+type NodeWrap = Compose ((,) (Position, Position)) (Compose Ambiguous ((,) ParsedLexemes))
 
 newtype ParsedLexemes = Trailing [Lexeme]
                       deriving (Data, Show, Semigroup, Monoid)
@@ -158,8 +160,10 @@ clearConsumed = tmap clear
 
 wrapAmbiguous, wrap :: Parser g Text a -> Parser g Text (NodeWrap a)
 wrapAmbiguous = wrap
-wrap = (Compose <$>) . ((,) <$> getSourcePos <*>) . (Compose <$>) . (ambiguous . tmap store) . ((,) (Trailing []) <$>)
+wrap = (Compose <$>) . (\p-> liftA3 surround getSourcePos p getSourcePos)
+         . (Compose <$>) . (ambiguous . tmap store) . ((,) (Trailing []) <$>)
    where store (wss, (Trailing [], a)) = (mempty, (Trailing (concat wss), a))
+         surround start val end = ((start, end), val)
 
 oberonGrammar, oberon2Grammar, oberonDefinitionGrammar, oberon2DefinitionGrammar
    :: Grammar (OberonGrammar AST.Language NodeWrap) Parser Text

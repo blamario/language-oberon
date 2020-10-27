@@ -151,7 +151,7 @@ main' Opts{..} =
                      >> succeed optsOutput (reportTypeErrorIn $ takeDirectory filename) Left (resolve . snd $ l !! optsIndex)
           Left err -> Text.putStrLn (failureDescription contents err 4)
 
-type NodeWrap = Compose ((,) Int) (Compose Ambiguous ((,) Grammar.ParsedLexemes))
+type NodeWrap = Compose ((,) (Int, Int)) (Compose Ambiguous ((,) Grammar.ParsedLexemes))
 
 succeed :: (Data a, Flattenable a, Pretty a, Show a)
         => Output -> (TypeChecker.Error Language -> IO ())
@@ -167,7 +167,7 @@ succeed out reportTypeError prepare x = either (reportFailure . prepare) showSuc
                           Tree -> putStrLn . reprTreeString
                           Plain -> print
 
-reportTypeErrorIn directory (moduleName, (pos, _), err) =
+reportTypeErrorIn directory (moduleName, (pos, _, _), err) =
    do contents <- readFile (combine directory $ addExtension (unpack moduleName) "Mod")
       putStrLn ("Type error: " ++ TypeChecker.errorMessage err)
       Text.putStrLn (Position.context contents (Position.fromStart pos) 4)

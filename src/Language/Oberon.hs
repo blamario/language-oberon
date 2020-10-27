@@ -31,8 +31,8 @@ import System.FilePath (FilePath, addExtension, combine, takeDirectory)
 
 import Prelude hiding (readFile)
 
-type NodeWrap = Compose ((,) Int) (Compose Ambiguous ((,) Grammar.ParsedLexemes))
-type Placed = (,) (Int, Grammar.ParsedLexemes)
+type NodeWrap = Compose ((,) (Int, Int)) (Compose Ambiguous ((,) Grammar.ParsedLexemes))
+type Placed = (,) (Int, Grammar.ParsedLexemes, Int)
 
 data LanguageVersion = Oberon1 | Oberon2 deriving (Eq, Ord, Show)
 
@@ -46,7 +46,7 @@ resolvePositions :: (p ~ Grammar.NodeWrap, q ~ NodeWrap, Deep.Functor (Rank2.Map
 resolvePositions src t = Rank2.Map (resolvePosition src) Full.<$> t
 
 resolvePosition :: Text -> Grammar.NodeWrap a -> NodeWrap a
-resolvePosition src = \(Compose (pos, a))-> Compose (Position.offset src pos, a)
+resolvePosition src = \(Compose ((start, end), a))-> Compose ((Position.offset src start, Position.offset src end), a)
 
 moduleGrammar Oberon1 = Grammar.oberonGrammar
 moduleGrammar Oberon2 = Grammar.oberon2Grammar 

@@ -48,9 +48,9 @@ foldConstants predef modules =
                                          (wrap (Auto ConstantFold Deep.<$> Modules modules))
                     `Rank2.apply`
                     Inherited (InhCFRoot predef)))
-   where wrap = (,) (0, Trailing [])
+   where wrap = (,) (0, Trailing [], 0)
 
-type Placed = (,) (Int, ParsedLexemes)
+type Placed = (,) (Int, ParsedLexemes, Int)
 
 type Environment l = Map (Abstract.QualIdent l) (Maybe (Abstract.Value l l Placed Placed))
 
@@ -375,7 +375,7 @@ minReal = encodeFloat (floatRadix x - 1) (fst (floatRange x))
    where x = 0 :: Double
 
 foldBinaryArithmetic :: forall λ l f. (f ~ Placed, Abstract.Value l ~ AST.Value l, Abstract.Wirthy λ) =>
-                        (Int, ParsedLexemes)
+                        (Int, ParsedLexemes, Int)
                      -> (f (Abstract.Expression λ l f f) -> f (Abstract.Expression λ l f f) -> Abstract.Expression λ l f f)
                      -> (forall n. Num n => n -> n -> n)
                      -> SynCFExp λ l -> SynCFExp λ l -> SynCFExp λ l
@@ -392,7 +392,7 @@ foldBinaryArithmetic pos node op l r = case join (foldValues <$> foldedValue l <
          foldValues _ _ = Nothing
 
 foldBinaryFractional :: forall λ l f. (f ~ Placed, Abstract.Value l ~ AST.Value l, Abstract.Wirthy λ) =>
-                        (Int, ParsedLexemes)
+                        (Int, ParsedLexemes, Int)
                      -> (f (Abstract.Expression λ l f f) -> f (Abstract.Expression λ l f f) -> Abstract.Expression λ l f f)
                      -> (forall n. Fractional n => n -> n -> n)
                      -> SynCFExp λ l -> SynCFExp λ l -> SynCFExp λ l
@@ -406,7 +406,7 @@ foldBinaryFractional pos node op l r = case join (foldValues <$> foldedValue l <
          foldValues _ _ = Nothing
 
 foldBinaryInteger :: forall λ l f. (f ~ Placed, Abstract.Value l ~ AST.Value l, Abstract.Wirthy λ) =>
-                        (Int, ParsedLexemes)
+                        (Int, ParsedLexemes, Int)
                      -> (f (Abstract.Expression λ l f f) -> f (Abstract.Expression λ l f f) -> Abstract.Expression λ l f f)
                      -> (forall n. Integral n => n -> n -> n)
                      -> SynCFExp λ l -> SynCFExp λ l -> SynCFExp λ l
@@ -420,7 +420,7 @@ foldBinaryInteger pos node op l r = case join (foldValues <$> foldedValue l <*> 
          foldValues _ _ = Nothing
 
 foldBinaryBoolean :: forall λ l f. (f ~ Placed, Abstract.Value l ~ AST.Value l, Abstract.Wirthy λ) =>
-                     (Int, ParsedLexemes)
+                     (Int, ParsedLexemes, Int)
                   -> (f (Abstract.Expression λ l f f) -> f (Abstract.Expression λ l f f) -> Abstract.Expression λ l f f)
                   -> (Bool -> Bool -> Bool)
                   -> SynCFExp λ l -> SynCFExp λ l -> SynCFExp λ l

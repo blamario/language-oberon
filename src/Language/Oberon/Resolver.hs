@@ -73,8 +73,8 @@ deriving instance (Show (Abstract.QualIdent l),
                    Show (Expression l l NodeWrap NodeWrap), Show (Abstract.Expression l l NodeWrap NodeWrap),
                    Show (Designator l l NodeWrap NodeWrap)) => Show (Error l)
 
-type Placed = (,) (Int, ParsedLexemes)
-type NodeWrap = Compose ((,) Int) (Compose Ambiguous ((,) ParsedLexemes))
+type Placed = (,) (Int, ParsedLexemes, Int)
+type NodeWrap = Compose ((,) (Int, Int)) (Compose Ambiguous ((,) ParsedLexemes))
 
 type Scope l = Map Ident (Validation (NonEmpty (Error l)) (DeclarationRHS l Placed Placed))
 
@@ -107,9 +107,10 @@ instance {-# overlappable #-} Resolution l `Transformation.At` g NodeWrap NodeWr
    ($) = traverseResolveDefault
 
 instance {-# overlaps #-} Resolvable l => Resolution l `Transformation.At` Designator l l NodeWrap NodeWrap where
-   res $ Compose (pos, Compose (Ambiguous designators)) = Compose $ StateT $ \s@(scope, state)->
-      case partitionEithers (NonEmpty.toList (traverse (validationToEither . resolveDesignator res scope state) <$> designators))
-      of (_, [(ws, x)]) -> Success (((pos, ws), x), s)
+   res $ Compose ((start, end), Compose (Ambiguous designators)) = Compose $ StateT $ \s@(scope, state)->
+      case partitionEithers (NonEmpty.toList (traverse (validationToEither . resolveDesignator res scope state)
+                                              <$> designators))
+      of (_, [(ws, x)]) -> Success (((start, ws, end), x), s)
          (errors, []) -> Failure (sconcat $ NonEmpty.fromList errors)
          (_, multi) -> Failure (AmbiguousDesignator (snd <$> multi) :| [])
 
@@ -165,15 +166,15 @@ instance {-# overlaps #-}
     Resolution l `Transformation.At` Abstract.ProcedureHeading l l NodeWrap NodeWrap,
     Resolution l `Transformation.At` Abstract.Block l l NodeWrap NodeWrap) =>
    Resolution l `Transformation.At` Declaration l l NodeWrap NodeWrap where
-   res $ Compose (pos, Compose (Ambiguous ((ws, proc@(ProcedureDeclaration heading body)) :| []))) =
+   res $ Compose ((start, end), Compose (Ambiguous ((ws, proc@(ProcedureDeclaration heading body)) :| []))) =
       Compose $
       do s@(scope, state) <- get
          let Success (headingScope, _) = execStateT (getCompose $ res Transformation.$ heading) s
              Success (_, body') = evalStateT (getCompose $ res Transformation.$ body) s
              innerScope = localScope res "" (getLocalDeclarations body') (headingScope `Map.union` scope)
          put (innerScope, state)
-         return ((pos, ws), proc)
-   _ $ Compose (pos, Compose (Ambiguous ((ws, dec) :| []))) = Compose (pure ((pos, ws), dec))
+         return ((start, ws, end), proc)
+   _ $ Compose ((start, end), Compose (Ambiguous ((ws, dec) :| []))) = Compose (pure ((start, ws, end), dec))
    _ $ declarations = Compose (StateT $ const $ Failure $ pure $ AmbiguousDeclaration $ toList declarations)
 
 class CoFormalParameters l where
@@ -195,7 +196,7 @@ instance {-# overlaps #-}
     Deep.Traversable (Resolution l) (Abstract.FormalParameters l l),
     Deep.Traversable (Resolution l) (Abstract.ConstExpression l l)) =>
    Resolution l `Transformation.At` ProcedureHeading l l NodeWrap NodeWrap where
-   res $ Compose (pos, Compose (Ambiguous ((ws, proc@(ProcedureHeading _ _ parameters)) :| []))) =
+   res $ Compose ((start, end), Compose (Ambiguous ((ws, proc@(ProcedureHeading _ _ parameters)) :| []))) =
       Compose $ StateT $ \s@(scope, state)->
          let innerScope = parameterScope `Map.union` scope
              parameterScope = case parameters
@@ -204,20 +205,23 @@ instance {-# overlaps #-}
                                     -> Map.fromList (concatMap binding sections)
              binding (Compose (_, Compose (Ambiguous ((_, section) :| [])))) = evalFPSection section $ \ _ names types->
                 [(v, evalStateT (Deep.traverse res $ DeclaredVariable types) s) | v <- names]
-         in Success (((pos, ws), proc), (innerScope, state))
-   res $ Compose (pos, Compose (Ambiguous ((ws, proc@(TypeBoundHeading _var receiverName receiverType _ _ parameters)) :| []))) =
+         in Success (((start, ws, end), proc), (innerScope, state))
+   res $ Compose ((start, end),
+                  Compose (Ambiguous ((ws, proc@(TypeBoundHeading _var receiverName receiverType _ _ parameters))
+                                      :| []))) =
       Compose $ StateT $ \s@(scope, state)->
          let innerScope = parameterScope `Map.union` receiverBinding `Map.union` scope
              receiverBinding :: Map Ident (Validation e (DeclarationRHS l f' Placed))
-             receiverBinding = Map.singleton receiverName (Success $ DeclaredVariable $ (,) (pos, ws)
-                                                           $ Abstract.typeReference $ Abstract.nonQualIdent receiverType)
+             receiverBinding = Map.singleton receiverName (Success $ DeclaredVariable $ (,) (start, ws, end)
+                                                           $ Abstract.typeReference
+                                                           $ Abstract.nonQualIdent receiverType)
              parameterScope = case parameters
                               of Nothing -> mempty
                                  Just (Compose (_, Compose (Ambiguous ((ws, fp) :| [])))) | sections <- getFPSections fp
                                     -> Map.fromList (concatMap binding sections)
              binding (Compose (_, Compose (Ambiguous ((_, section) :| [])))) = evalFPSection section $ \ _ names types->
                 [(v, evalStateT (Deep.traverse res $ DeclaredVariable types) s) | v <- names]
-         in Success (((pos, ws), proc), (innerScope, state))
+         in Success (((start, ws, end), proc), (innerScope, state))
 
 instance {-# overlaps #-}
    (BindableDeclaration l,
@@ -228,8 +232,9 @@ instance {-# overlaps #-}
     Deep.Traversable (Resolution l) (Abstract.FormalParameters l l),
     Deep.Traversable (Resolution l) (Abstract.ConstExpression l l)) =>
    Resolution l `Transformation.At` Block l l NodeWrap NodeWrap where
-   res $ Compose (pos, Compose (Ambiguous ((ws, body@(Block (ZipList declarations) _statements)) :| []))) =
-     Compose $ StateT $ \(scope, state)-> Success (((pos, ws), body), (localScope res "" declarations scope, state))
+   res $ Compose ((start, end), Compose (Ambiguous ((ws, body@(Block (ZipList declarations) _statements)) :| []))) =
+     Compose $ StateT $ \(scope, state)-> Success (((start, ws, end), body),
+                                                   (localScope res "" declarations scope, state))
    _ $ _ = Compose (StateT $ const $ Failure $ pure AmbiguousParses)
 
 instance {-# overlaps #-}
@@ -248,8 +253,8 @@ instance {-# overlaps #-}
          <$> unique InvalidStatement (AmbiguousStatement . (fst <$>)) (resolveStatement <$> statements)
 
 traverseResolveDefault :: Resolution l -> NodeWrap (g (f :: * -> *) f) -> Compose (Resolved l) Placed (g f f)
-traverseResolveDefault Resolution{} (Compose (pos, Compose (Ambiguous ((ws, x) :| [])))) =
-   Compose (StateT $ \s-> Success (((pos, ws), x), s))
+traverseResolveDefault Resolution{} (Compose ((start, end), Compose (Ambiguous ((ws, x) :| [])))) =
+   Compose (StateT $ \s-> Success (((start, ws, end), x), s))
 traverseResolveDefault Resolution{} _ = Compose (StateT $ const $ Failure $ pure AmbiguousParses)
 
 class Resolvable l where
@@ -496,7 +501,7 @@ predefined2 = predefined <>
         wrap $ Abstract.fpSection False (pure "n") $ wrap $ Abstract.typeReference $ Abstract.nonQualIdent "ARRAY"]
       Nothing)])
 
-wrap = (,) (0, Trailing [])
+wrap = (,) (0, Trailing [], 0)
 
 exportsOfModule :: (BindableDeclaration l, CoFormalParameters l) => Module l l Placed Placed -> Scope l
 exportsOfModule = fmap Success . Map.mapMaybe isExported . globalsOfModule
@@ -510,10 +515,10 @@ globalsOfModule (Module name imports (_, body)) =
 
 unique :: (NonEmpty (Error l) -> Error l) -> ([a] -> Error l) -> NodeWrap (Validation (NonEmpty (Error l)) a)
        -> Validation (NonEmpty (Error l)) (Placed a)
-unique _ _ (Compose (pos, Compose (Ambiguous (x :| [])))) = first ((,) pos) <$> (sequenceA x)
-unique inv amb (Compose (pos, Compose (Ambiguous xs))) =
+unique _ _ (Compose ((start, end), Compose (Ambiguous (x :| [])))) = first (flip ((,,) start) end) <$> (sequenceA x)
+unique inv amb (Compose ((start, end), Compose (Ambiguous xs))) =
    case partitionEithers (traverse validationToEither <$> NonEmpty.toList xs)
-   of (_, [(ws, x)]) -> Success ((pos, ws), x)
+   of (_, [(ws, x)]) -> Success ((start, ws, end), x)
       (errors, []) -> Failure (inv (sconcat $ NonEmpty.fromList errors) :| [])
       (_, multi) -> Failure (amb (snd <$> multi) :| [])
 
