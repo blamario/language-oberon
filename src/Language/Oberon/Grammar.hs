@@ -7,7 +7,7 @@
 -- Extracted from the book Programmieren in Oberon - Das neue Pascal by N. Wirth and M. Reiser and translated by
 -- J. Templ.
 
-module Language.Oberon.Grammar (OberonGrammar(..), Parser, NodeWrap, ParsedLexemes(..), Lexeme(..),
+module Language.Oberon.Grammar (OberonGrammar(..), Parser, NodeWrap, ParsedLexemes(..), Lexeme(..), TokenType(..),
                                 oberonGrammar, oberon2Grammar, oberonDefinitionGrammar, oberon2DefinitionGrammar) where
 
 import Control.Applicative

@@ -6,6 +6,7 @@ module Language.Oberon (parseModule, parseAndResolveModule, parseAndResolveModul
 import Language.Oberon.AST (Language, Module(..))
 import qualified Language.Oberon.Grammar as Grammar
 import qualified Language.Oberon.Resolver as Resolver
+import qualified Language.Oberon.Reserializer as Reserializer
 import qualified Language.Oberon.ConstantFolder as ConstantFolder
 import qualified Language.Oberon.TypeChecker as TypeChecker
 
@@ -109,7 +110,8 @@ parseAndResolveModule Options{..} path source =
                 successful _ = Nothing
                 addLeft (Failure resolutionErrors) = Failure (Left resolutionErrors)
                 addLeft (Success result) = Success result
-                constantFolded = ConstantFolder.foldConstants
+                constantFolded = Reserializer.adjustPositions <$>
+                                 ConstantFolder.foldConstants
                                     (case version
                                      of Oberon1 -> ConstantFolder.predefined
                                         Oberon2 -> ConstantFolder.predefined2)

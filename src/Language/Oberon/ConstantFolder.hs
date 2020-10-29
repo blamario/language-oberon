@@ -18,9 +18,12 @@ import qualified Data.Text as Text
 import Foreign.Storable (sizeOf)
 import GHC.Generics (Generic)
 import Language.Haskell.TH (appT, conT, varT, varE, newName)
+import Data.Text.Prettyprint.Doc (layoutCompact, Pretty(pretty))
+import Data.Text.Prettyprint.Doc.Render.Text (renderStrict)
 
 import qualified Rank2
 import qualified Transformation
+import qualified Transformation.Rank2
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 import qualified Transformation.Full.TH
@@ -31,7 +34,8 @@ import Transformation.AG.Generics (Auto(Auto), Bequether(..), Synthesizer(..), S
 
 import qualified Language.Oberon.Abstract as Abstract
 import qualified Language.Oberon.AST as AST
-import Language.Oberon.Grammar (ParsedLexemes(Trailing))
+import qualified Language.Oberon.Pretty ()
+import Language.Oberon.Grammar (ParsedLexemes(Trailing), Lexeme(Token, lexemeType, lexemeText), TokenType(Other))
 
 foldConstants :: (Abstract.Oberon l, Abstract.Nameable l,
                   Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
@@ -214,14 +218,14 @@ instance (Abstract.Nameable l, k ~ Abstract.QualIdent l, v ~ Abstract.Value l l 
 instance {-# overlaps #-}
    (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
     Abstract.Value l ~ AST.Value l, InhCF l ~ InhCF λ,
+    Pretty (AST.Value λ λ Identity Identity),
     Atts (Synthesized (Auto ConstantFold)) (Abstract.Expression l l Sem Sem) ~ SynCFExp λ l,
     Atts (Synthesized (Auto ConstantFold)) (Abstract.Element l l Sem Sem) ~ SynCF' (Abstract.Element l l),
     Atts (Synthesized (Auto ConstantFold)) (Abstract.Designator l l Sem Sem) ~ SynCFDesignator l) =>
    Synthesizer (Auto ConstantFold) (AST.Expression λ l) Sem Placed where
    synthesis _ (pos, AST.Relation op _ _) _ (AST.Relation _op left right) =
       case join (compareValues <$> foldedValue (syn left) <*> foldedValue (syn right))
-      of Just value -> SynCFExp{folded= Mapped (pos, Abstract.literal (pos, value)),
-                                foldedValue= Just value}
+      of Just value -> literalSynthesis pos value
          Nothing -> SynCFExp{folded= Mapped (pos,
                                              Abstract.relation op (foldedExp' $ syn left) (foldedExp' $ syn right)),
                              foldedValue= Nothing}
@@ -250,18 +254,14 @@ instance {-# overlaps #-}
             relate Abstract.In _              = Nothing
    synthesis _ (pos, _) _ (AST.Positive expr) =
       case foldedValue (syn expr)
-      of Just (AST.Integer n) -> SynCFExp{folded= Mapped (pos, Abstract.literal (pos, AST.Integer n)),
-                                          foldedValue= Just (AST.Integer n)}
-         Just (AST.Real n) -> SynCFExp{folded= Mapped (pos, Abstract.literal (pos, AST.Real n)),
-                                       foldedValue= Just (AST.Real n)}
+      of Just (AST.Integer n) -> literalSynthesis pos (AST.Integer n)
+         Just (AST.Real n) -> literalSynthesis pos (AST.Real n)
          _ -> SynCFExp{folded= Mapped (pos, Abstract.positive $ foldedExp' $ syn expr),
                        foldedValue= Nothing}
    synthesis _ (pos, _) _ (AST.Negative expr) =
       case foldedValue (syn expr)
-      of Just (AST.Integer n) -> SynCFExp{folded= Mapped (pos, Abstract.literal (pos, AST.Integer $ negate n)),
-                                          foldedValue= Just (AST.Integer $ negate n)}
-         Just (AST.Real n) -> SynCFExp{folded= Mapped (pos, Abstract.literal (pos, AST.Real $ negate n)),
-                                       foldedValue= Just (AST.Real $ negate n)}
+      of Just (AST.Integer n) -> literalSynthesis pos (AST.Integer $ negate n)
+         Just (AST.Real n) -> literalSynthesis pos (AST.Real $ negate n)
          _ -> SynCFExp{folded= Mapped (pos, Abstract.negative $ foldedExp' $ syn expr),
                        foldedValue= Nothing}
    synthesis _ (pos, _) _ (AST.Add left right) =
@@ -282,10 +282,8 @@ instance {-# overlaps #-}
       foldBinaryBoolean pos Abstract.and (&&) (syn left) (syn right)
    synthesis _ (pos, _) _ (AST.Not expr) =
       case foldedValue (syn expr)
-      of Just (AST.Boolean True) -> SynCFExp{folded= Mapped (pos, Abstract.literal (pos, Abstract.false)),
-                                             foldedValue= Just Abstract.false}
-         Just (AST.Boolean False) -> SynCFExp{folded= Mapped (pos, Abstract.literal (pos, Abstract.true)),
-                                              foldedValue= Just Abstract.true}
+      of Just (AST.Boolean True) -> literalSynthesis pos Abstract.false
+         Just (AST.Boolean False) -> literalSynthesis pos Abstract.true
          _ -> SynCFExp{folded= Mapped (pos, Abstract.not $ foldedExp' $ syn expr),
                        foldedValue= Nothing}
    synthesis _ (pos, AST.IsA _ right) _ (AST.IsA left _) =
@@ -296,63 +294,70 @@ instance {-# overlaps #-}
                foldedValue= Nothing}
    synthesis _ (pos, _) _ (AST.Read des) =
       case syn des :: SynCFDesignator l
-      of SynCFDesignator{folded= Mapped (pos', _),
-                         designatorValue= Just val} -> SynCFExp{folded= Mapped (pos, Abstract.literal (pos', val)),
-                                                                foldedValue= Just val}
+      of SynCFDesignator{designatorValue= Just val} -> literalSynthesis pos val
          SynCFDesignator{folded= Mapped (pos', des'),
                          designatorValue= Nothing} -> SynCFExp{folded= Mapped (pos, Abstract.read (pos', des')),
                                                                foldedValue= Nothing}
    synthesis _ (pos, _) _ (AST.FunctionCall fn args) =
       case (designatorValue (syn fn :: SynCFDesignator l), foldedValue . syn <$> getZipList args)
       of (Just (AST.Builtin "CAP"), [Just (AST.String s)])
-            | Text.length s == 1, capital <- Text.toUpper s -> literalSynthesis (Abstract.string capital)
+            | Text.length s == 1, capital <- Text.toUpper s -> fromValue (Abstract.string capital)
          (Just (AST.Builtin "CAP"), [Just (AST.CharCode c)])
-            | capital <- ord (toUpper $ chr c) -> literalSynthesis (Abstract.charCode capital)
-         (Just (AST.Builtin "CHR"), [Just (AST.Integer code)]) -> literalSynthesis (Abstract.charCode $ fromIntegral code)
+            | capital <- ord (toUpper $ chr c) -> fromValue (Abstract.charCode capital)
+         (Just (AST.Builtin "CHR"), [Just (AST.Integer code)]) -> fromValue (Abstract.charCode $ fromIntegral code)
          (Just (AST.Builtin "ORD"), [Just (AST.String s)])
-            | Text.length s == 1, code <- ord (Text.head s) -> literalSynthesis (Abstract.integer $ toInteger code)
-         (Just (AST.Builtin "ORD"), [Just (AST.CharCode code)]) -> literalSynthesis (Abstract.integer $ toInteger code)
-         (Just (AST.Builtin "ABS"), [Just (AST.Integer i)]) -> literalSynthesis (Abstract.integer $ abs i)
-         (Just (AST.Builtin "ABS"), [Just (AST.Real r)]) -> literalSynthesis (Abstract.real $ abs r)
+            | Text.length s == 1, code <- ord (Text.head s) -> fromValue (Abstract.integer $ toInteger code)
+         (Just (AST.Builtin "ORD"), [Just (AST.CharCode code)]) -> fromValue (Abstract.integer $ toInteger code)
+         (Just (AST.Builtin "ABS"), [Just (AST.Integer i)]) -> fromValue (Abstract.integer $ abs i)
+         (Just (AST.Builtin "ABS"), [Just (AST.Real r)]) -> fromValue (Abstract.real $ abs r)
          (Just (AST.Builtin "ASH"), [Just (AST.Integer i), Just (AST.Integer j)])
-            | shifted <- shift i (fromIntegral j) -> literalSynthesis (Abstract.integer shifted)
-         (Just (AST.Builtin "ENTIER"), [Just (AST.Real x)]) -> literalSynthesis (Abstract.integer $ ceiling x)
-         (Just (AST.Builtin "LEN"), [Just (AST.String s)]) -> literalSynthesis (Abstract.integer $ toInteger $ Text.length s)
-         (Just (AST.Builtin "LONG"), [Just (AST.Integer x)]) -> literalSynthesis (Abstract.integer x)
-         (Just (AST.Builtin "LONG"), [Just (AST.Real x)]) -> literalSynthesis (Abstract.real x)
-         (Just (AST.Builtin "SHORT"), [Just (AST.Integer x)]) -> literalSynthesis (Abstract.integer x)
-         (Just (AST.Builtin "SHORT"), [Just (AST.Real x)]) -> literalSynthesis (Abstract.real x)
+            | shifted <- shift i (fromIntegral j) -> fromValue (Abstract.integer shifted)
+         (Just (AST.Builtin "ENTIER"), [Just (AST.Real x)]) -> fromValue (Abstract.integer $ ceiling x)
+         (Just (AST.Builtin "LEN"), [Just (AST.String s)]) -> fromValue (Abstract.integer $ toInteger $ Text.length s)
+         (Just (AST.Builtin "LONG"), [Just (AST.Integer x)]) -> fromValue (Abstract.integer x)
+         (Just (AST.Builtin "LONG"), [Just (AST.Real x)]) -> fromValue (Abstract.real x)
+         (Just (AST.Builtin "SHORT"), [Just (AST.Integer x)]) -> fromValue (Abstract.integer x)
+         (Just (AST.Builtin "SHORT"), [Just (AST.Real x)]) -> fromValue (Abstract.real x)
          (Just (AST.Builtin "ODD"), [Just (AST.Integer x)]) ->
-            literalSynthesis (if x `mod` 2 == 1 then Abstract.true else Abstract.false)
-         (Just (AST.Builtin "SIZE"), [Just (AST.Builtin "INTEGER")]) -> literalSynthesis (Abstract.integer intSize)
-         (Just (AST.Builtin "SIZE"), [Just (AST.Builtin "LONGINT")]) -> literalSynthesis (Abstract.integer intSize)
-         (Just (AST.Builtin "SIZE"), [Just (AST.Builtin "SHORTINT")]) -> literalSynthesis (Abstract.integer int32Size)
-         (Just (AST.Builtin "SIZE"), [Just (AST.Builtin "REAL")]) -> literalSynthesis (Abstract.integer doubleSize)
-         (Just (AST.Builtin "SIZE"), [Just (AST.Builtin "LONGREAL")]) -> literalSynthesis (Abstract.integer doubleSize)
-         (Just (AST.Builtin "SIZE"), [Just (AST.Builtin "SHORTREAL")]) -> literalSynthesis (Abstract.integer floatSize)
-         (Just (AST.Builtin "MAX"), [Just (AST.Builtin "CHAR")]) -> literalSynthesis (Abstract.charCode 0xff)
-         (Just (AST.Builtin "MAX"), [Just (AST.Builtin "INTEGER")]) -> literalSynthesis (Abstract.integer maxInteger)
-         (Just (AST.Builtin "MAX"), [Just (AST.Builtin "LONGINT")]) -> literalSynthesis (Abstract.integer maxInteger)
-         (Just (AST.Builtin "MAX"), [Just (AST.Builtin "SHORTINT")]) -> literalSynthesis (Abstract.integer maxInt32)
-         (Just (AST.Builtin "MAX"), [Just (AST.Builtin "SET")]) -> literalSynthesis (Abstract.integer maxSet)
-         (Just (AST.Builtin "MAX"), [Just (AST.Builtin "REAL")]) -> literalSynthesis (Abstract.real maxReal)
-         (Just (AST.Builtin "MAX"), [Just (AST.Builtin "LONGREAL")]) -> literalSynthesis (Abstract.real maxReal)
-         (Just (AST.Builtin "MIN"), [Just (AST.Builtin "CHAR")]) -> literalSynthesis (Abstract.charCode 0)
-         (Just (AST.Builtin "MIN"), [Just (AST.Builtin "INTEGER")]) -> literalSynthesis (Abstract.integer minInteger)
-         (Just (AST.Builtin "MIN"), [Just (AST.Builtin "LONGINT")]) -> literalSynthesis (Abstract.integer minInteger)
-         (Just (AST.Builtin "MIN"), [Just (AST.Builtin "SHORTINT")]) -> literalSynthesis (Abstract.integer minInt32)
-         (Just (AST.Builtin "MIN"), [Just (AST.Builtin "SET")]) -> literalSynthesis (Abstract.integer minSet)
-         (Just (AST.Builtin "MIN"), [Just (AST.Builtin "REAL")]) -> literalSynthesis (Abstract.real minReal)
-         (Just (AST.Builtin "MIN"), [Just (AST.Builtin "LONGREAL")]) -> literalSynthesis (Abstract.real minReal)
+            fromValue (if x `mod` 2 == 1 then Abstract.true else Abstract.false)
+         (Just (AST.Builtin "SIZE"), [Just (AST.Builtin "INTEGER")]) -> fromValue (Abstract.integer intSize)
+         (Just (AST.Builtin "SIZE"), [Just (AST.Builtin "LONGINT")]) -> fromValue (Abstract.integer intSize)
+         (Just (AST.Builtin "SIZE"), [Just (AST.Builtin "SHORTINT")]) -> fromValue (Abstract.integer int32Size)
+         (Just (AST.Builtin "SIZE"), [Just (AST.Builtin "REAL")]) -> fromValue (Abstract.integer doubleSize)
+         (Just (AST.Builtin "SIZE"), [Just (AST.Builtin "LONGREAL")]) -> fromValue (Abstract.integer doubleSize)
+         (Just (AST.Builtin "SIZE"), [Just (AST.Builtin "SHORTREAL")]) -> fromValue (Abstract.integer floatSize)
+         (Just (AST.Builtin "MAX"), [Just (AST.Builtin "CHAR")]) -> fromValue (Abstract.charCode 0xff)
+         (Just (AST.Builtin "MAX"), [Just (AST.Builtin "INTEGER")]) -> fromValue (Abstract.integer maxInteger)
+         (Just (AST.Builtin "MAX"), [Just (AST.Builtin "LONGINT")]) -> fromValue (Abstract.integer maxInteger)
+         (Just (AST.Builtin "MAX"), [Just (AST.Builtin "SHORTINT")]) -> fromValue (Abstract.integer maxInt32)
+         (Just (AST.Builtin "MAX"), [Just (AST.Builtin "SET")]) -> fromValue (Abstract.integer maxSet)
+         (Just (AST.Builtin "MAX"), [Just (AST.Builtin "REAL")]) -> fromValue (Abstract.real maxReal)
+         (Just (AST.Builtin "MAX"), [Just (AST.Builtin "LONGREAL")]) -> fromValue (Abstract.real maxReal)
+         (Just (AST.Builtin "MIN"), [Just (AST.Builtin "CHAR")]) -> fromValue (Abstract.charCode 0)
+         (Just (AST.Builtin "MIN"), [Just (AST.Builtin "INTEGER")]) -> fromValue (Abstract.integer minInteger)
+         (Just (AST.Builtin "MIN"), [Just (AST.Builtin "LONGINT")]) -> fromValue (Abstract.integer minInteger)
+         (Just (AST.Builtin "MIN"), [Just (AST.Builtin "SHORTINT")]) -> fromValue (Abstract.integer minInt32)
+         (Just (AST.Builtin "MIN"), [Just (AST.Builtin "SET")]) -> fromValue (Abstract.integer minSet)
+         (Just (AST.Builtin "MIN"), [Just (AST.Builtin "REAL")]) -> fromValue (Abstract.real minReal)
+         (Just (AST.Builtin "MIN"), [Just (AST.Builtin "LONGREAL")]) -> fromValue (Abstract.real minReal)
          _ -> SynCFExp{folded= Mapped (pos,
                                        Abstract.functionCall (getMapped $ folded (syn fn :: SynCFDesignator l))
                                                              (foldedExp' . syn <$> getZipList args)),
                        foldedValue= Nothing}
-      where literalSynthesis value = SynCFExp{folded= Mapped (pos, Abstract.literal (pos, value)),
-                                              foldedValue= Just value}
+      where fromValue = literalSynthesis pos
    synthesis _ (pos, _) _ (AST.Literal val) =
       SynCFExp{folded= Mapped (pos, Abstract.literal $ getMapped $ folded' $ syn val),
                foldedValue= Just (snd $ getMapped $ folded' $ syn val)}
+
+literalSynthesis :: (Abstract.Wirthy λ, Deep.Functor (Transformation.Rank2.Map Placed Identity) (Abstract.Value l l),
+                     Pretty (Abstract.Value l l Identity Identity)) =>
+                    (Int, ParsedLexemes, Int) -> Abstract.Value l l Placed Placed -> SynCFExp λ l
+literalSynthesis (start, _, end) value = SynCFExp{folded= Mapped ((start, mempty, end),
+                                                                  Abstract.literal ((start, lexemes, end), value)),
+                                                  foldedValue= Just value}
+   where lexemes = Trailing [Token{lexemeType= Other,
+                                   lexemeText= renderStrict $ layoutCompact $ pretty
+                                               $ (Identity . snd) Transformation.Rank2.<$> value}]
 
 maxInteger, minInteger, maxInt32, minInt32, maxSet, minSet :: Integer
 maxInteger = toInteger (maxBound :: Int)
@@ -380,8 +385,7 @@ foldBinaryArithmetic :: forall λ l f. (f ~ Placed, Abstract.Value l ~ AST.Value
                      -> (forall n. Num n => n -> n -> n)
                      -> SynCFExp λ l -> SynCFExp λ l -> SynCFExp λ l
 foldBinaryArithmetic pos node op l r = case join (foldValues <$> foldedValue l <*> foldedValue r)
-                                       of Just v -> SynCFExp{folded= Mapped (pos, Abstract.literal (pos, v)),
-                                                             foldedValue= Just v}
+                                       of Just v -> literalSynthesis pos v
                                           Nothing -> SynCFExp{folded= Mapped (pos, node (foldedExp' l) (foldedExp' r)),
                                                               foldedValue= Nothing}
    where foldValues :: AST.Value l l f f -> AST.Value l l f f -> Maybe (AST.Value l l f f)
@@ -397,8 +401,7 @@ foldBinaryFractional :: forall λ l f. (f ~ Placed, Abstract.Value l ~ AST.Value
                      -> (forall n. Fractional n => n -> n -> n)
                      -> SynCFExp λ l -> SynCFExp λ l -> SynCFExp λ l
 foldBinaryFractional pos node op l r = case join (foldValues <$> foldedValue l <*> foldedValue r)
-                                       of Just v -> SynCFExp{folded= Mapped (pos, Abstract.literal (pos, v)),
-                                                             foldedValue= Just v}
+                                       of Just v -> literalSynthesis pos v
                                           Nothing -> SynCFExp{folded= Mapped (pos, node (foldedExp' l) (foldedExp' r)),
                                                               foldedValue= Nothing}
    where foldValues :: AST.Value l l f f -> AST.Value l l f f -> Maybe (AST.Value l l f f)
@@ -411,8 +414,7 @@ foldBinaryInteger :: forall λ l f. (f ~ Placed, Abstract.Value l ~ AST.Value l,
                      -> (forall n. Integral n => n -> n -> n)
                      -> SynCFExp λ l -> SynCFExp λ l -> SynCFExp λ l
 foldBinaryInteger pos node op l r = case join (foldValues <$> foldedValue l <*> foldedValue r)
-                                    of Just v -> SynCFExp{folded= Mapped (pos, Abstract.literal (pos, v)),
-                                                          foldedValue= Just v}
+                                    of Just v -> literalSynthesis pos v
                                        Nothing -> SynCFExp{folded= Mapped (pos, node (foldedExp' l) (foldedExp' r)),
                                                            foldedValue= Nothing}
    where foldValues :: AST.Value l l f f -> AST.Value l l f f -> Maybe (AST.Value l l f f)
@@ -425,8 +427,7 @@ foldBinaryBoolean :: forall λ l f. (f ~ Placed, Abstract.Value l ~ AST.Value l,
                   -> (Bool -> Bool -> Bool)
                   -> SynCFExp λ l -> SynCFExp λ l -> SynCFExp λ l
 foldBinaryBoolean pos node op l r = case join (foldValues <$> foldedValue l <*> foldedValue r)
-                                    of Just v -> SynCFExp{folded= Mapped (pos, Abstract.literal (pos, v)),
-                                                          foldedValue= Just v}
+                                    of Just v -> literalSynthesis pos v
                                        Nothing -> SynCFExp{folded= Mapped (pos, node (foldedExp' l) (foldedExp' r)),
                                                            foldedValue= Nothing}
    where foldValues :: AST.Value l l f f -> AST.Value l l f f -> Maybe (AST.Value l l f f)
