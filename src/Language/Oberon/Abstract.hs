@@ -2,7 +2,7 @@
              TypeApplications, TypeFamilies, TypeFamilyDependencies, UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 
--- | Oberon Finally Tagless Abstract Syntax Tree definitions
+-- | Finally Tagless Abstract Syntax Tree definitions for the programming language Oberon
 
 module Language.Oberon.Abstract (-- * Language classes
                                  Wirthy(..), CoWirthy(..), Oberon(..), Oberon2(..), Nameable(..),
@@ -23,9 +23,13 @@ import Prelude hiding (and, not, or, read, subtract)
 
 type Ident = Text
 
+-- | Relational operators
 data RelOp = Equal | Unequal | Less | LessOrEqual | Greater | GreaterOrEqual | In
    deriving (Data, Eq, Show)
 
+-- | The finally-tagless associated types and methods relevant to all programming languages designed by Niklaus
+-- Wirth. The type variable @l@ represents the language of the constructs built by the methods, @l'@ is the language
+-- of the argument constructs.
 class Wirthy l where
    type Module l      = (m :: * -> (* -> *) -> (* -> *) -> *) | m -> l
    type Declaration l = (d :: * -> (* -> *) -> (* -> *) -> *) | d -> l
@@ -122,7 +126,8 @@ class Wirthy l where
    identDef :: Ident -> IdentDef l
    nonQualIdent :: Ident -> QualIdent l
 
-class CoWirthy l where
+-- | An instance of this type can convert its own constructs to another language that's an instance of 'TargetClass'.
+class Wirthy l => CoWirthy l where
    type TargetClass l :: * -> Constraint
    type TargetClass l = Wirthy
    coDeclaration :: TargetClass l l' => Declaration l l'' f' f -> Declaration l' l'' f' f
@@ -132,13 +137,20 @@ class CoWirthy l where
    coDesignator  :: TargetClass l l' => Designator l l'' f' f  -> Designator l' l'' f' f
    coValue       :: TargetClass l l' => Value l l'' f' f       -> Value l' l'' f' f
 
+-- | A language with constructs beyond the base 'Wirthy' class will have constructs that cannot be converted to a
+-- | 'Wirthy' target. It can declare its 'TargetClass' to be this transformed language instead, whose language
+-- | constructs are all wrapped in 'Maybe' or 'Maybe3'.
 data WirthySubsetOf l = WirthySubsetOf l
 
+-- | A modified 'Maybe' with kind that fits the types associated with 'Wirthy'.
 newtype Maybe3 f a b c = Maybe3 (Maybe (f a b c)) deriving (Eq, Ord, Read, Show)
 
+-- | Smart 'Maybe3' constructor corresponding to 'Just'
 just3 = Maybe3 . Just
-maybe3 n f (Maybe3 x) = maybe n f x
+-- | Smart 'Maybe3' constructor corresponding to 'Nothing'
 nothing3 = Maybe3 Nothing
+-- | Smart 'Maybe3' destructor corresponding to 'maybe'
+maybe3 n f (Maybe3 x) = maybe n f x
 
 instance Wirthy l => Wirthy (WirthySubsetOf l) where
    type Module (WirthySubsetOf l)            = Maybe3 (Module l)
@@ -241,11 +253,13 @@ instance Wirthy l => Wirthy (WirthySubsetOf l) where
    identDef = Just . identDef @l
    nonQualIdent = Just . nonQualIdent @l
 
+-- | Ability to deconstruct named constructs and obtain their 'Ident'.
 class Wirthy l => Nameable l where
    getProcedureName :: Nameable l' => ProcedureHeading l l' f' f -> Ident
    getIdentDefName :: IdentDef l -> Ident
    getNonQualIdentName :: QualIdent l -> Maybe Ident
 
+-- | The finally-tagless associated types and methods relevant to both versions of the Oberon language.
 class Wirthy l => Oberon l where
    type WithAlternative l = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
 
@@ -291,6 +305,7 @@ instance Wirthy l => Oberon (WirthySubsetOf l) where
 
    typeGuard = const $ const nothing3
 
+-- | The finally-tagless associated types and methods relevant to the Oberon 2 language.
 class Oberon l => Oberon2 l where
    readOnly :: Ident -> IdentDef l
    typeBoundHeading :: Bool -> Ident -> Ident -> Bool -> IdentDef l' -> Maybe (f (FormalParameters l' l' f' f'))

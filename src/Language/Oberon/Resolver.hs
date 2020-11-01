@@ -7,8 +7,8 @@
 -- expression @foo(bar)@ may be a call to function @foo@ with a parameter @bar@, or it may be type guard on variable
 -- @foo@ casting it to type @bar@.
 
-module Language.Oberon.Resolver (Error(..),
-                                 Predefined, predefined, predefined2, resolveModule, resolveModules) where
+module Language.Oberon.Resolver (resolveModules, resolveModule, resolvePositions, resolvePosition,
+                                 Error(..), Predefined, Placed, NodeWrap, predefined, predefined2) where
 
 import Control.Applicative (ZipList(ZipList, getZipList))
 import Control.Arrow (first)
@@ -26,17 +26,31 @@ import Data.Semigroup (Semigroup(..), sconcat)
 import Data.Text (Text)
 import Language.Haskell.TH (appT, conT, varT, newName)
 
+import qualified Text.Parser.Input.Position as Position
 import qualified Rank2.TH
 import qualified Transformation
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Deep.TH
 import qualified Transformation.Full as Full
 import qualified Transformation.Full.TH
+import qualified Transformation.Rank2 as Rank2
 import Text.Grampa (Ambiguous(..))
 
 import qualified Language.Oberon.Abstract as Abstract
 import Language.Oberon.AST
 import Language.Oberon.Grammar (ParsedLexemes(Trailing))
+import qualified Language.Oberon.Grammar as Grammar
+
+-- | Replace the stored positions in the entire ambiguous parsed tree, as obtained from "Language.Oberon.Grammar",
+-- | with offsets from the start of the given source text
+resolvePositions :: (p ~ Grammar.NodeWrap, q ~ NodeWrap, Deep.Functor (Rank2.Map p q) g)
+                 => Text -> p (g p p) -> q (g q q)
+resolvePositions src t = Rank2.Map (resolvePosition src) Full.<$> t
+
+-- | Replace the stored positions of the given node, as obtained from "Language.Oberon.Grammar", with offset from the
+-- | start of the given source text
+resolvePosition :: Text -> Grammar.NodeWrap a -> NodeWrap a
+resolvePosition src = \(Compose ((start, end), a))-> Compose ((Position.offset src start, Position.offset src end), a)
 
 data DeclarationRHS l f' f = DeclaredConstant (f (Abstract.ConstExpression l l f' f'))
                            | DeclaredType (f (Abstract.Type l l f' f'))
@@ -73,7 +87,11 @@ deriving instance (Show (Abstract.QualIdent l),
                    Show (Expression l l NodeWrap NodeWrap), Show (Abstract.Expression l l NodeWrap NodeWrap),
                    Show (Designator l l NodeWrap NodeWrap)) => Show (Error l)
 
+-- | The node wrapper in a fully resolved AST
 type Placed = (,) (Int, ParsedLexemes, Int)
+
+-- | The node wrapper in an ambiguous, freshly parsed AST, only with 'Position.Position' replaced with an offset from
+-- the beginning of the source.
 type NodeWrap = Compose ((,) (Int, Int)) (Compose Ambiguous ((,) ParsedLexemes))
 
 type Scope l = Map Ident (Validation (NonEmpty (Error l)) (DeclarationRHS l Placed Placed))
@@ -312,6 +330,9 @@ resolveName res scope q
      of Just (Success rhs) -> Success rhs
         _ -> Failure (UnknownLocal name :| [])
 
+-- | Resolve ambiguities in the given collection of modules, a 'Map' keyed by module name. The value for the first
+-- argument is typically 'predefined' or 'predefined2'. Note that all class constraints in the function's type
+-- signature are satisfied by the Oberon 'Language'.
 resolveModules :: forall l. (BindableDeclaration l, CoFormalParameters l, Abstract.Wirthy l,
                              Deep.Traversable (Resolution l) (Abstract.Declaration l l),
                              Deep.Traversable (Resolution l) (Abstract.Type l l),
@@ -335,6 +356,9 @@ resolveModules predefinedScope modules = traverseWithKey extractErrors modules'
          extractErrors moduleKey (Failure e)   = Failure ((moduleKey, e) :| [])
          extractErrors _         (Success mod) = Success mod
 
+-- | Resolve ambiguities in a single module. The value for the first argument is typically 'predefined' or
+-- 'predefined2'. The imports are resolved using the given map of already resolved modules. Note that all class
+-- constraints in the function's type signature are satisfied by the Oberon 'Language'.
 resolveModule :: forall l. (BindableDeclaration l, CoFormalParameters l,
                             Full.Traversable (Resolution l) (Abstract.Block l l),
                             Full.Traversable (Resolution l) (Abstract.Declaration l l),

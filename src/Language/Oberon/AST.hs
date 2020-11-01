@@ -2,7 +2,9 @@
              OverloadedStrings, StandaloneDeriving, TemplateHaskell, TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 
--- | Oberon Abstract Syntax Tree definitions
+-- | Concrete data types for Oberon constructs that make up its Abstract Syntax Tree. Every data type from this module
+-- is an instance of a type family declared in "Language.Oberon.Abstract". This way it can be replaced by another data
+-- type for another language while leaving other types to be reused.
 
 module Language.Oberon.AST (module Language.Oberon.AST, RelOp(..)) where
 
@@ -22,6 +24,7 @@ import qualified Rank2.TH
 import qualified Language.Oberon.Abstract as Abstract
 import Language.Oberon.Abstract (RelOp(..))
 
+-- | Data type representing the Oberon language, both versions of it.
 data Language = Language deriving (Data, Typeable)
 
 instance Abstract.Wirthy Language where

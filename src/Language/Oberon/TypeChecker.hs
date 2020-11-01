@@ -2,7 +2,8 @@
              MultiParamTypeClasses, OverloadedStrings, ScopedTypeVariables,
              TemplateHaskell, TypeFamilies, TypeOperators, UndecidableInstances, ViewPatterns #-}
 
-module Language.Oberon.TypeChecker (Error, errorMessage, checkModules, predefined, predefined2) where
+-- | Type checker for Oberon AST. The AST must have its ambiguities previously resolved by "Language.Oberon.Resolver".
+module Language.Oberon.TypeChecker (checkModules, errorMessage, Error, ErrorType(..), predefined, predefined2) where
 
 import Control.Applicative (liftA2, (<|>), ZipList(ZipList, getZipList))
 import Control.Arrow (first)
@@ -32,6 +33,7 @@ import Transformation.AG.Generics (Auto(Auto), Folded(..), Bequether(..), Synthe
 import qualified Language.Oberon.Abstract as Abstract
 import qualified Language.Oberon.AST as AST
 import Language.Oberon.Grammar (ParsedLexemes(Trailing))
+import Language.Oberon.Resolver (Placed)
 
 data Type l = NominalType (Abstract.QualIdent l) (Maybe (Type l))
             | RecordType{ancestry :: [Abstract.QualIdent l],
@@ -1022,8 +1024,8 @@ instance Rank2.Apply (AST.Module l l f') where
    AST.Module name1 imports1 body1 <*> ~(AST.Module name2 imports2 body2) =
       AST.Module name1 imports1 (Rank2.apply body1 body2)
 
-type Placed = (,) (Int, ParsedLexemes, Int)
-
+-- | Check if the given collection of modules is well typed and return all type errors found. The collection is a
+-- 'Map' keyed by module name. The first argument's value is typically 'predefined' or 'predefined2'.
 checkModules :: forall l. (Abstract.Oberon l, Abstract.Nameable l,
                            Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
                            Atts (Inherited (Auto TypeCheck)) (Abstract.Block l l Sem Sem) ~ InhTC l,

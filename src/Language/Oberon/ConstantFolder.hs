@@ -2,6 +2,12 @@
              MultiParamTypeClasses, OverloadedStrings, RankNTypes, ScopedTypeVariables,
              TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
+-- | The main export of this module is the function 'foldConstants' that folds the constants in Oberon AST using a
+-- attribute grammar. Other exports are helper functions and attribute types that can be reused for other languages or
+-- attribute grammars.
+-- 
+-- This module expects the ambiguities in the AST to be already resolved by the "Language.Oberon.Resolver" module.
+
 module Language.Oberon.ConstantFolder where
 
 import Control.Applicative (liftA2, ZipList(ZipList, getZipList))
@@ -37,6 +43,9 @@ import qualified Language.Oberon.AST as AST
 import qualified Language.Oberon.Pretty ()
 import Language.Oberon.Grammar (ParsedLexemes(Trailing), Lexeme(Token, lexemeType, lexemeText), TokenType(Other))
 
+-- | Fold the constants in the given collection of Oberon modules (a 'Map' of modules keyed by module name). It uses
+-- the constant declarations from the modules as well as the given 'Environment' of predefined constants and
+-- functions. The value of the latter argument is typically 'predefined' or 'predefined2'.
 foldConstants :: (Abstract.Oberon l, Abstract.Nameable l,
                   Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
                   Atts (Inherited (Auto ConstantFold)) (Abstract.Block l l Sem Sem) ~ InhCF l,
@@ -455,7 +464,7 @@ instance Rank2.Apply (AST.Module l l f') where
       AST.Module name1 imports1 (Rank2.apply body1 body2)
 
 predefined, predefined2 :: (Abstract.Wirthy l, Ord (Abstract.QualIdent l)) => Environment l
--- | The set of 'Predefined' types and procedures defined in the Oberon Language Report.
+-- | The set of predefined types and procedures defined in the Oberon Language Report.
 predefined = Map.fromList $ map (first Abstract.nonQualIdent) $
    [("TRUE", Just Abstract.true),
     ("FALSE", Just Abstract.false)]

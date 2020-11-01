@@ -119,6 +119,7 @@ data Lexeme = WhiteSpace{lexemeText :: Text}
 data TokenType = Delimiter | Keyword | Operator | Other
                deriving (Data, Eq, Show)
 
+-- | Every node in the parsed AST will be wrapped in this data type.
 type NodeWrap = Compose ((,) (Position, Position)) (Compose Ambiguous ((,) ParsedLexemes))
 
 newtype ParsedLexemes = Trailing [Lexeme]
