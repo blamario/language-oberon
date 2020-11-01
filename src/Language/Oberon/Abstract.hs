@@ -28,8 +28,12 @@ data RelOp = Equal | Unequal | Less | LessOrEqual | Greater | GreaterOrEqual | I
    deriving (Data, Eq, Show)
 
 -- | The finally-tagless associated types and methods relevant to all programming languages designed by Niklaus
--- Wirth. The type variable @l@ represents the language of the constructs built by the methods, @l'@ is the language
--- of the argument constructs.
+-- Wirth. Every non-leaf node type has four type variables:
+--
+-- * type variable @l@ represents the language of the constructs built by the methods,
+-- * @l'@ is the language of the child node constructs,
+-- * @f'@ wraps all descendant nodes, except
+-- * @f@ wraps all direct children of the node.
 class Wirthy l where
    type Module l      = (m :: * -> (* -> *) -> (* -> *) -> *) | m -> l
    type Declaration l = (d :: * -> (* -> *) -> (* -> *) -> *) | d -> l
