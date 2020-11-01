@@ -1,5 +1,14 @@
 # Revision history for language-oberon
 
+## 0.3  -- 2020-11-01
+
+* Preserving the parsed start and end positions and lexemes of every node
+* Added the `Reserializer` module and the `--original` command-line option
+* Added the `ConstantFolder` module
+* Moved the `Transformation` modules into the new `deep-transformations` package
+* Eliminated many of the attribute grammar rules using `Tranformation.AG.Generics`
+* Added the `README`
+
 ## 0.2.1  -- 2019-01-27
 
 * Pretty-printer fixes

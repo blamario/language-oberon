@@ -3,19 +3,14 @@
 
 name:                language-oberon
 version:             0.3
-synopsis:            Parser, pretty-printer, and type checker for the Oberon programming language
+synopsis:            Parser, pretty-printer, and more for the Oberon programming language
 description:
    The library and the executable support both the original Oberon and the Oberon-2 programming language, as described
    in the respective <http://www.ethoberon.ethz.ch/compiler/index.html#report language reports>.
    .
-   The grammars in "Language.Oberon.Grammar" attempt to follow the language grammars from the reports, while
-   generating a semantically meaningful abstract syntax tree; the latter is defined in "Language.Oberon.AST". As the
-   grammars are ambiguous, it is necessary to resolve the ambiguities after parsing all Oberon modules in use.
-   "Language.Oberon.Resolver" provides this functionality. Only after the ambiguity resolution can the abstract syntax
-   tree be pretty-printed using the instances from "Language.Oberon.Pretty".
-   .
    The original purpose for the library was to be a test of the underlying
-   <http://hackage.haskell.org/package/grammatical-parsers grammatical-parsers> library. The experiment succeeded, so    the package can be used in practice.
+   <http://hackage.haskell.org/package/grammatical-parsers grammatical-parsers> library. The experiment succeeded, so
+   the package can be used in practice.
 
 homepage:            https://github.com/blamario/language-oberon
 bug-reports:         https://github.com/blamario/language-oberon/issues
@@ -26,7 +21,7 @@ maintainer:          blamario@protonmail.com
 copyright:           (c) 2018 Mario Blažević
 category:            Language
 build-type:          Simple
-extra-source-files:  ChangeLog.md, examples/AGRS/*.Def, examples/AGRS/*.Mod
+extra-source-files:  README.md, ChangeLog.md, examples/AGRS/*.Def, examples/AGRS/*.Mod
 cabal-version:       >=1.10
 
 library

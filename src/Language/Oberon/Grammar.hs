@@ -6,6 +6,14 @@
 -- 
 -- Extracted from the book Programmieren in Oberon - Das neue Pascal by N. Wirth and M. Reiser and translated by
 -- J. Templ.
+--
+-- The grammars in this module attempt to follow the language grammars from the reports, while generating a
+-- semantically meaningful abstract syntax tree; the latter is defined in "Language.Oberon.AST". As the grammars are
+-- ambiguous, it is necessary to resolve the ambiguities after parsing all Oberon modules in use.
+-- "Language.Oberon.Resolver" provides this functionality. Only after the ambiguity resolution can the abstract syntax
+-- tree be pretty-printed using the instances from "Language.Oberon.Pretty". Alternatively, since the parsing
+-- preserves the original parsed lexemes including comments in the AST, you can use "Language.Oberon.Reserializer" to
+-- reproduce the original source code from the AST.
 
 module Language.Oberon.Grammar (OberonGrammar(..), Parser, NodeWrap, ParsedLexemes(..), Lexeme(..), TokenType(..),
                                 oberonGrammar, oberon2Grammar, oberonDefinitionGrammar, oberon2DefinitionGrammar) where
