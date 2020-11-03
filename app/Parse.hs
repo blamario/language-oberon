@@ -2,8 +2,7 @@
 
 module Main where
 
-import Language.Oberon (Placed, LanguageVersion(Oberon1, Oberon2), Options(..),
-                        parseAndResolveModule, resolvePosition, resolvePositions)
+import Language.Oberon (Placed, LanguageVersion(Oberon1, Oberon2), Options(..), parseAndResolveModule)
 import Language.Oberon.AST (Language, Module(..), StatementSequence, Statement, Expression)
 import qualified Language.Oberon.AST as AST
 import qualified Language.Oberon.Grammar as Grammar
@@ -145,7 +144,8 @@ main' Opts{..} =
        -> (Grammar (Grammar.OberonGrammar AST.Language Grammar.NodeWrap) Grammar.Parser Text)
        -> String -> Text -> IO ()
     go resolve production grammar filename contents =
-       case getCompose (second (resolvePositions contents) <$> getCompose (production $ parseComplete grammar contents))
+       case getCompose (second (Resolver.resolvePositions contents)
+            <$> getCompose (production $ parseComplete grammar contents))
        of Right [(s, x)] -> succeed optsOutput (reportTypeErrorIn $ takeDirectory filename) Left (resolve x)
           Right l -> putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
                      >> succeed optsOutput (reportTypeErrorIn $ takeDirectory filename) Left (resolve . snd $ l !! optsIndex)
