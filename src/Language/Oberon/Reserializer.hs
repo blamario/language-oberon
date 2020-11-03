@@ -4,7 +4,7 @@
 
 -- | This module exports functions for reserializing the parsed tree from the tokens stored with every node.
 
-module Language.Oberon.Reserializer (adjustPositions, reserialize, sourceLength) where
+module Language.Oberon.Reserializer (adjustPositions, reserialize, sourceLength, PositionAdjustment, Serialization) where
 
 import Control.Arrow (first)
 import Control.Monad.Trans.State.Strict (State, StateT(..), evalState, runState, state)
@@ -47,7 +47,9 @@ sourceLength root@((_, Trailing rootLexemes, _), node) = getSum (nodeLength root
 
 type Parsed = (,) (Int, ParsedLexemes, Int)
 
+-- | Transformation type used by 'reserialize'
 data Serialization = Serialization
+-- | Transformation type used by 'adjustPositions'
 data PositionAdjustment = PositionAdjustment
 
 instance Transformation.Transformation Serialization where
