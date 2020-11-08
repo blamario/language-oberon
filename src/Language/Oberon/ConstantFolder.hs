@@ -234,7 +234,7 @@ instance {-# overlaps #-}
     Atts (Synthesized (Auto ConstantFold)) (Abstract.Element l l Sem Sem) ~ SynCF' (Abstract.Element l l),
     Atts (Synthesized (Auto ConstantFold)) (Abstract.Designator l l Sem Sem) ~ SynCFDesignator l) =>
    Synthesizer (Auto ConstantFold) (AST.Expression λ l) Sem Placed where
-   synthesis _ (pos@(start, _, end), AST.Relation op _ _) _ (AST.Relation _op left right) =
+   synthesis _ (pos@(start, ls, end), AST.Relation op _ _) _ (AST.Relation _op left right) =
       case join (compareValues <$> foldedValue (syn left) <*> foldedValue (syn right))
       of Just value -> literalSynthesis value
          Nothing -> SynCFExp{folded= Mapped (pos,
@@ -252,7 +252,7 @@ instance {-# overlaps #-}
             compareValues (_, AST.String l) (ls, AST.CharCode r) = repos ls
                                                                    <$> relate op (compare l (Text.singleton $ chr r))
             compareValues _ _                               = Nothing
-            repos (_, ls, _) v = ((start, ls, end), v)
+            repos (_, ls', _) v = ((start, anyWhitespace ls ls', end), v)
             relate Abstract.Equal EQ          = Just Abstract.true
             relate Abstract.Equal _           = Just Abstract.false
             relate Abstract.Unequal EQ        = Just Abstract.false
@@ -266,16 +266,17 @@ instance {-# overlaps #-}
             relate Abstract.GreaterOrEqual LT = Just Abstract.false
             relate Abstract.GreaterOrEqual _  = Just Abstract.true
             relate Abstract.In _              = Nothing
-   synthesis _ (pos@(start, _, end), _) _ (AST.Positive expr) =
+   synthesis _ (pos@(start, ls, end), _) _ (AST.Positive expr) =
       case foldedValue (syn expr)
-      of Just ((_, ls, _), AST.Integer n) -> literalSynthesis ((start, ls, end), AST.Integer n)
-         Just ((_, ls, _), AST.Real n) -> literalSynthesis ((start, ls, end), AST.Real n)
+      of Just ((_, ls', _), AST.Integer n) -> literalSynthesis ((start, anyWhitespace ls ls', end), AST.Integer n)
+         Just ((_, ls', _), AST.Real n) -> literalSynthesis ((start, anyWhitespace ls ls', end), AST.Real n)
          _ -> SynCFExp{folded= Mapped (pos, Abstract.positive $ foldedExp' $ syn expr),
                        foldedValue= Nothing}
-   synthesis _ (pos@(start, _, end), _) _ (AST.Negative expr) =
+   synthesis _ (pos@(start, ls, end), _) _ (AST.Negative expr) =
       case foldedValue (syn expr)
-      of Just ((_, ls, _), AST.Integer n) -> literalSynthesis ((start, ls, end), AST.Integer $ negate n)
-         Just ((_, ls, _), AST.Real n) -> literalSynthesis ((start, ls, end), AST.Real $ negate n)
+      of Just ((_, ls', _), AST.Integer n) -> literalSynthesis ((start, anyWhitespace ls ls', end),
+                                                                AST.Integer $ negate n)
+         Just ((_, ls', _), AST.Real n) -> literalSynthesis ((start, anyWhitespace ls ls', end), AST.Real $ negate n)
          _ -> SynCFExp{folded= Mapped (pos, Abstract.negative $ foldedExp' $ syn expr),
                        foldedValue= Nothing}
    synthesis _ (pos, _) _ (AST.Add left right) =
@@ -294,10 +295,10 @@ instance {-# overlaps #-}
       foldBinaryInteger pos Abstract.modulo mod (syn left) (syn right)
    synthesis _ (pos, _) _ (AST.And left right) =
       foldBinaryBoolean pos Abstract.and (&&) (syn left) (syn right)
-   synthesis _ (pos@(start, _, end), _) _ (AST.Not expr) =
+   synthesis _ (pos@(start, ls, end), _) _ (AST.Not expr) =
       case foldedValue (syn expr)
-      of Just ((_, ls, _), AST.Boolean True) -> literalSynthesis ((start, ls, end), Abstract.false)
-         Just ((_, ls, _), AST.Boolean False) -> literalSynthesis ((start, ls, end), Abstract.true)
+      of Just ((_, ls', _), AST.Boolean b) -> literalSynthesis ((start, anyWhitespace ls ls', end),
+                                                                if b then Abstract.false else Abstract.true)
          _ -> SynCFExp{folded= Mapped (pos, Abstract.not $ foldedExp' $ syn expr),
                        foldedValue= Nothing}
    synthesis _ (pos, AST.IsA _ right) _ (AST.IsA left _) =
@@ -404,14 +405,14 @@ foldBinaryArithmetic :: forall λ l f. (f ~ Placed, Abstract.Value l ~ AST.Value
                      -> (f (Abstract.Expression l l f f) -> f (Abstract.Expression l l f f) -> Abstract.Expression λ l f f)
                      -> (forall n. Num n => n -> n -> n)
                      -> SynCFExp l l -> SynCFExp l l -> SynCFExp λ l
-foldBinaryArithmetic pos@(start, _, end) node op l r =
+foldBinaryArithmetic pos@(start, ls, end) node op l r =
    case join (foldValues <$> foldedValue l <*> foldedValue r)
    of Just v -> literalSynthesis v
       Nothing -> SynCFExp{folded= Mapped (pos, node (foldedExp' l) (foldedExp' r)),
                           foldedValue= Nothing}
    where foldValues :: Placed (AST.Value l l f f) -> Placed (AST.Value l l f f) -> Maybe (Placed (AST.Value l l f f))
          foldBareValues :: AST.Value l l f f -> AST.Value l l f f -> Maybe (AST.Value l l f f)
-         foldValues (_, l') ((_, ls, _), r') = (,) (start, ls, end) <$> foldBareValues l' r'
+         foldValues (_, l') ((_, ls', _), r') = (,) (start, anyWhitespace ls ls', end) <$> foldBareValues l' r'
          foldBareValues (AST.Integer l') (AST.Integer r') = Just (AST.Integer $ op l' r')
          foldBareValues (AST.Real l')    (AST.Real r')    = Just (AST.Real $ op l' r')
          foldBareValues (AST.Integer l') (AST.Real r')    = Just (AST.Real $ op (fromIntegral l') r')
@@ -424,13 +425,14 @@ foldBinaryFractional :: forall λ l f. (f ~ Placed, Abstract.Value l ~ AST.Value
                      -> (f (Abstract.Expression l l f f) -> f (Abstract.Expression l l f f) -> Abstract.Expression λ l f f)
                      -> (forall n. Fractional n => n -> n -> n)
                      -> SynCFExp l l -> SynCFExp l l -> SynCFExp λ l
-foldBinaryFractional pos@(start, _, end) node op l r =
+foldBinaryFractional pos@(start, ls, end) node op l r =
    case join (foldValues <$> foldedValue l <*> foldedValue r)
    of Just v -> literalSynthesis v
       Nothing -> SynCFExp{folded= Mapped (pos, node (foldedExp' l) (foldedExp' r)),
                           foldedValue= Nothing}
    where foldValues :: Placed (AST.Value l l f f) -> Placed (AST.Value l l f f) -> Maybe (Placed (AST.Value l l f f))
-         foldValues (_, AST.Real l') ((_, ls, _), AST.Real r') = Just ((start, ls, end), AST.Real $ op l' r')
+         foldValues (_, AST.Real l') ((_, ls', _), AST.Real r') = Just ((start, anyWhitespace ls ls', end),
+                                                                        AST.Real $ op l' r')
          foldValues _ _ = Nothing
 
 foldBinaryInteger :: forall λ l f. (f ~ Placed, Abstract.Value l ~ AST.Value l, Abstract.Wirthy λ,
@@ -439,13 +441,14 @@ foldBinaryInteger :: forall λ l f. (f ~ Placed, Abstract.Value l ~ AST.Value l,
                      -> (f (Abstract.Expression l l f f) -> f (Abstract.Expression l l f f) -> Abstract.Expression λ l f f)
                      -> (forall n. Integral n => n -> n -> n)
                      -> SynCFExp l l -> SynCFExp l l -> SynCFExp λ l
-foldBinaryInteger pos@(start, _, end) node op l r =
+foldBinaryInteger pos@(start, ls, end) node op l r =
    case join (foldValues <$> foldedValue l <*> foldedValue r)
    of Just v -> literalSynthesis v
       Nothing -> SynCFExp{folded= Mapped (pos, node (foldedExp' l) (foldedExp' r)),
                           foldedValue= Nothing}
    where foldValues :: Placed (AST.Value l l f f) -> Placed (AST.Value l l f f) -> Maybe (Placed (AST.Value l l f f))
-         foldValues (_, AST.Integer l') ((_, ls, _), AST.Integer r') = Just ((start, ls, end), AST.Integer $ op l' r')
+         foldValues (_, AST.Integer l') ((_, ls', _), AST.Integer r') = Just ((start, anyWhitespace ls ls', end),
+                                                                              AST.Integer $ op l' r')
          foldValues _ _ = Nothing
 
 foldBinaryBoolean :: forall λ l f. (f ~ Placed, Abstract.Value l ~ AST.Value l, Abstract.Wirthy λ,
@@ -454,13 +457,14 @@ foldBinaryBoolean :: forall λ l f. (f ~ Placed, Abstract.Value l ~ AST.Value l,
                   -> (f (Abstract.Expression l l f f) -> f (Abstract.Expression l l f f) -> Abstract.Expression λ l f f)
                   -> (Bool -> Bool -> Bool)
                   -> SynCFExp l l -> SynCFExp l l -> SynCFExp λ l
-foldBinaryBoolean pos@(start, _, end) node op l r =
+foldBinaryBoolean pos@(start, ls, end) node op l r =
    case join (foldValues <$> foldedValue l <*> foldedValue r)
    of Just v -> literalSynthesis v
       Nothing -> SynCFExp{folded= Mapped (pos, node (foldedExp' l) (foldedExp' r)),
                           foldedValue= Nothing}
    where foldValues :: Placed (AST.Value l l f f) -> Placed (AST.Value l l f f) -> Maybe (Placed (AST.Value l l f f))
-         foldValues (_, AST.Boolean l') ((_, ls, _), AST.Boolean r') = Just ((start, ls, end), AST.Boolean $ op l' r')
+         foldValues (_, AST.Boolean l') ((_, ls', _), AST.Boolean r') = Just ((start, anyWhitespace ls ls', end),
+                                                                              AST.Boolean $ op l' r')
          foldValues _ _ = Nothing
 
 instance (Ord (Abstract.QualIdent l), v ~ Abstract.Value l l Placed Placed) =>
@@ -470,6 +474,19 @@ instance (Ord (Abstract.QualIdent l), v ~ Abstract.Value l l Placed Placed) =>
 
 instance {-# overlaps #-} Ord (Abstract.QualIdent l) => Transformation.At (Auto ConstantFold) (Modules l Sem Sem) where
    ($) = AG.applyDefault snd
+
+anyWhitespace :: ParsedLexemes -> ParsedLexemes -> ParsedLexemes
+anyWhitespace outer inner@(Trailing ls)
+   | any isWhitespace ls = inner
+   | otherwise = inner <> lastWhitespace outer
+   where isWhitespace WhiteSpace{} = True
+         isWhitespace _ = False
+
+lastWhitespace :: ParsedLexemes -> ParsedLexemes
+lastWhitespace ls@(Trailing []) = ls
+lastWhitespace ls@(Trailing [WhiteSpace{}]) = ls
+lastWhitespace (Trailing [_]) = mempty
+lastWhitespace (Trailing (l:ls)) = lastWhitespace (Trailing ls)
 
 --- * Shortcut
 
