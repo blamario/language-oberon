@@ -102,7 +102,7 @@ instance Pretty (Abstract.Expression l l Identity Identity) => Pretty (Element Î
    pretty (Element e) = pretty e
    pretty (Range from to) = pretty from <+> ".." <+> pretty to
 
-instance Pretty (Value Î» l Identity Identity) where
+instance Pretty (Value Language l Identity Identity) where
    pretty (Boolean False) = "FALSE"
    pretty (Boolean True) = "TRUE"
    pretty (Integer n) = pretty n
