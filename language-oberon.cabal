@@ -21,7 +21,7 @@ maintainer:          blamario@protonmail.com
 copyright:           (c) 2018 Mario Blažević
 category:            Language
 build-type:          Simple
-extra-source-files:  README.md, CHANGELOG.md, examples/AGRS/*.Def, examples/AGRS/*.Mod
+extra-source-files:  README.md, ChangeLog.md, examples/AGRS/*.Def, examples/AGRS/*.Mod
 cabal-version:       >=1.10
 
 library
