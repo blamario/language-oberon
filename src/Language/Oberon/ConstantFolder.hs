@@ -140,24 +140,24 @@ type instance Atts (Synthesized (Auto ConstantFold)) (AST.ConditionalBranch l l 
 type instance Atts (Synthesized (Auto ConstantFold)) (AST.WithAlternative l l _ _) = SynCF' (AST.WithAlternative l l)
 
 type instance Atts (Inherited (Auto ConstantFold)) (Modules l _ _) = InhCFRoot l
-type instance Atts (Inherited (Auto ConstantFold)) (AST.Module l l _ _) = InhCF l
-type instance Atts (Inherited (Auto ConstantFold)) (AST.Declaration l l _ _) = InhCF l
-type instance Atts (Inherited (Auto ConstantFold)) (AST.ProcedureHeading l l _ _) = InhCF l
-type instance Atts (Inherited (Auto ConstantFold)) (AST.Block l l _ _) = InhCF l
-type instance Atts (Inherited (Auto ConstantFold)) (AST.FormalParameters l l _ _) = InhCF l
-type instance Atts (Inherited (Auto ConstantFold)) (AST.FPSection l l _ _) = InhCF l
-type instance Atts (Inherited (Auto ConstantFold)) (AST.Type l l _ _) = InhCF l
-type instance Atts (Inherited (Auto ConstantFold)) (AST.FieldList l l _ _) = InhCF l
-type instance Atts (Inherited (Auto ConstantFold)) (AST.StatementSequence l l _ _) = InhCF l
-type instance Atts (Inherited (Auto ConstantFold)) (AST.Expression l l _ _) = InhCF l
-type instance Atts (Inherited (Auto ConstantFold)) (AST.Element l l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.Module λ l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.Declaration λ l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.ProcedureHeading λ l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.Block λ l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.FormalParameters λ l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.FPSection λ l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.Type λ l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.FieldList λ l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.StatementSequence λ l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.Expression λ l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.Element λ l _ _) = InhCF l
 type instance Atts (Inherited (Auto ConstantFold)) (AST.Value l l _ _) = InhCF l
-type instance Atts (Inherited (Auto ConstantFold)) (AST.Designator l l _ _) = InhCF l
-type instance Atts (Inherited (Auto ConstantFold)) (AST.Statement l l _ _) = InhCF l
-type instance Atts (Inherited (Auto ConstantFold)) (AST.Case l l _ _) = InhCF l
-type instance Atts (Inherited (Auto ConstantFold)) (AST.CaseLabels l l _ _) = InhCF l
-type instance Atts (Inherited (Auto ConstantFold)) (AST.ConditionalBranch l l _ _) = InhCF l
-type instance Atts (Inherited (Auto ConstantFold)) (AST.WithAlternative l l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.Designator λ l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.Statement λ l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.Case λ l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.CaseLabels λ l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.ConditionalBranch λ l _ _) = InhCF l
+type instance Atts (Inherited (Auto ConstantFold)) (AST.WithAlternative λ l _ _) = InhCF l
 
 type SynCF' node = SynCF (node Placed Placed)
 type SynCFMod' l node = SynCFMod l (node Placed Placed)
@@ -227,9 +227,9 @@ instance (Abstract.Nameable l, k ~ Abstract.QualIdent l, v ~ Abstract.Value l l 
    synthesizedField _ _ _ _ _ = mempty
 
 instance {-# overlaps #-}
-   (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
-    Abstract.Value l ~ AST.Value l, InhCF l ~ InhCF λ,
-    Pretty (AST.Value λ λ Identity Identity),
+   (Abstract.Oberon λ, Abstract.Nameable l, Ord (Abstract.QualIdent l),
+    Abstract.Value l ~ AST.Value l,
+    Pretty (AST.Value l l Identity Identity),
     Atts (Synthesized (Auto ConstantFold)) (Abstract.Expression l l Sem Sem) ~ SynCFExp l l,
     Atts (Synthesized (Auto ConstantFold)) (Abstract.Element l l Sem Sem) ~ SynCF' (Abstract.Element l l),
     Atts (Synthesized (Auto ConstantFold)) (Abstract.Designator l l Sem Sem) ~ SynCFDesignator l) =>
