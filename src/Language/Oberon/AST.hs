@@ -171,6 +171,7 @@ instance Abstract.CoWirthy Language where
    coExpression (Read var) = Abstract.read var
    coExpression (FunctionCall function parameters) = Abstract.functionCall function $ getZipList parameters
    coExpression (Not e) = Abstract.not e
+   coExpression (Literal value) = Abstract.literal value
 
    coValue Nil = Abstract.nil
    coValue (Boolean False) = Abstract.false
