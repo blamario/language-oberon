@@ -363,7 +363,7 @@ instance {-# overlaps #-}
       where fromValue v = literalSynthesis (pos, v)
    synthesis _ (pos, _) _ (AST.Literal val) =
       SynCFExp{folded= Mapped (pos, Abstract.literal $ getMapped $ folded' $ syn val),
-               foldedValue= Just (pos, snd $ getMapped $ folded' $ syn val)}
+               foldedValue= Just (getMapped $ folded' $ syn val)}
 
 literalSynthesis :: (Abstract.Wirthy λ, Deep.Functor (Transformation.Rank2.Map Placed Identity) (Abstract.Value l l),
                      Pretty (Abstract.Value l l Identity Identity)) =>
