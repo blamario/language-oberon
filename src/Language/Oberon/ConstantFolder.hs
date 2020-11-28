@@ -168,19 +168,18 @@ type SynCFMod' l node = SynCFMod l (node Placed Placed)
 folded' :: SynCF' node -> Mapped Placed (node Placed Placed)
 foldedExp  :: SynCFExp λ l -> Mapped Placed (Abstract.Expression λ l Placed Placed)
 foldedExp' :: SynCFExp λ l -> Placed (Abstract.Expression λ l Placed Placed)
+foldedMod :: SynCFMod' l node -> Mapped Placed (node Placed Placed)
 
-folded' = folded
-foldedExp = folded
+folded' SynCF{folded= x} = x
+foldedExp SynCFExp{folded= x} = x
 foldedExp' = getMapped . foldedExp
-
+foldedMod SynCFMod{folded= x} = x
 -- * Rules
 
 instance {-# overlaps #-} Ord (Abstract.QualIdent l) =>
                           Synthesizer (Auto ConstantFold) (Modules l) Sem Placed where
    synthesis _ (_, Modules self) inheritance (Modules ms) =
-      SynCFRoot{modulesFolded= (Modules (getMapped . foldedModule . syn <$> ms))}
-      where foldedModule :: SynCFMod' l (AST.Module l l) -> Mapped Placed (AST.Module l l Placed Placed)
-            foldedModule = folded
+      SynCFRoot{modulesFolded= (Modules (getMapped . foldedMod . syn <$> ms))}
 
 instance {-# overlaps #-} Ord (Abstract.QualIdent l) =>
                           Bequether (Auto ConstantFold) (Modules l) Sem Placed where
@@ -193,9 +192,7 @@ instance {-# overlaps #-} (Abstract.Oberon l, Abstract.Nameable l, Ord (Abstract
                           Synthesizer (Auto ConstantFold) (AST.Module l l) Sem Placed where
    synthesis _ (pos, AST.Module moduleName imports _body) inheritance (AST.Module _ _ body) =
       SynCFMod{moduleEnv= exportedEnv,
-               folded= Mapped (pos,
-                               AST.Module moduleName imports $ getMapped
-                               $ folded (syn body :: SynCFMod' l (Abstract.Block l l)))}
+               folded= Mapped (pos, AST.Module moduleName imports $ getMapped $ foldedMod (syn body))}
       where exportedEnv = Map.mapKeysMonotonic export newEnv
             newEnv = moduleEnv (syn body)
             export q
@@ -357,10 +354,11 @@ instance {-# overlaps #-}
          (Just (AST.Builtin "MIN"), [Just (AST.Builtin "REAL")]) -> fromValue (Abstract.real minReal)
          (Just (AST.Builtin "MIN"), [Just (AST.Builtin "LONGREAL")]) -> fromValue (Abstract.real minReal)
          _ -> SynCFExp{folded= Mapped (pos,
-                                       Abstract.functionCall (getMapped $ folded (syn fn :: SynCFDesignator l))
+                                       Abstract.functionCall (getMapped $ foldedDes $ syn fn)
                                                              (foldedExp' . syn <$> getZipList args)),
                        foldedValue= Nothing}
       where fromValue v = literalSynthesis (pos, v)
+            foldedDes SynCFDesignator{folded= x} = x
    synthesis _ (pos, _) _ (AST.Literal val) =
       SynCFExp{folded= Mapped (pos, Abstract.literal $ getMapped $ folded' $ syn val),
                foldedValue= Just (getMapped $ folded' $ syn val)}
