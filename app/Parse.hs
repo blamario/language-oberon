@@ -154,8 +154,8 @@ main' Opts{..} =
 type NodeWrap = Compose ((,) (Int, Int)) (Compose Ambiguous ((,) Grammar.ParsedLexemes))
 
 succeed :: (Data a, Flattenable a, Pretty a, Show a)
-        => Output -> (TypeChecker.Error Language -> IO ())
-        -> (err -> Either (NonEmpty (Resolver.Error Language)) (NonEmpty (TypeChecker.Error Language)))
+        => Output -> (TypeChecker.Error AST.Ident Language -> IO ())
+        -> (err -> Either (NonEmpty (Resolver.Error Language)) (NonEmpty (TypeChecker.Error AST.Ident Language)))
         -> Validation err a -> IO ()
 succeed out reportTypeError prepare x = either (reportFailure . prepare) showSuccess (validationToEither x)
    where reportFailure (Left (Resolver.UnparseableModule err :| [])) = Text.putStrLn err

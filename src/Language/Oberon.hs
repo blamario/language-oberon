@@ -5,7 +5,7 @@
 module Language.Oberon (parseModule, parseAndResolveModule, parseAndResolveModuleFile,
                         LanguageVersion(..), Options(..), NodeWrap, Placed) where
 
-import Language.Oberon.AST (Language, Module(..))
+import Language.Oberon.AST (Language, Module(..), Ident)
 import qualified Language.Oberon.Grammar as Grammar
 import qualified Language.Oberon.Resolver as Resolver
 import qualified Language.Oberon.Reserializer as Reserializer
@@ -91,7 +91,7 @@ parseImportsOf version path modules =
 -- use all the information to resolve the syntactic ambiguities.
 parseAndResolveModule :: Options -> FilePath -> Text
                       -> IO (Validation (Either (NonEmpty (Resolver.Error Language))
-                                                (NonEmpty (TypeChecker.Error Language)))
+                                                (NonEmpty (TypeChecker.Error Ident Language)))
                                         (Placed (Module Language Language Placed Placed)))
 parseAndResolveModule Options{..} path source =
    case parseModule version source
@@ -125,7 +125,8 @@ parseAndResolveModule Options{..} path source =
 
 -- | Parse the module file at the given path, assuming all its imports are in the same directory.
 parseAndResolveModuleFile :: Options -> FilePath
-                          -> IO (Validation (Either (NonEmpty (Resolver.Error Language)) (NonEmpty (TypeChecker.Error Language)))
+                          -> IO (Validation (Either (NonEmpty (Resolver.Error Language))
+                                                    (NonEmpty (TypeChecker.Error Ident Language)))
                                             (Placed (Module Language Language Placed Placed)))
 parseAndResolveModuleFile options path =
   readFile path >>= parseAndResolveModule options (takeDirectory path)
