@@ -4,7 +4,7 @@ module Main where
 import Data.Either.Validation (Validation(..))
 import Data.Functor.Identity (Identity(Identity))
 import Data.List (isSuffixOf)
-import Data.List.NonEmpty (NonEmpty((:|)))
+import Data.List.NonEmpty (NonEmpty((:|)), toList)
 import Data.Text (Text, unpack)
 import Data.Text.IO (readFile)
 import Data.Text.Prettyprint.Doc (Pretty(pretty), layoutPretty, defaultLayoutOptions)
@@ -56,10 +56,11 @@ prettyFile dirPath source = do
                      dirPath source
    case resolvedModule
       of Failure (Left (Resolver.UnparseableModule err :| [])) -> assertFailure (unpack err)
-         Failure errs -> assertFailure (show $ (onLastOfThree TypeChecker.errorMessage <$>) <$> errs)
+         Failure (Right errs) -> assertFailure $ show
+                                 $ [(TypeChecker.errorModule err,
+                                     TypeChecker.errorPosition err,
+                                     TypeChecker.errorMessage $ TypeChecker.errorType err) | err <- toList errs]
          Success mod -> return (renderStrict $ layoutPretty defaultLayoutOptions $ pretty mod)
-
-onLastOfThree f (a, b, c) = (a, b, f c)
 
 instance {-# overlaps #-} Pretty (Placed (Module Language Language Placed Placed)) where
    pretty (_, m) = pretty ((Identity . snd) Rank2.<$> m)

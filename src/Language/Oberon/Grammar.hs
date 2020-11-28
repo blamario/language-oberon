@@ -131,7 +131,7 @@ data TokenType = Delimiter | Keyword | Operator | Other
 type NodeWrap = Compose ((,) (Position, Position)) (Compose Ambiguous ((,) ParsedLexemes))
 
 newtype ParsedLexemes = Trailing [Lexeme]
-                      deriving (Data, Show, Semigroup, Monoid)
+                      deriving (Data, Eq, Show, Semigroup, Monoid)
 
 instance TokenParsing (Parser (OberonGrammar l f) Text) where
    someSpace = someLexicalSpace

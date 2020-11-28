@@ -167,7 +167,7 @@ succeed out reportTypeError prepare x = either (reportFailure . prepare) showSuc
                           Tree -> putStrLn . reprTreeString
                           Plain -> print
 
-reportTypeErrorIn directory (moduleName, (pos, _, _), err) =
+reportTypeErrorIn directory (TypeChecker.Error moduleName (pos, _, _) err) =
    do contents <- readFile (combine directory $ addExtension (unpack moduleName) "Mod")
       putStrLn ("Type error: " ++ TypeChecker.errorMessage err)
       Text.putStrLn (Position.context contents (Position.fromStart pos) 4)
