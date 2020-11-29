@@ -309,17 +309,15 @@ instance (Abstract.Oberon l, Abstract.Nameable l, k ~ Abstract.QualIdent l, Ord 
             exportNominal' t = t
 
 instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Atts (Inherited (Auto TypeCheck)) (Abstract.Declaration l l Sem Sem) ~ InhTCDecl l,
           Atts (Inherited (Auto TypeCheck)) (Abstract.Type l l Sem Sem) ~ InhTC l,
           Atts (Inherited (Auto TypeCheck)) (Abstract.ProcedureHeading l l Sem Sem) ~ InhTCDecl l,
           Atts (Inherited (Auto TypeCheck)) (Abstract.Block l l Sem Sem) ~ InhTC l,
           Atts (Synthesized (Auto TypeCheck)) (Abstract.ProcedureHeading l l Sem Sem) ~ SynTCHead l,
           Atts (Inherited (Auto TypeCheck)) (Abstract.FormalParameters l l Sem Sem) ~ InhTC l,
-          Atts (Inherited (Auto TypeCheck)) (Abstract.ConstExpression l l Sem Sem) ~ InhTC l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Declaration l l Sem Sem) ~ SynTCMod l) =>
+          Atts (Inherited (Auto TypeCheck)) (Abstract.ConstExpression l l Sem Sem) ~ InhTC l) =>
          Bequether (Auto TypeCheck) (AST.Declaration l l) Sem Placed where
    bequest _ (pos, AST.ProcedureDeclaration{})
-           inheritance@InhTCDecl{env= declEnv} (AST.ProcedureDeclaration heading body) =
+           inheritance@InhTCDecl{env= declEnv} (AST.ProcedureDeclaration heading _body) =
       AST.ProcedureDeclaration (Inherited inheritance) (Inherited bodyInherited)
       where bodyInherited = InhTC{env= insideEnv (syn heading) `Map.union` declEnv}
    bequest t local inheritance synthesized = AG.bequestDefault t local inheritance synthesized
@@ -329,7 +327,6 @@ instance (Abstract.Nameable l, k ~ Abstract.QualIdent l, Ord k,
           Atts (Synthesized (Auto TypeCheck)) (Abstract.Type l l Sem Sem) ~ SynTCType l,
           Atts (Synthesized (Auto TypeCheck)) (Abstract.FormalParameters l l Sem Sem) ~ SynTCSig l,
           Atts (Synthesized (Auto TypeCheck)) (Abstract.ProcedureHeading l l Sem Sem) ~ SynTCHead l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Block l l Sem Sem) ~ SynTCMod l,
           Atts (Synthesized (Auto TypeCheck)) (Abstract.ConstExpression l l Sem Sem) ~ SynTCExp l) =>
          SynthesizedField "moduleEnv" (Map k (Type l)) (Auto TypeCheck) (AST.Declaration l l) Sem Placed where
    synthesizedField _ _ (pos, AST.ConstantDeclaration namedef _) _ (AST.ConstantDeclaration _ expression) =
@@ -353,12 +350,7 @@ instance (Abstract.Nameable l, k ~ Abstract.QualIdent l, Ord k,
       foldMap (Map.singleton (Abstract.nonQualIdent $ Abstract.getIdentDefName namedef) . signatureType . syn) sig
 
 instance (Abstract.Nameable l, k ~ Abstract.QualIdent l, Ord k,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Declaration l l Sem Sem) ~ SynTCMod l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Type l l Sem Sem) ~ SynTCType l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.FormalParameters l l Sem Sem) ~ SynTCSig l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.ProcedureHeading l l Sem Sem) ~ SynTCHead l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Block l l Sem Sem) ~ SynTCMod l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.ConstExpression l l Sem Sem) ~ SynTCExp l) =>
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.Type l l Sem Sem) ~ SynTCType l) =>
          SynthesizedField "pointerTargets" (Folded (Map AST.Ident AST.Ident)) (Auto TypeCheck)
                                            (AST.Declaration l l) Sem Placed where
    synthesizedField _ _ (pos, AST.TypeDeclaration namedef _) _ (AST.TypeDeclaration _ definition) =
@@ -402,7 +394,7 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualId
           Atts (Inherited (Auto TypeCheck)) (Abstract.Declaration l l Sem Sem) ~ InhTCDecl l,
           Atts (Inherited (Auto TypeCheck)) (Abstract.StatementSequence l l Sem Sem) ~ InhTC l) =>
          Bequether (Auto TypeCheck) (AST.Block l l) Sem Placed where
-   bequest _ (pos, AST.Block{}) inheritance@InhTC{env} (AST.Block declarations statements) =
+   bequest _ (pos, AST.Block{}) inheritance@InhTC{env} (AST.Block declarations _statements) =
       AST.Block (pure $ Inherited InhTCDecl{env= localEnv,
                                             pointerTargets= getFolded pointers})
                 (pure $ Inherited localInheritance)
@@ -469,8 +461,7 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Synthesized (Auto TypeCheck)) (Abstract.ConstExpression l l Sem Sem) ~ SynTCExp l) =>
          Synthesizer (Auto TypeCheck) (AST.Type l l) Sem Placed where
    synthesis _ (pos, AST.TypeReference q) InhTC{env} _ = 
-      SynTCType{errors= if Map.member q env then mempty
-                        else Folded [Error () pos (UnknownName q)],
+      SynTCType{errors= if Map.member q env then mempty else Folded [Error () pos (UnknownName q)],
                 typeName= Abstract.getNonQualIdentName q,
                 pointerTarget= Nothing,
                 definedType= fromMaybe UnknownType (Map.lookup q env)}
@@ -482,8 +473,7 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
                 pointerTarget= Nothing,
                 definedType= ArrayType (integerValue . syn <$> getZipList dimensions) (definedType $ syn itemType)}
      where expectInteger SynTCExp{inferredType= IntegerType{}} = mempty
-           expectInteger SynTCExp{inferredType= t} =
-              Folded [Error () pos (NonIntegerType t)]
+           expectInteger SynTCExp{inferredType= t} = Folded [Error () pos (NonIntegerType t)]
            integerValue SynTCExp{inferredType= IntegerType n} = n
            integerValue _ = 0
    synthesis _ (pos, AST.RecordType base fields) InhTC{env} (AST.RecordType _base fields') =
@@ -511,8 +501,7 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
                 pointerTarget= Nothing,
                 definedType= maybe (ProcedureType False [] Nothing) (signatureType . syn) signature'}
 
-instance (Abstract.Nameable l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Type l l Sem Sem) ~ SynTCType l) =>
+instance (Abstract.Nameable l, Atts (Synthesized (Auto TypeCheck)) (Abstract.Type l l Sem Sem) ~ SynTCType l) =>
          SynthesizedField "fieldEnv" (Map AST.Ident (Type l)) (Auto TypeCheck) (AST.FieldList l l) Sem Placed where
    synthesizedField _ _ (_, AST.FieldList names _declaredType) _inheritance (AST.FieldList _names declaredType) =
       foldMap (\name-> Map.singleton (Abstract.getIdentDefName name) (definedType $ syn declaredType)) names
@@ -526,25 +515,13 @@ instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Inherited (Auto TypeCheck)) (Abstract.Designator l l Sem Sem) ~ InhTC l,
           Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ SynTCExp l) =>
          Bequether (Auto TypeCheck) (AST.Statement l l) Sem Placed where
-   bequest _ (_pos, AST.EmptyStatement) i _   = AST.EmptyStatement
-   bequest _ (_pos, AST.Assignment{}) i _     = AST.Assignment (AG.Inherited i) (AG.Inherited i)
-   bequest _ (_pos, AST.ProcedureCall proc args) i _  =
-      AST.ProcedureCall (AG.Inherited i) ((AG.Inherited i <$) <$> args)
-   bequest _ (_pos, AST.If _branch branches _fallback) i _ =
-      AST.If (AG.Inherited i) (AG.Inherited i <$ branches) (Just $ AG.Inherited i)
    bequest _ (_pos, AST.CaseStatement{}) i@InhTC{env} (AST.CaseStatement value _branches _fallback) =
       AST.CaseStatement (Inherited i) (pure $ Inherited InhTCExp{env= env,
                                                                  expectedType= inferredType $ syn value})
                         (Just $ Inherited i)
-   bequest _ (_pos, AST.While{}) i _          = AST.While (AG.Inherited i) (AG.Inherited i)
-   bequest _ (_pos, AST.Repeat{}) i _         = AST.Repeat (AG.Inherited i) (AG.Inherited i)
-   bequest _ (_pos, AST.For name _ _ _ _) i _ =
-      AST.For name (AG.Inherited i) (AG.Inherited i) (pure $ AG.Inherited i) (AG.Inherited i)  -- Oberon2
-   bequest _ (_pos, AST.Loop{}) i _           = AST.Loop (AG.Inherited i)
-   bequest _ (_pos, AST.With{}) i _           =
-      AST.With (AG.Inherited i) (pure $ AG.Inherited i) (Just $ AG.Inherited i)
-   bequest _ (_pos, AST.Exit{}) i _           = AST.Exit
-   bequest _ (_pos, AST.Return{}) i _         = AST.Return (Just $ AG.Inherited i)
+   bequest _ (_pos, statement) InhTC{env} _ =
+      AG.passDown InhTCExp{env= env,
+                           expectedType= error "No statement except CASE needs expectedType"} statement
 
 instance {-# overlaps #-} (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
                            Atts (Synthesized (Auto TypeCheck)) (Abstract.StatementSequence l l Sem Sem) ~ SynTC l,
@@ -730,9 +707,6 @@ instance {-# overlaps #-} (Abstract.Nameable l, Ord (Abstract.QualIdent l),
    synthesis _ (pos, _) _inheritance (AST.Not expr) =
       SynTCExp{errors= booleanExpressionErrors pos (syn expr),
                inferredType= BuiltinType "BOOLEAN"}
-
-instance SynthesizedField "errors" (Folded [Error () l]) (Auto TypeCheck) (AST.Value l l) Sem Placed where
-   synthesizedField = mempty
   
 instance Abstract.Wirthy l => SynthesizedField "inferredType" (Type l) (Auto TypeCheck) (AST.Value l l) Sem Placed where
    synthesizedField _ _ (_, AST.Integer x) _ _  = IntegerType (fromIntegral x)
@@ -771,8 +745,7 @@ instance {-# overlaps #-} (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract
                        of SynTCDes{errors= Folded [],
                                    designatorType= t} ->
                              maybe (Folded [Error () pos (NonRecordType t)])
-                                   (maybe (Folded [Error () pos (UnknownField fieldName t)])
-                                    $ const mempty)
+                                   (maybe (Folded [Error () pos (UnknownField fieldName t)]) $ const mempty)
                                    (access True t)
                           SynTCDes{errors= errors} -> errors,
                designatorName= Nothing,
@@ -815,13 +788,11 @@ instance {-# overlaps #-} (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract
    synthesis _ (pos, _) InhTC{} (AST.Dereference pointer) =
       SynTCDes{errors= case syn pointer
                        of SynTCDes{errors= Folded [],
-                                   designatorType= PointerType{}} -> mempty
-                          SynTCDes{errors= Folded [],
-                                   designatorType= NominalType _ (Just PointerType{})} -> mempty
-                          SynTCDes{errors= Folded [],
-                                   designatorType= ProcedureType True _ _} -> mempty
-                          SynTCDes{errors= Folded [],
-                                   designatorType= t} -> Folded [Error () pos (NonPointerType t)]
+                                   designatorType= t}
+                             | PointerType{} <- t -> mempty
+                             | NominalType _ (Just PointerType{}) <- t -> mempty
+                             | ProcedureType True _ _ <- t -> mempty
+                             | otherwise -> Folded [Error () pos (NonPointerType t)]
                           SynTCDes{errors= es} -> es,
                designatorName= Nothing,
                designatorType= case designatorType (syn pointer)
@@ -843,12 +814,10 @@ binaryBooleanSynthesis pos left right =
             inferredType= BuiltinType "BOOLEAN"}
 
 unaryNumericOrSetOperatorErrors :: forall l. Abstract.Nameable l => LexicalPosition -> SynTCExp l -> Folded [Error () l]
-unaryNumericOrSetOperatorErrors _ SynTCExp{errors= Folded [], inferredType= IntegerType{}} = mempty
-unaryNumericOrSetOperatorErrors _ SynTCExp{errors= Folded [], inferredType= BuiltinType name}
-  | isNumerical name = mempty
-  | name == "SET" = mempty
-unaryNumericOrSetOperatorErrors pos SynTCExp{errors= Folded [], inferredType= t} =
-   Folded [Error () pos (NonNumericType t)]
+unaryNumericOrSetOperatorErrors pos SynTCExp{errors= Folded [], inferredType= t}
+   | IntegerType{} <- t = mempty
+   | BuiltinType name <- t, isNumerical name || name == "SET" = mempty
+   | otherwise = Folded [Error () pos (NonNumericType t)]
 unaryNumericOrSetOperatorErrors _ SynTCExp{errors= errs} = errs
 
 unaryNumericOrSetOperatorType :: (Int -> Int) -> SynTCExp l -> Type l
