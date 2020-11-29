@@ -790,6 +790,7 @@ instance {-# overlaps #-} (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract
                        of SynTCDes{errors= Folded [],
                                    designatorType= t} -> either id (const mempty) (access True t)
                           SynTCDes{errors= errors} -> errors,
+               designatorName= Nothing,
                designatorType= either (const UnknownType) id (access True $ designatorType $ syn array)}
       where access _ (ArrayType dimensions t)
               | length dimensions == length indexes + 1 = Right t
@@ -808,6 +809,7 @@ instance {-# overlaps #-} (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract
                                     (SynTCDes{errors= errors}, 
                                      Nothing) -> Folded (Error () pos (UnknownName q) : getFolded errors)
                                     (SynTCDes{errors= errors}, _) -> errors,
+               designatorName= Nothing,
                designatorType= fromMaybe UnknownType targetType}
       where targetType = Map.lookup q env
    synthesis _ (pos, _) InhTC{} (AST.Dereference pointer) =
@@ -821,6 +823,7 @@ instance {-# overlaps #-} (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract
                           SynTCDes{errors= Folded [],
                                    designatorType= t} -> Folded [Error () pos (NonPointerType t)]
                           SynTCDes{errors= es} -> es,
+               designatorName= Nothing,
                designatorType= case designatorType (syn pointer)
                                of NominalType _ (Just (PointerType t)) -> t
                                   ProcedureType True params result -> ProcedureType False params result
