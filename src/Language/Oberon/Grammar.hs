@@ -25,6 +25,7 @@ import Data.Char
 import Data.Data (Data)
 import Data.Functor.Compose (Compose(..))
 import Data.List.NonEmpty (NonEmpty)
+import Data.Ord (Down)
 import Data.Maybe (catMaybes)
 import Data.Monoid ((<>), Dual(Dual, getDual), Endo(Endo, appEndo))
 import Numeric (readDec, readHex, readFloat)
@@ -128,7 +129,7 @@ data TokenType = Delimiter | Keyword | Operator | Other
                deriving (Data, Eq, Show)
 
 -- | Every node in the parsed AST will be wrapped in this data type.
-type NodeWrap = Compose ((,) (Position, Position)) (Compose Ambiguous ((,) ParsedLexemes))
+type NodeWrap = Compose ((,) (Down Int, Down Int)) (Compose Ambiguous ((,) ParsedLexemes))
 
 newtype ParsedLexemes = Trailing [Lexeme]
                       deriving (Data, Eq, Show, Semigroup, Monoid)
