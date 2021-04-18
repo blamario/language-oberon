@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds, DeriveGeneric, DuplicateRecordFields, FlexibleContexts, FlexibleInstances,
              MultiParamTypeClasses, OverloadedStrings, RankNTypes, ScopedTypeVariables,
-             TemplateHaskell, TypeFamilies, UndecidableInstances #-}
+             TypeFamilies, UndecidableInstances #-}
 
 -- | The main export of this module is the function 'foldConstants' that folds the constants in Oberon AST using a
 -- attribute grammar. Other exports are helper functions and attribute types that can be reused for other languages or
@@ -23,7 +23,6 @@ import Data.Semigroup (Semigroup(..))
 import qualified Data.Text as Text
 import Foreign.Storable (sizeOf)
 import GHC.Generics (Generic)
-import Language.Haskell.TH (appT, conT, varT, varE, newName)
 import Data.Text.Prettyprint.Doc (layoutCompact, Pretty(pretty))
 import Data.Text.Prettyprint.Doc.Render.Text (renderStrict)
 
@@ -470,9 +469,6 @@ instance (Ord (Abstract.QualIdent l), v ~ Abstract.Value l l Placed Placed) =>
    synthesizedField _ _ (pos, AST.Variable q) inheritance _ = (,) pos <$> join (Map.lookup q $ env inheritance)
    synthesizedField _ _ _ _ _ = Nothing
 
-instance {-# overlaps #-} Ord (Abstract.QualIdent l) => Transformation.At (Auto ConstantFold) (Modules l Sem Sem) where
-   ($) = AG.applyDefault snd
-
 anyWhitespace :: ParsedLexemes -> ParsedLexemes -> ParsedLexemes
 anyWhitespace outer inner@(Trailing ls)
    | any isWhitespace ls = inner
@@ -485,12 +481,6 @@ lastWhitespace ls@(Trailing []) = ls
 lastWhitespace ls@(Trailing [WhiteSpace{}]) = ls
 lastWhitespace (Trailing [_]) = mempty
 lastWhitespace (Trailing (l:ls)) = lastWhitespace (Trailing ls)
-
---- * Shortcut
-
-instance Full.Functor (Auto ConstantFold) (AST.Value l l) where
-   Auto ConstantFold <$> (pos, val) = Rank2.Arrow sem
-      where sem _inherited = Synthesized (SynCF $ Mapped (pos, val))
 
 -- * Unsafe Rank2 AST instances
 
@@ -508,23 +498,3 @@ predefined = Map.fromList $ map (first Abstract.nonQualIdent) $
                    "ODD", "SIZE", "ORD", "CHR", "SHORT", "LONG", "ENTIER"]
    where builtin name = (name, Just $ Abstract.builtin name)
 predefined2 = predefined
-
-$(do l <- varT  <$> newName "l"
-     mconcat <$> mapM (\g-> Transformation.Full.TH.deriveUpFunctor (conT ''Auto `appT` conT ''ConstantFold)
-                            $ conT g `appT` l `appT` l)
-        [''AST.Declaration, ''AST.Type, ''AST.FieldList,
-         ''AST.ProcedureHeading, ''AST.FormalParameters, ''AST.FPSection,
-         ''AST.Expression, ''AST.Element, ''AST.Designator,
-         ''AST.Block, ''AST.StatementSequence, ''AST.Statement,
-         ''AST.Case, ''AST.CaseLabels, ''AST.ConditionalBranch, ''AST.WithAlternative])
-
-$(do let sem = [t|Semantics (Auto ConstantFold)|]
-     let inst g = [d| instance Attribution (Auto ConstantFold) ($g l l) Sem Placed =>
-                               Transformation.At (Auto ConstantFold) ($g l l $sem $sem)
-                         where ($) = AG.applyDefault snd |]
-     mconcat <$> mapM (inst . conT)
-        [''AST.Module, ''AST.Block, ''AST.Declaration, ''AST.Type, ''AST.FieldList,
-         ''AST.ProcedureHeading, ''AST.FormalParameters, ''AST.FPSection,
-         ''AST.StatementSequence, ''AST.Statement,
-         ''AST.Case, ''AST.CaseLabels, ''AST.ConditionalBranch, ''AST.WithAlternative,
-         ''AST.Element, ''AST.Expression, ''AST.Designator])

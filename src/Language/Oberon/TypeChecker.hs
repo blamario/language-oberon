@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds, DeriveGeneric, DuplicateRecordFields, FlexibleContexts, FlexibleInstances,
              MultiParamTypeClasses, NamedFieldPuns, OverloadedStrings, ScopedTypeVariables, StandaloneDeriving,
-             TemplateHaskell, TypeFamilies, TypeOperators, UndecidableInstances, ViewPatterns #-}
+             TypeFamilies, TypeOperators, UndecidableInstances, ViewPatterns #-}
 
 -- | Type checker for Oberon AST. The AST must have its ambiguities previously resolved by "Language.Oberon.Resolver".
 module Language.Oberon.TypeChecker (checkModules, errorMessage, Error(..), ErrorType(..), predefined, predefined2) where
@@ -17,7 +17,6 @@ import qualified Data.Map.Lazy as Map
 import Data.Semigroup (Semigroup(..))
 import qualified Data.Text as Text
 import GHC.Generics (Generic)
-import Language.Haskell.TH (appT, conT, varT, newName)
 
 import qualified Rank2
 import qualified Transformation
@@ -1025,23 +1024,3 @@ predefined2 = predefined <>
    Map.fromList (first Abstract.nonQualIdent <$>
                  [("ASSERT", ProcedureType False [(False, BuiltinType "BOOLEAN"),
                                                   (False, BuiltinType "INTEGER")] Nothing)])
-
-$(do l <- varT <$> newName "l"
-     mconcat <$> mapM (\t-> Transformation.Full.TH.deriveUpFunctor (conT ''Auto `appT` conT ''TypeCheck)
-                            $ conT t `appT` l `appT` l)
-        [''AST.Declaration, ''AST.Type, ''AST.FieldList,
-         ''AST.ProcedureHeading, ''AST.FormalParameters, ''AST.FPSection,
-         ''AST.Expression, ''AST.Element, ''AST.Designator,
-         ''AST.Block, ''AST.StatementSequence, ''AST.Statement,
-         ''AST.Case, ''AST.CaseLabels, ''AST.ConditionalBranch, ''AST.Value, ''AST.WithAlternative])
-
-$(do let sem = [t|Semantics (Auto TypeCheck)|]
-     let inst g = [d| instance Attribution (Auto TypeCheck) ($g l l) Sem Placed =>
-                               Transformation.At (Auto TypeCheck) ($g l l $sem $sem)
-                         where ($) = AG.applyDefault snd |]
-     mconcat <$> mapM (inst . conT)
-        [''AST.Module, ''AST.Declaration, ''AST.Type, ''AST.FieldList,
-         ''AST.ProcedureHeading, ''AST.FormalParameters, ''AST.FPSection,
-         ''AST.Block, ''AST.StatementSequence, ''AST.Statement,
-         ''AST.Case, ''AST.CaseLabels, ''AST.ConditionalBranch, ''AST.WithAlternative,
-         ''AST.Expression, ''AST.Element, ''AST.Designator, ''AST.Value])
