@@ -34,6 +34,7 @@ import qualified Transformation.Full as Full
 import qualified Transformation.Full.TH
 import qualified Transformation.Shallow as Shallow
 import qualified Transformation.AG as AG
+import qualified Transformation.AG.Generics as AG
 import Transformation.AG (Attribution(..), Atts, Inherited(..), Synthesized(..), Semantics)
 import Transformation.AG.Generics (Auto(Auto), Bequether(..), Synthesizer(..), SynthesizedField(..), Mapped(..))
 
@@ -76,6 +77,9 @@ type Sem = Semantics (Auto ConstantFold)
 instance Transformation.Transformation (Auto ConstantFold) where
    type Domain (Auto ConstantFold) = Placed
    type Codomain (Auto ConstantFold) = Semantics (Auto ConstantFold)
+
+instance AG.Revelation (Auto ConstantFold) where
+   reveal (Auto ConstantFold) = snd
 
 data InhCFRoot l = InhCFRoot{rootEnv :: Environment l} deriving Generic
 
