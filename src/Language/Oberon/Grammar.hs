@@ -35,6 +35,7 @@ import Text.Parser.Combinators (sepBy, sepBy1, sepByNonEmpty, try)
 import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift, tmap)
 import Text.Parser.Token (braces, brackets, parens)
 
+import qualified Rank2
 import qualified Rank2.TH
 
 import qualified Language.Oberon.Abstract as Abstract
@@ -155,20 +156,20 @@ instance LexicalParsing (Parser (OberonGrammar l f) Text) where
                              <* lift ([[Token Keyword s]], ()))
                <?> ("keyword " <> show s)
 
-comment :: Parser g Text Text
+comment :: Rank2.Apply g => Parser g Text Text
 comment = try (string "(*"
                <> concatMany (comment <<|> notFollowedBy (string "*)") *> anyToken <> takeCharsWhile isCommentChar)
                <> string "*)")
    where isCommentChar c = c /= '*' && c /= '('
 
-whiteSpace :: LexicalParsing (Parser g Text) => Parser g Text ()
+whiteSpace :: Rank2.Apply g => LexicalParsing (Parser g Text) => Parser g Text ()
 whiteSpace = spaceChars *> skipMany (lexicalComment *> spaceChars) <?> "whitespace"
    where spaceChars = (takeCharsWhile1 isSpace >>= \ws-> lift ([[WhiteSpace ws]], ())) <<|> pure ()
 
 clearConsumed = tmap clear
    where clear (_, x) = ([], x)
 
-wrapAmbiguous, wrap :: Parser g Text a -> Parser g Text (NodeWrap a)
+wrapAmbiguous, wrap :: Rank2.Apply g => Parser g Text a -> Parser g Text (NodeWrap a)
 wrapAmbiguous = wrap
 wrap = (Compose <$>) . (\p-> liftA3 surround getSourcePos p getSourcePos)
          . (Compose <$>) . (ambiguous . tmap store) . ((,) (Trailing []) <$>)

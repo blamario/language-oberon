@@ -1,5 +1,10 @@
 # Revision history for language-oberon
 
+## 0.3.1  -- 2022-10-09
+
+* Incremented the upper bound of the `input-parsers` dependency
+* Minor fixes for GHC 9 compatibility
+
 ## 0.3  -- 2020-11-01
 
 * Preserving the parsed start and end positions and lexemes of every node

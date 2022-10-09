@@ -177,6 +177,7 @@ instance {-# overlaps #-}
     Full.Traversable (Resolution l) (Abstract.Type l l),
     Full.Traversable (Resolution l) (Abstract.FormalParameters l l),
     Full.Traversable (Resolution l) (Abstract.ConstExpression l l),
+    Deep.Traversable (Resolution l) (DeclarationRHS l),
     Deep.Traversable (Resolution l) (Abstract.Type l l),
     Deep.Traversable (Resolution l) (Abstract.ProcedureHeading l l),
     Deep.Traversable (Resolution l) (Abstract.FormalParameters l l),
@@ -210,6 +211,7 @@ instance {-# overlaps #-}
     Full.Traversable (Resolution l) (Abstract.Type l l),
     Full.Traversable (Resolution l) (Abstract.FormalParameters l l),
     Full.Traversable (Resolution l) (Abstract.ConstExpression l l),
+    Deep.Traversable (Resolution l) (DeclarationRHS l),
     Deep.Traversable (Resolution l) (Abstract.Type l l),
     Deep.Traversable (Resolution l) (Abstract.FormalParameters l l),
     Deep.Traversable (Resolution l) (Abstract.ConstExpression l l)) =>
@@ -246,6 +248,7 @@ instance {-# overlaps #-}
     Full.Traversable (Resolution l) (Abstract.Type l l),
     Full.Traversable (Resolution l) (Abstract.FormalParameters l l),
     Full.Traversable (Resolution l) (Abstract.ConstExpression l l),
+    Deep.Traversable (Resolution l) (DeclarationRHS l),
     Deep.Traversable (Resolution l) (Abstract.Type l l),
     Deep.Traversable (Resolution l) (Abstract.FormalParameters l l),
     Deep.Traversable (Resolution l) (Abstract.ConstExpression l l)) =>
@@ -335,12 +338,14 @@ resolveName res scope q
 -- signature are satisfied by the Oberon 'Language'.
 resolveModules :: forall l. (BindableDeclaration l, CoFormalParameters l, Abstract.Wirthy l,
                              Deep.Traversable (Resolution l) (Abstract.Declaration l l),
+                             Deep.Traversable (Resolution l) (DeclarationRHS l),
                              Deep.Traversable (Resolution l) (Abstract.Type l l),
                              Deep.Traversable (Resolution l) (Abstract.ProcedureHeading l l),
                              Deep.Traversable (Resolution l) (Abstract.FormalParameters l l),
                              Deep.Traversable (Resolution l) (Abstract.Expression l l),
                              Deep.Traversable (Resolution l) (Abstract.Block l l),
                              Deep.Traversable (Resolution l) (Abstract.StatementSequence l l),
+                             Full.Traversable (Resolution l) (Module l l),
                              Full.Traversable (Resolution l) (Abstract.Declaration l l),
                              Full.Traversable (Resolution l) (Abstract.Type l l),
                              Full.Traversable (Resolution l) (Abstract.ProcedureHeading l l),
@@ -360,6 +365,7 @@ resolveModules predefinedScope modules = traverseWithKey extractErrors modules'
 -- 'predefined2'. The imports are resolved using the given map of already resolved modules. Note that all class
 -- constraints in the function's type signature are satisfied by the Oberon 'Language'.
 resolveModule :: forall l. (BindableDeclaration l, CoFormalParameters l,
+                            Full.Traversable (Resolution l) (Module l l),
                             Full.Traversable (Resolution l) (Abstract.Block l l),
                             Full.Traversable (Resolution l) (Abstract.Declaration l l),
                             Full.Traversable (Resolution l) (Abstract.Type l l),
@@ -367,6 +373,7 @@ resolveModule :: forall l. (BindableDeclaration l, CoFormalParameters l,
                             Full.Traversable (Resolution l) (Abstract.ConstExpression l l),
                             Full.Traversable (Resolution l) (Abstract.StatementSequence l l),
                             Deep.Traversable (Resolution l) (Declaration l l),
+                            Deep.Traversable (Resolution l) (DeclarationRHS l),
                             Deep.Traversable (Resolution l) (Abstract.Declaration l l),
                             Deep.Traversable (Resolution l) (Abstract.StatementSequence l l),
                             Deep.Traversable (Resolution l) (Abstract.Type l l),
@@ -392,6 +399,7 @@ resolveModule predefined modules m@(Compose (pos, Compose (Ambiguous ((ls, Modul
          moduleGlobalScope = localScope res moduleName (getLocalDeclarations body') predefined
 
 localScope :: forall l. (BindableDeclaration l,
+                         Deep.Traversable (Resolution l) (DeclarationRHS l),
                          Full.Traversable (Resolution l) (Abstract.Type l l),
                          Full.Traversable (Resolution l) (Abstract.FormalParameters l l),
                          Full.Traversable (Resolution l) (Abstract.ConstExpression l l)) =>
