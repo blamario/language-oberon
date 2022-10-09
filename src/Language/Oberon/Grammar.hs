@@ -32,7 +32,7 @@ import Numeric (readDec, readHex, readFloat)
 import Data.Text (Text, unpack)
 import Text.Grampa
 import Text.Parser.Combinators (sepBy, sepBy1, sepByNonEmpty, try)
-import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift, tmap)
+import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, autochain, lift, tmap)
 import Text.Parser.Token (braces, brackets, parens)
 
 import qualified Rank2
@@ -179,13 +179,13 @@ wrap = (Compose <$>) . (\p-> liftA3 surround getSourcePos p getSourcePos)
 oberonGrammar, oberon2Grammar, oberonDefinitionGrammar, oberon2DefinitionGrammar
    :: Grammar (OberonGrammar AST.Language NodeWrap) Parser Text
 -- | Grammar of an Oberon module
-oberonGrammar = fixGrammar grammar
+oberonGrammar = autochain $ fixGrammar grammar
 -- | Grammar of an Oberon-2 module
-oberon2Grammar = fixGrammar grammar2
+oberon2Grammar = autochain $ fixGrammar grammar2
 -- | Grammar of an Oberon definition module
-oberonDefinitionGrammar = fixGrammar definitionGrammar
+oberonDefinitionGrammar = autochain $ fixGrammar definitionGrammar
 -- | Grammar of an Oberon-2 definition module
-oberon2DefinitionGrammar = fixGrammar definitionGrammar2
+oberon2DefinitionGrammar = autochain $ fixGrammar definitionGrammar2
 
 grammar, definitionGrammar :: forall l. Abstract.Oberon l
                            => GrammarBuilder (OberonGrammar l NodeWrap) (OberonGrammar l NodeWrap) Parser Text
