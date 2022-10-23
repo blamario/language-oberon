@@ -1,5 +1,9 @@
 # Revision history for language-oberon
 
+## 0.3.2  -- 2022-10-23
+
+* Using `autochain` and new imports from grammatical-parsers-0.7
+
 ## 0.3.1  -- 2022-10-09
 
 * Incremented the upper bound of the `input-parsers` dependency
