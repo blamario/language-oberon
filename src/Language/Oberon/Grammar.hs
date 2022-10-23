@@ -32,7 +32,7 @@ import Numeric (readDec, readHex, readFloat)
 import Data.Text (Text, unpack)
 import Text.Grampa
 import Text.Parser.Combinators (sepBy, sepBy1, sepByNonEmpty, try)
-import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, autochain, lift, tmap)
+import Text.Grampa.ContextFree.SortedMemoizing.Transformer.LeftRecursive (ParserT, autochain, lift, tmap)
 import Text.Parser.Token (braces, brackets, parens)
 
 import qualified Rank2

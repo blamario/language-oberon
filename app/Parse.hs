@@ -32,7 +32,6 @@ import qualified Data.Text.IO as Text
 import Options.Applicative
 import qualified Text.Parser.Input.Position as Position
 import Text.Grampa (Ambiguous, Grammar, parseComplete, failureDescription)
-import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
 import ReprTree
 import System.FilePath (FilePath, addExtension, combine, takeDirectory)
 
