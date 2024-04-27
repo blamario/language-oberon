@@ -1,5 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, UndecidableInstances,
-             OverloadedStrings, StandaloneDeriving, TemplateHaskell, TypeFamilies #-}
+             OverloadedStrings, StandaloneDeriving, TemplateHaskell, TypeFamilies, TypeOperators #-}
 {-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 
 -- | Concrete data types for Oberon constructs that make up its Abstract Syntax Tree. Every data type from this module

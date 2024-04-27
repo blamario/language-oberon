@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds, DeriveGeneric, DuplicateRecordFields, FlexibleContexts, FlexibleInstances,
              MultiParamTypeClasses, OverloadedStrings, RankNTypes, ScopedTypeVariables,
-             TypeFamilies, UndecidableInstances #-}
+             TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | The main export of this module is the function 'foldConstants' that folds the constants in Oberon AST using a
 -- attribute grammar. Other exports are helper functions and attribute types that can be reused for other languages or
