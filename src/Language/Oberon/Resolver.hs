@@ -17,6 +17,7 @@ import Data.Either (partitionEithers)
 import Data.Either.Validation (Validation(..), validationToEither)
 import Data.Foldable (toList)
 import Data.Functor.Compose (Compose(..))
+import qualified Data.Kind as K (Type)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.List as List
@@ -273,7 +274,7 @@ instance {-# overlaps #-}
       in (\(pos, (r, s'))-> ((pos, r), (scope, s')))
          <$> unique InvalidStatement (AmbiguousStatement . (fst <$>)) (resolveStatement <$> statements)
 
-traverseResolveDefault :: Resolution l -> NodeWrap (g (f :: * -> *) f) -> Compose (Resolved l) Placed (g f f)
+traverseResolveDefault :: Resolution l -> NodeWrap (g (f :: K.Type -> K.Type) f) -> Compose (Resolved l) Placed (g f f)
 traverseResolveDefault Resolution{} (Compose ((start, end), Compose (Ambiguous ((ws, x) :| [])))) =
    Compose (StateT $ \s-> Success (((start, ws, end), x), s))
 traverseResolveDefault Resolution{} _ = Compose (StateT $ const $ Failure $ pure AmbiguousParses)

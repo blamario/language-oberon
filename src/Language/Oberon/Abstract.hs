@@ -15,7 +15,7 @@ module Language.Oberon.Abstract (-- * Language classes
                                  ) where
 
 import Data.Data (Data)
-import Data.Kind (Constraint)
+import qualified Data.Kind as K
 import Data.List.NonEmpty
 import Data.Text (Text)
 
@@ -35,24 +35,24 @@ data RelOp = Equal | Unequal | Less | LessOrEqual | Greater | GreaterOrEqual | I
 -- * @f'@ wraps all descendant nodes, except
 -- * @f@ wraps all direct children of the node.
 class Wirthy l where
-   type Module l      = (m :: * -> (* -> *) -> (* -> *) -> *) | m -> l
-   type Declaration l = (d :: * -> (* -> *) -> (* -> *) -> *) | d -> l
-   type Type l        = (t :: * -> (* -> *) -> (* -> *) -> *) | t -> l
-   type Statement l   = (s :: * -> (* -> *) -> (* -> *) -> *) | s -> l
-   type Expression l  = (e :: * -> (* -> *) -> (* -> *) -> *) | e -> l
-   type Designator l  = (d :: * -> (* -> *) -> (* -> *) -> *) | d -> l
-   type Value l       = (v :: * -> (* -> *) -> (* -> *) -> *) | v -> l
+   type Module l      = (m :: K.Type -> (K.Type -> K.Type) -> (K.Type -> K.Type) -> K.Type) | m -> l
+   type Declaration l = (d :: K.Type -> (K.Type -> K.Type) -> (K.Type -> K.Type) -> K.Type) | d -> l
+   type Type l        = (t :: K.Type -> (K.Type -> K.Type) -> (K.Type -> K.Type) -> K.Type) | t -> l
+   type Statement l   = (s :: K.Type -> (K.Type -> K.Type) -> (K.Type -> K.Type) -> K.Type) | s -> l
+   type Expression l  = (e :: K.Type -> (K.Type -> K.Type) -> (K.Type -> K.Type) -> K.Type) | e -> l
+   type Designator l  = (d :: K.Type -> (K.Type -> K.Type) -> (K.Type -> K.Type) -> K.Type) | d -> l
+   type Value l       = (v :: K.Type -> (K.Type -> K.Type) -> (K.Type -> K.Type) -> K.Type) | v -> l
 
-   type FieldList l         = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
-   type ProcedureHeading l  = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
-   type FormalParameters l  = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
-   type FPSection l         = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
-   type Block l             = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
-   type StatementSequence l = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
-   type Case l              = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
-   type CaseLabels l        = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
-   type ConditionalBranch l = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
-   type Element l           = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
+   type FieldList l         = (x :: K.Type -> (K.Type -> K.Type) -> (K.Type -> K.Type) -> K.Type) | x -> l
+   type ProcedureHeading l  = (x :: K.Type -> (K.Type -> K.Type) -> (K.Type -> K.Type) -> K.Type) | x -> l
+   type FormalParameters l  = (x :: K.Type -> (K.Type -> K.Type) -> (K.Type -> K.Type) -> K.Type) | x -> l
+   type FPSection l         = (x :: K.Type -> (K.Type -> K.Type) -> (K.Type -> K.Type) -> K.Type) | x -> l
+   type Block l             = (x :: K.Type -> (K.Type -> K.Type) -> (K.Type -> K.Type) -> K.Type) | x -> l
+   type StatementSequence l = (x :: K.Type -> (K.Type -> K.Type) -> (K.Type -> K.Type) -> K.Type) | x -> l
+   type Case l              = (x :: K.Type -> (K.Type -> K.Type) -> (K.Type -> K.Type) -> K.Type) | x -> l
+   type CaseLabels l        = (x :: K.Type -> (K.Type -> K.Type) -> (K.Type -> K.Type) -> K.Type) | x -> l
+   type ConditionalBranch l = (x :: K.Type -> (K.Type -> K.Type) -> (K.Type -> K.Type) -> K.Type) | x -> l
+   type Element l           = (x :: K.Type -> (K.Type -> K.Type) -> (K.Type -> K.Type) -> K.Type) | x -> l
    
    type Import l  = x | x -> l
    type IdentDef l  = x | x -> l
@@ -132,7 +132,7 @@ class Wirthy l where
 
 -- | An instance of this type can convert its own constructs to another language that's an instance of 'TargetClass'.
 class Wirthy l => CoWirthy l where
-   type TargetClass l :: * -> Constraint
+   type TargetClass l :: K.Type -> K.Constraint
    type TargetClass l = Wirthy
    coDeclaration :: TargetClass l l' => Declaration l l'' f' f -> Declaration l' l'' f' f
    coType        :: TargetClass l l' => Type l l'' f' f        -> Type l' l'' f' f
@@ -265,7 +265,7 @@ class Wirthy l => Nameable l where
 
 -- | The finally-tagless associated types and methods relevant to both versions of the Oberon language.
 class Wirthy l => Oberon l where
-   type WithAlternative l = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> l
+   type WithAlternative l = (x :: K.Type -> (K.Type -> K.Type) -> (K.Type -> K.Type) -> K.Type) | x -> l
 
    moduleUnit :: Ident -> [Import l] -> f (Block l' l' f' f') -> Module l l' f' f
    moduleImport :: Maybe Ident -> Ident -> Import l

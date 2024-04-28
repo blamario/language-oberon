@@ -11,6 +11,7 @@ module Language.Oberon.AST (module Language.Oberon.AST, RelOp(..)) where
 import Control.Applicative (ZipList(ZipList, getZipList))
 import Control.Monad (forM, mapM)
 import Data.Data (Data, Typeable)
+import qualified Data.Kind as K (Type)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Text (Text)
 
@@ -298,14 +299,15 @@ deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f', Data (f (Ab
 deriving instance Show (f (Abstract.Expression l l f' f')) => Show (Element λ l f' f)
 deriving instance Eq (f (Abstract.Expression l l f' f')) => Eq (Element λ l f' f)
 
-data Value λ l (f' :: * -> *) (f :: * -> *) = Boolean Bool
-                                            | Builtin Text
-                                            | CharCode Int
-                                            | Integer Integer
-                                            | Nil
-                                            | Real Double
-                                            | String Text
-                                            deriving (Eq, Show)
+data Value λ l (f' :: K.Type -> K.Type) (f :: K.Type -> K.Type)
+   = Boolean Bool
+   | Builtin Text
+   | CharCode Int
+   | Integer Integer
+   | Nil
+   | Real Double
+   | String Text
+   deriving (Eq, Show)
 
 deriving instance (Typeable λ, Typeable l, Typeable f, Typeable f') => Data (Value λ l f' f)
 
