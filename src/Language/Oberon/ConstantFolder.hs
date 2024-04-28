@@ -23,8 +23,8 @@ import Data.Semigroup (Semigroup(..))
 import qualified Data.Text as Text
 import Foreign.Storable (sizeOf)
 import GHC.Generics (Generic)
-import Data.Text.Prettyprint.Doc (layoutCompact, Pretty(pretty))
-import Data.Text.Prettyprint.Doc.Render.Text (renderStrict)
+import Prettyprinter (layoutCompact, Pretty(pretty))
+import Prettyprinter.Render.Text (renderStrict)
 
 import qualified Rank2
 import qualified Transformation

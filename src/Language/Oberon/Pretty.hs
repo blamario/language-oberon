@@ -11,7 +11,7 @@ import Data.Functor.Identity (Identity(..))
 import Data.List (intersperse)
 import Data.List.NonEmpty (NonEmpty((:|)), toList)
 import qualified Data.Text as Text
-import Data.Text.Prettyprint.Doc
+import Prettyprinter
 import Numeric (showHex)
 
 import qualified Language.Oberon.Abstract as Abstract
