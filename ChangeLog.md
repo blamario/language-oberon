@@ -1,5 +1,10 @@
 # Revision history for language-oberon
 
+## 0.3.3.1 -- 2024-04-27
+
+* Fixed deprecation warnings
+* Bumped the upper bound of `filepath`
+
 ## 0.3.3  -- 2022-09-26
 
 * Using `OverloadedRecordDot` (GHC >= 9.2) instead of field accessors unsupported by GHC 9.6
