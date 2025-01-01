@@ -1,4 +1,5 @@
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, RankNTypes, RecordWildCards, ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, RankNTypes, RecordWildCards, ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies, TypeOperators #-}
 
 module Main where
 
@@ -14,8 +15,8 @@ import qualified Language.Oberon.TypeChecker as TypeChecker
 import qualified Transformation.Rank2 as Rank2
 import qualified Transformation.Deep as Deep
 
-import Data.Text.Prettyprint.Doc (Pretty(pretty))
-import Data.Text.Prettyprint.Doc.Util (putDocW)
+import Prettyprinter (Pretty(pretty))
+import Prettyprinter.Util (putDocW)
 
 import Control.Arrow (second)
 import Control.Monad
