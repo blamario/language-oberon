@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                language-oberon
-version:             0.3.3.1
+version:             0.3.3.2
 synopsis:            Parser, pretty-printer, and more for the Oberon programming language
 description:
    The library and the executable support both the original Oberon and the Oberon-2 programming language, as described
