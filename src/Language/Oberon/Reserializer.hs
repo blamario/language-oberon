@@ -85,6 +85,7 @@ instance (Rank2.Foldable (g (Const (Sum Int))),
                where nodeEnd' = nodeStart + sourceLength root
 
 instance (Rank2.Foldable (g (Const (Sum Int))),
+          Rank2.Traversable (g Parsed),
           Deep.Foldable (Transformation.Rank2.Fold Parsed (Sum Int)) g,
           Deep.Traversable PositionAdjustment g) => Full.Traversable PositionAdjustment g where
    traverse PositionAdjustment root@((nodeStart, lexemes, nodeEnd), node) = state f
