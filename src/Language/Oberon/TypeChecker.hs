@@ -235,59 +235,59 @@ instance Rank2.Apply (Modules l f') where
    ~(Modules fs) <*> ~(Modules ms) = Modules (Map.intersectionWith Rank2.apply fs ms)
 
 -- * Boring attribute types
-type instance Atts (Inherited TypeCheck) (Modules l _ _) = InhTCRoot l
-type instance Atts (Synthesized TypeCheck) (Modules l _ _) = SynTCMods l
-type instance Atts (Inherited TypeCheck) (AST.Module l l _ _) = InhTC l
-type instance Atts (Synthesized TypeCheck) (AST.Module l l _ _) = SynTCMod l
-type instance Atts (Inherited TypeCheck) (AST.Declaration l l _ _) = InhTCDecl l
-type instance Atts (Synthesized TypeCheck) (AST.Declaration l l _ _) = SynTCMod l
-type instance Atts (Inherited TypeCheck) (AST.ProcedureHeading l l _ _) = InhTCDecl l
-type instance Atts (Synthesized TypeCheck) (AST.ProcedureHeading l l _ _) = SynTCHead l
-type instance Atts (Inherited TypeCheck) (AST.Block l l _ _) = InhTC l
-type instance Atts (Synthesized TypeCheck) (AST.Block l l _ _) = SynTCMod l
-type instance Atts (Inherited TypeCheck) (AST.FormalParameters l l _ _) = InhTC l
-type instance Atts (Synthesized TypeCheck) (AST.FormalParameters l l _ _) = SynTCSig l
-type instance Atts (Inherited TypeCheck) (AST.FPSection l l _ _) = InhTC l
-type instance Atts (Synthesized TypeCheck) (AST.FPSection l l _ _) = SynTCSec l
-type instance Atts (Inherited TypeCheck) (AST.Type l l _ _) = InhTC l
-type instance Atts (Synthesized TypeCheck) (AST.Type l l _ _) = SynTCType l
-type instance Atts (Inherited TypeCheck) (AST.FieldList l l _ _) = InhTC l
-type instance Atts (Synthesized TypeCheck) (AST.FieldList l l _ _) = SynTCFields l
-type instance Atts (Inherited TypeCheck) (AST.StatementSequence l l _ _) = InhTC l
-type instance Atts (Synthesized TypeCheck) (AST.StatementSequence l l _ _) = SynTC l
-type instance Atts (Inherited TypeCheck) (AST.Expression l l _ _) = InhTC l
-type instance Atts (Synthesized TypeCheck) (AST.Expression l l _ _) = SynTCExp l
-type instance Atts (Inherited TypeCheck) (AST.Element l l _ _) = InhTC l
-type instance Atts (Synthesized TypeCheck) (AST.Element l l _ _) = SynTCExp l
-type instance Atts (Inherited TypeCheck) (AST.Value l l _ _) = InhTC l
-type instance Atts (Synthesized TypeCheck) (AST.Value l l _ _) = SynTCExp l
-type instance Atts (Inherited TypeCheck) (AST.Designator l l _ _) = InhTC l
-type instance Atts (Synthesized TypeCheck) (AST.Designator l l _ _) = SynTCDes l
-type instance Atts (Inherited TypeCheck) (AST.Statement l l _ _) = InhTC l
-type instance Atts (Synthesized TypeCheck) (AST.Statement l l _ _) = SynTC l
-type instance Atts (Inherited TypeCheck) (AST.ConditionalBranch l l _ _) = InhTC l
-type instance Atts (Synthesized TypeCheck) (AST.ConditionalBranch l l _ _) = SynTC l
-type instance Atts (Inherited TypeCheck) (AST.Case l l _ _) = InhTCExp l
-type instance Atts (Synthesized TypeCheck) (AST.Case l l _ _) = SynTC l
-type instance Atts (Inherited TypeCheck) (AST.CaseLabels l l _ _) = InhTCExp l
-type instance Atts (Synthesized TypeCheck) (AST.CaseLabels l l _ _) = SynTC l
-type instance Atts (Inherited TypeCheck) (AST.WithAlternative l l _ _) = InhTC l
-type instance Atts (Synthesized TypeCheck) (AST.WithAlternative l l _ _) = SynTC l
+type instance Atts (Inherited TypeCheck) (Modules l) = InhTCRoot l
+type instance Atts (Synthesized TypeCheck) (Modules l) = SynTCMods l
+type instance Atts (Inherited TypeCheck) (AST.Module l l) = InhTC l
+type instance Atts (Synthesized TypeCheck) (AST.Module l l) = SynTCMod l
+type instance Atts (Inherited TypeCheck) (AST.Declaration l l) = InhTCDecl l
+type instance Atts (Synthesized TypeCheck) (AST.Declaration l l) = SynTCMod l
+type instance Atts (Inherited TypeCheck) (AST.ProcedureHeading l l) = InhTCDecl l
+type instance Atts (Synthesized TypeCheck) (AST.ProcedureHeading l l) = SynTCHead l
+type instance Atts (Inherited TypeCheck) (AST.Block l l) = InhTC l
+type instance Atts (Synthesized TypeCheck) (AST.Block l l) = SynTCMod l
+type instance Atts (Inherited TypeCheck) (AST.FormalParameters l l) = InhTC l
+type instance Atts (Synthesized TypeCheck) (AST.FormalParameters l l) = SynTCSig l
+type instance Atts (Inherited TypeCheck) (AST.FPSection l l) = InhTC l
+type instance Atts (Synthesized TypeCheck) (AST.FPSection l l) = SynTCSec l
+type instance Atts (Inherited TypeCheck) (AST.Type l l) = InhTC l
+type instance Atts (Synthesized TypeCheck) (AST.Type l l) = SynTCType l
+type instance Atts (Inherited TypeCheck) (AST.FieldList l l) = InhTC l
+type instance Atts (Synthesized TypeCheck) (AST.FieldList l l) = SynTCFields l
+type instance Atts (Inherited TypeCheck) (AST.StatementSequence l l) = InhTC l
+type instance Atts (Synthesized TypeCheck) (AST.StatementSequence l l) = SynTC l
+type instance Atts (Inherited TypeCheck) (AST.Expression l l) = InhTC l
+type instance Atts (Synthesized TypeCheck) (AST.Expression l l) = SynTCExp l
+type instance Atts (Inherited TypeCheck) (AST.Element l l) = InhTC l
+type instance Atts (Synthesized TypeCheck) (AST.Element l l) = SynTCExp l
+type instance Atts (Inherited TypeCheck) (AST.Value l l) = InhTC l
+type instance Atts (Synthesized TypeCheck) (AST.Value l l) = SynTCExp l
+type instance Atts (Inherited TypeCheck) (AST.Designator l l) = InhTC l
+type instance Atts (Synthesized TypeCheck) (AST.Designator l l) = SynTCDes l
+type instance Atts (Inherited TypeCheck) (AST.Statement l l) = InhTC l
+type instance Atts (Synthesized TypeCheck) (AST.Statement l l) = SynTC l
+type instance Atts (Inherited TypeCheck) (AST.ConditionalBranch l l) = InhTC l
+type instance Atts (Synthesized TypeCheck) (AST.ConditionalBranch l l) = SynTC l
+type instance Atts (Inherited TypeCheck) (AST.Case l l) = InhTCExp l
+type instance Atts (Synthesized TypeCheck) (AST.Case l l) = SynTC l
+type instance Atts (Inherited TypeCheck) (AST.CaseLabels l l) = InhTCExp l
+type instance Atts (Synthesized TypeCheck) (AST.CaseLabels l l) = SynTC l
+type instance Atts (Inherited TypeCheck) (AST.WithAlternative l l) = InhTC l
+type instance Atts (Synthesized TypeCheck) (AST.WithAlternative l l) = SynTC l
 
 -- * Rules
 
-instance Ord (Abstract.QualIdent l) => Bequether (Auto TypeCheck) (Modules l) Sem Placed where
+instance Ord (Abstract.QualIdent l) => Bequether (Auto TypeCheck) (Modules l) where
    bequest _ (_, Modules self) inheritance (Modules ms) =
      Modules (Map.mapWithKey moduleInheritance self)
      where moduleInheritance name mod = Inherited InhTC{env= rootEnv inheritance <> foldMap (moduleEnv . syn) ms}
-instance Ord (Abstract.QualIdent l) => Synthesizer (Auto TypeCheck) (Modules l) Sem Placed where
+instance Ord (Abstract.QualIdent l) => Synthesizer (Auto TypeCheck) (Modules l) where
   synthesis _ _ _ (Modules ms) = SynTCMods{errors= Map.foldMapWithKey moduleErrors ms}
      where moduleErrors name (Synthesized SynTCMod{errors= Folded errs}) =
               Folded [Error name pos t | Error () pos t <- errs]
 
 instance (Abstract.Oberon l, Abstract.Nameable l, k ~ Abstract.QualIdent l, Ord k,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Block l l Sem Sem) ~ SynTCMod l) =>
-         SynthesizedField "moduleEnv" (Map k (Type l)) (Auto TypeCheck) (AST.Module l l) Sem Placed where
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.Block l l) ~ SynTCMod l) =>
+         SynthesizedField "moduleEnv" (Map k (Type l)) (Auto TypeCheck) (AST.Module l l) where
    synthesizedField _ _ (pos, AST.Module moduleName imports body) _inheritance (AST.Module _ _ body') = exportedEnv
       where exportedEnv = exportNominal <$> Map.mapKeysMonotonic export (moduleEnv $ syn body')
             export q
@@ -309,13 +309,13 @@ instance (Abstract.Oberon l, Abstract.Nameable l, k ~ Abstract.QualIdent l, Ord 
             exportNominal' t = t
 
 instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Atts (Inherited (Auto TypeCheck)) (Abstract.Type l l Sem Sem) ~ InhTC l,
-          Atts (Inherited (Auto TypeCheck)) (Abstract.ProcedureHeading l l Sem Sem) ~ InhTCDecl l,
-          Atts (Inherited (Auto TypeCheck)) (Abstract.Block l l Sem Sem) ~ InhTC l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.ProcedureHeading l l Sem Sem) ~ SynTCHead l,
-          Atts (Inherited (Auto TypeCheck)) (Abstract.FormalParameters l l Sem Sem) ~ InhTC l,
-          Atts (Inherited (Auto TypeCheck)) (Abstract.ConstExpression l l Sem Sem) ~ InhTC l) =>
-         Bequether (Auto TypeCheck) (AST.Declaration l l) Sem Placed where
+          Atts (Inherited (Auto TypeCheck)) (Abstract.Type l l) ~ InhTC l,
+          Atts (Inherited (Auto TypeCheck)) (Abstract.ProcedureHeading l l) ~ InhTCDecl l,
+          Atts (Inherited (Auto TypeCheck)) (Abstract.Block l l) ~ InhTC l,
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.ProcedureHeading l l) ~ SynTCHead l,
+          Atts (Inherited (Auto TypeCheck)) (Abstract.FormalParameters l l) ~ InhTC l,
+          Atts (Inherited (Auto TypeCheck)) (Abstract.ConstExpression l l) ~ InhTC l) =>
+         Bequether (Auto TypeCheck) (AST.Declaration l l) where
    bequest _ (pos, AST.ProcedureDeclaration{})
            inheritance@InhTCDecl{env= declEnv} (AST.ProcedureDeclaration heading _body) =
       AST.ProcedureDeclaration (Inherited inheritance) (Inherited bodyInherited)
@@ -323,12 +323,12 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
    bequest t local inheritance synthesized = AG.bequestDefault t local inheritance synthesized
 
 instance (Abstract.Nameable l, k ~ Abstract.QualIdent l, Ord k,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Declaration l l Sem Sem) ~ SynTCMod l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Type l l Sem Sem) ~ SynTCType l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.FormalParameters l l Sem Sem) ~ SynTCSig l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.ProcedureHeading l l Sem Sem) ~ SynTCHead l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.ConstExpression l l Sem Sem) ~ SynTCExp l) =>
-         SynthesizedField "moduleEnv" (Map k (Type l)) (Auto TypeCheck) (AST.Declaration l l) Sem Placed where
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.Declaration l l) ~ SynTCMod l,
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.Type l l) ~ SynTCType l,
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.FormalParameters l l) ~ SynTCSig l,
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.ProcedureHeading l l) ~ SynTCHead l,
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.ConstExpression l l) ~ SynTCExp l) =>
+         SynthesizedField "moduleEnv" (Map k (Type l)) (Auto TypeCheck) (AST.Declaration l l) where
    synthesizedField _ _ (pos, AST.ConstantDeclaration namedef _) _ (AST.ConstantDeclaration _ expression) =
       Map.singleton (Abstract.nonQualIdent $ Abstract.getIdentDefName namedef) (inferredType $ syn expression)
    synthesizedField _ _ (pos, AST.TypeDeclaration namedef _) _ (AST.TypeDeclaration _ definition) =
@@ -350,17 +350,17 @@ instance (Abstract.Nameable l, k ~ Abstract.QualIdent l, Ord k,
       foldMap (Map.singleton (Abstract.nonQualIdent $ Abstract.getIdentDefName namedef) . signatureType . syn) sig
 
 instance (Abstract.Nameable l, k ~ Abstract.QualIdent l, Ord k,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Type l l Sem Sem) ~ SynTCType l) =>
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.Type l l) ~ SynTCType l) =>
          SynthesizedField "pointerTargets" (Folded (Map AST.Ident AST.Ident)) (Auto TypeCheck)
-                                           (AST.Declaration l l) Sem Placed where
+                                           (AST.Declaration l l) where
    synthesizedField _ _ (pos, AST.TypeDeclaration namedef _) _ (AST.TypeDeclaration _ definition) =
       foldMap (Folded . Map.singleton name) (pointerTarget $ syn definition)
       where name = Abstract.getIdentDefName namedef
    synthesizedField _ _ _ _ _ = mempty
 
 instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.FormalParameters l l Sem Sem) ~ SynTCSig l) =>
-         Synthesizer (Auto TypeCheck) (AST.ProcedureHeading l l) Sem Placed where
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.FormalParameters l l) ~ SynTCSig l) =>
+         Synthesizer (Auto TypeCheck) (AST.ProcedureHeading l l) where
    synthesis _ (pos, AST.ProcedureHeading indirect namedef _sig) _inheritance (AST.ProcedureHeading _indirect _ sig) =
       SynTCHead{errors= foldMap ((.errors) . syn) sig,
                 outsideEnv= Map.singleton (Abstract.nonQualIdent name) $
@@ -390,10 +390,10 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
                      | otherwise -> Folded [Error () pos (NonRecordType t)]
 
 instance (Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Declaration l l Sem Sem) ~ SynTCMod l,
-          Atts (Inherited (Auto TypeCheck)) (Abstract.Declaration l l Sem Sem) ~ InhTCDecl l,
-          Atts (Inherited (Auto TypeCheck)) (Abstract.StatementSequence l l Sem Sem) ~ InhTC l) =>
-         Bequether (Auto TypeCheck) (AST.Block l l) Sem Placed where
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.Declaration l l) ~ SynTCMod l,
+          Atts (Inherited (Auto TypeCheck)) (Abstract.Declaration l l) ~ InhTCDecl l,
+          Atts (Inherited (Auto TypeCheck)) (Abstract.StatementSequence l l) ~ InhTC l) =>
+         Bequether (Auto TypeCheck) (AST.Block l l) where
    bequest _ (pos, AST.Block{}) inheritance@InhTC{env} (AST.Block declarations _statements) =
       AST.Block (pure $ Inherited InhTCDecl{env= localEnv,
                                             pointerTargets= getFolded pointers})
@@ -404,12 +404,12 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualId
             pointers= foldMap (\Synthesized{syn= SynTCMod{pointerTargets= ptrs}}-> ptrs) declarations
 
 instance (Abstract.Nameable l, k ~ Abstract.QualIdent l, Ord k, Show k,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Declaration l l Sem Sem) ~ SynTCMod l) =>
-         SynthesizedField "moduleEnv" (Map k (Type l)) (Auto TypeCheck) (AST.Block l l) Sem Placed where
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.Declaration l l) ~ SynTCMod l) =>
+         SynthesizedField "moduleEnv" (Map k (Type l)) (Auto TypeCheck) (AST.Block l l) where
    synthesizedField _ _ (pos, AST.Block{}) _inheritance (AST.Block declarations _statements) = newEnv declarations
 
 newEnv :: (Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
-           Atts (Synthesized (Auto TypeCheck)) (Abstract.Declaration l l Sem Sem) ~ SynTCMod l) =>
+           Atts (Synthesized (Auto TypeCheck)) (Abstract.Declaration l l) ~ SynTCMod l) =>
           ZipList (Synthesized (Auto TypeCheck) (Abstract.Declaration l l Sem Sem)) -> Environment l
 newEnv declarations = Map.unionsWith mergeTypeBoundProcedures (moduleEnv . syn <$> declarations)
    where mergeTypeBoundProcedures (NominalType q (Just t1)) t2
@@ -433,8 +433,8 @@ newEnv declarations = Map.unionsWith mergeTypeBoundProcedures (moduleEnv . syn <
          mergeTypeBoundProcedures t1 t2 = error (take 90 $ show t1)
             
 instance (Ord (Abstract.QualIdent l),
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.FPSection l l Sem Sem) ~ SynTCSec l) =>
-         Synthesizer (Auto TypeCheck) (AST.FormalParameters l l) Sem Placed where
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.FPSection l l) ~ SynTCSec l) =>
+         Synthesizer (Auto TypeCheck) (AST.FormalParameters l l) where
    synthesis _ (pos, AST.FormalParameters sections returnType) InhTC{env}
              (AST.FormalParameters sections' _) =
       SynTCSig{errors= foldMap ((.errors) . syn) sections' <> foldMap typeRefErrors returnType,
@@ -446,19 +446,19 @@ instance (Ord (Abstract.QualIdent l),
                | otherwise = Folded [Error () pos (UnknownName q)]
 
 instance (Abstract.Wirthy l, Ord (Abstract.QualIdent l),
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Type l l Sem Sem) ~ SynTCType l) =>
-         Synthesizer (Auto TypeCheck) (AST.FPSection l l) Sem Placed where
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.Type l l) ~ SynTCType l) =>
+         Synthesizer (Auto TypeCheck) (AST.FPSection l l) where
    synthesis _ (pos, AST.FPSection var names _typeDef) _inheritance (AST.FPSection _var _names typeDef) =
       SynTCSec{errors= (syn typeDef).errors,
                sectionParameters= (var, definedType (syn typeDef)) <$ names,
                sectionEnv= Map.fromList (flip (,) (definedType $ syn typeDef) . Abstract.nonQualIdent <$> names)}
 
 instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.FormalParameters l l Sem Sem) ~ SynTCSig l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.FieldList l l Sem Sem) ~ SynTCFields l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Type l l Sem Sem) ~ SynTCType l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.ConstExpression l l Sem Sem) ~ SynTCExp l) =>
-         Synthesizer (Auto TypeCheck) (AST.Type l l) Sem Placed where
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.FormalParameters l l) ~ SynTCSig l,
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.FieldList l l) ~ SynTCFields l,
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.Type l l) ~ SynTCType l,
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.ConstExpression l l) ~ SynTCExp l) =>
+         Synthesizer (Auto TypeCheck) (AST.Type l l) where
    synthesis _ (pos, AST.TypeReference q) InhTC{env} _ = 
       SynTCType{errors= if Map.member q env then mempty else Folded [Error () pos (UnknownName q)],
                 typeName= Abstract.getNonQualIdentName q,
@@ -500,20 +500,20 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
                 pointerTarget= Nothing,
                 definedType= maybe (ProcedureType False [] Nothing) (signatureType . syn) signature'}
 
-instance (Abstract.Nameable l, Atts (Synthesized (Auto TypeCheck)) (Abstract.Type l l Sem Sem) ~ SynTCType l) =>
-         SynthesizedField "fieldEnv" (Map AST.Ident (Type l)) (Auto TypeCheck) (AST.FieldList l l) Sem Placed where
+instance (Abstract.Nameable l, Atts (Synthesized (Auto TypeCheck)) (Abstract.Type l l) ~ SynTCType l) =>
+         SynthesizedField "fieldEnv" (Map AST.Ident (Type l)) (Auto TypeCheck) (AST.FieldList l l) where
    synthesizedField _ _ (_, AST.FieldList names _declaredType) _inheritance (AST.FieldList _names declaredType) =
       foldMap (\name-> Map.singleton (Abstract.getIdentDefName name) (definedType $ syn declaredType)) names
 
 instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Atts (Inherited (Auto TypeCheck)) (Abstract.StatementSequence l l Sem Sem) ~ InhTC l,
-          Atts (Inherited (Auto TypeCheck)) (Abstract.ConditionalBranch l l Sem Sem) ~ InhTC l,
-          Atts (Inherited (Auto TypeCheck)) (Abstract.Case l l Sem Sem) ~ InhTCExp l,
-          Atts (Inherited (Auto TypeCheck)) (Abstract.WithAlternative l l Sem Sem) ~ InhTC l,
-          Atts (Inherited (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ InhTC l,
-          Atts (Inherited (Auto TypeCheck)) (Abstract.Designator l l Sem Sem) ~ InhTC l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ SynTCExp l) =>
-         Bequether (Auto TypeCheck) (AST.Statement l l) Sem Placed where
+          Atts (Inherited (Auto TypeCheck)) (Abstract.StatementSequence l l) ~ InhTC l,
+          Atts (Inherited (Auto TypeCheck)) (Abstract.ConditionalBranch l l) ~ InhTC l,
+          Atts (Inherited (Auto TypeCheck)) (Abstract.Case l l) ~ InhTCExp l,
+          Atts (Inherited (Auto TypeCheck)) (Abstract.WithAlternative l l) ~ InhTC l,
+          Atts (Inherited (Auto TypeCheck)) (Abstract.Expression l l) ~ InhTC l,
+          Atts (Inherited (Auto TypeCheck)) (Abstract.Designator l l) ~ InhTC l,
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l) ~ SynTCExp l) =>
+         Bequether (Auto TypeCheck) (AST.Statement l l) where
    bequest _ (_pos, AST.CaseStatement{}) i@InhTC{env} (AST.CaseStatement value _branches _fallback) =
       AST.CaseStatement (Inherited i) (pure $ Inherited InhTCExp{env= env,
                                                                  expectedType= inferredType $ syn value})
@@ -523,13 +523,13 @@ instance (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
                            expectedType= error "No statement except CASE needs expectedType"} statement
 
 instance {-# overlaps #-} (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract.QualIdent l),
-                           Atts (Synthesized (Auto TypeCheck)) (Abstract.StatementSequence l l Sem Sem) ~ SynTC l,
-                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ SynTCExp l,
-                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Designator l l Sem Sem) ~ SynTCDes l,
-                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Case l l Sem Sem) ~ SynTC l,
-                           Atts (Synthesized (Auto TypeCheck)) (Abstract.ConditionalBranch l l Sem Sem) ~ SynTC l,
-                           Atts (Synthesized (Auto TypeCheck)) (Abstract.WithAlternative l l Sem Sem) ~ SynTC l) =>
-                          Synthesizer (Auto TypeCheck) (AST.Statement l l) Sem Placed where
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.StatementSequence l l) ~ SynTC l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l) ~ SynTCExp l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Designator l l) ~ SynTCDes l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Case l l) ~ SynTC l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.ConditionalBranch l l) ~ SynTC l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.WithAlternative l l) ~ SynTC l) =>
+                          Synthesizer (Auto TypeCheck) (AST.Statement l l) where
    synthesis t (pos, _) InhTC{} statement@(AST.Assignment var value) =
       {-# SCC "Assignment" #-}
       SynTC{errors= assignmentCompatible pos (designatorType $ syn var) (inferredType $ syn value)
@@ -564,9 +564,9 @@ instance {-# overlaps #-} (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract
    synthesis t self _ statement = SynTC{errors= AG.foldedField (Proxy :: Proxy "errors") t statement}
 
 instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
-          Atts (Inherited (Auto TypeCheck)) (Abstract.StatementSequence l l Sem Sem) ~ InhTC l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.StatementSequence l l Sem Sem) ~ SynTC l) =>
-         Attribution (Auto TypeCheck) (AST.WithAlternative l l) Sem Placed where
+          Atts (Inherited (Auto TypeCheck)) (Abstract.StatementSequence l l) ~ InhTC l,
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.StatementSequence l l) ~ SynTC l) =>
+         Attribution (Auto TypeCheck) (AST.WithAlternative l l) where
    attribution _ (pos, AST.WithAlternative var subtype _body)
                (Inherited InhTC{env},
                 AST.WithAlternative _var _subtype body) =
@@ -579,15 +579,15 @@ instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
        AST.WithAlternative var subtype (Inherited $ InhTC $ maybe id (Map.insert var) (Map.lookup subtype env) env))
 
 instance (Abstract.Nameable l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ SynTCExp l,
-          Atts (Synthesized (Auto TypeCheck)) (Abstract.StatementSequence l l Sem Sem) ~ SynTC l) =>
-         Synthesizer (Auto TypeCheck) (AST.ConditionalBranch l l) Sem Placed where
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l) ~ SynTCExp l,
+          Atts (Synthesized (Auto TypeCheck)) (Abstract.StatementSequence l l) ~ SynTC l) =>
+         Synthesizer (Auto TypeCheck) (AST.ConditionalBranch l l) where
    synthesis _ (pos, _) _inheritance (AST.ConditionalBranch condition body) =
       SynTC{errors= booleanExpressionErrors pos (syn condition) <> (syn body).errors}
 
 instance {-# overlaps #-} (Abstract.Nameable l, Eq (Abstract.QualIdent l),
-                           Atts (Synthesized (Auto TypeCheck)) (Abstract.ConstExpression l l Sem Sem) ~ SynTCExp l) =>
-                          Synthesizer (Auto TypeCheck) (AST.CaseLabels l l) Sem Placed where
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.ConstExpression l l) ~ SynTCExp l) =>
+                          Synthesizer (Auto TypeCheck) (AST.CaseLabels l l) where
    synthesis _ (pos, _) inheritance (AST.SingleLabel value) =
       SynTC{errors= assignmentCompatibleIn inheritance pos (inferredType $ syn value)}
    synthesis _ (pos, _) inheritance (AST.LabelRange start end) =
@@ -595,12 +595,12 @@ instance {-# overlaps #-} (Abstract.Nameable l, Eq (Abstract.QualIdent l),
                     <> assignmentCompatibleIn inheritance pos (inferredType $ syn end)}
 
 instance {-# overlaps #-} (Abstract.Nameable l, Ord (Abstract.QualIdent l),
-                           Atts (Inherited (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ InhTC l,
-                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ SynTCExp l,
-                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Element l l Sem Sem) ~ SynTCExp l,
-                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Value l l Sem Sem) ~ SynTCExp l,
-                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Designator l l Sem Sem) ~ SynTCDes l) =>
-                          Synthesizer (Auto TypeCheck) (AST.Expression l l) Sem Placed where
+                           Atts (Inherited (Auto TypeCheck)) (Abstract.Expression l l) ~ InhTC l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l) ~ SynTCExp l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Element l l) ~ SynTCExp l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Value l l) ~ SynTCExp l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Designator l l) ~ SynTCDes l) =>
+                          Synthesizer (Auto TypeCheck) (AST.Expression l l) where
    synthesis _ (pos, AST.Relation op _ _) InhTC{} (AST.Relation _op left right) =
       SynTCExp{errors= case (syn left).errors <> (syn right).errors
                        of Folded []
@@ -707,7 +707,7 @@ instance {-# overlaps #-} (Abstract.Nameable l, Ord (Abstract.QualIdent l),
       SynTCExp{errors= booleanExpressionErrors pos (syn expr),
                inferredType= BuiltinType "BOOLEAN"}
   
-instance Abstract.Wirthy l => SynthesizedField "inferredType" (Type l) (Auto TypeCheck) (AST.Value l l) Sem Placed where
+instance Abstract.Wirthy l => SynthesizedField "inferredType" (Type l) (Auto TypeCheck) (AST.Value l l) where
    synthesizedField _ _ (_, AST.Integer x) _ _  = IntegerType (fromIntegral x)
    synthesizedField _ _ (_, AST.Real x) _ _     = BuiltinType "REAL"
    synthesizedField _ _ (_, AST.Boolean x) _ _  = BuiltinType "BOOLEAN"
@@ -716,21 +716,21 @@ instance Abstract.Wirthy l => SynthesizedField "inferredType" (Type l) (Auto Typ
    synthesizedField _ _ (_, AST.Nil) _ _        = NilType
    synthesizedField _ _ (_, AST.Builtin x) _ _  = BuiltinType x
 
-instance (Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ SynTCExp l) =>
-         SynthesizedField "errors" (Folded [Error () l]) (Auto TypeCheck) (AST.Element l l) Sem Placed where
+instance (Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l) ~ SynTCExp l) =>
+         SynthesizedField "errors" (Folded [Error () l]) (Auto TypeCheck) (AST.Element l l) where
    synthesizedField _ _ (pos, _) _inheritance (AST.Element expr) = integerExpressionErrors pos (syn expr)
    synthesizedField _ _ (pos, _) _inheritance (AST.Range low high) = integerExpressionErrors pos (syn high)
                                                                      <> integerExpressionErrors pos (syn low)
 
-instance SynthesizedField "inferredType" (Type l) (Auto TypeCheck) (AST.Element l l) Sem Placed where
+instance SynthesizedField "inferredType" (Type l) (Auto TypeCheck) (AST.Element l l) where
    synthesizedField _ _ _ _ _ = BuiltinType "SET"
 
 instance {-# overlaps #-} (Abstract.Nameable l, Abstract.Oberon l, Ord (Abstract.QualIdent l),
                            Show (Abstract.QualIdent l),
-                           Atts (Inherited (Auto TypeCheck)) (Abstract.Designator l l Sem Sem) ~ InhTC l,
-                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l Sem Sem) ~ SynTCExp l,
-                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Designator l l Sem Sem) ~ SynTCDes l) =>
-                          Synthesizer (Auto TypeCheck) (AST.Designator l l) Sem Placed where
+                           Atts (Inherited (Auto TypeCheck)) (Abstract.Designator l l) ~ InhTC l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Expression l l) ~ SynTCExp l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Designator l l) ~ SynTCDes l) =>
+                          Synthesizer (Auto TypeCheck) (AST.Designator l l) where
    synthesis _ (pos, AST.Variable q) InhTC{env} _ =
       SynTCDes{errors= case designatorType
                        of Nothing -> Folded [Error () pos (UnknownName q)]
@@ -978,8 +978,8 @@ instance Rank2.Apply (AST.Module l l f') where
 -- 'Map' keyed by module name. The first argument's value is typically 'predefined' or 'predefined2'.
 checkModules :: forall l. (Abstract.Oberon l, Abstract.Nameable l,
                            Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
-                           Atts (Inherited (Auto TypeCheck)) (Abstract.Block l l Sem Sem) ~ InhTC l,
-                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Block l l Sem Sem) ~ SynTCMod l,
+                           Atts (Inherited (Auto TypeCheck)) (Abstract.Block l l) ~ InhTC l,
+                           Atts (Synthesized (Auto TypeCheck)) (Abstract.Block l l) ~ SynTCMod l,
                            Full.Functor (Auto TypeCheck) (Abstract.Block l l))
              => Environment l -> Map AST.Ident (Placed (AST.Module l l Placed Placed)) -> [Error AST.Ident l]
 checkModules predef modules =
