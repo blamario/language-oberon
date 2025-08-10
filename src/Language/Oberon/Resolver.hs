@@ -17,6 +17,7 @@ import Data.Either (partitionEithers)
 import Data.Either.Validation (Validation(..), validationToEither)
 import Data.Foldable (toList)
 import Data.Functor.Compose (Compose(..))
+import Data.Functor.Identity (Identity)
 import qualified Data.Kind as K (Type)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
@@ -28,6 +29,7 @@ import Data.Text (Text)
 import Language.Haskell.TH (appT, conT, varT, newName)
 
 import qualified Text.Parser.Input.Position as Position
+import qualified Rank2
 import qualified Rank2.TH
 import qualified Transformation
 import qualified Transformation.Deep as Deep
@@ -554,6 +556,14 @@ unique inv amb (Compose ((start, end), Compose (Ambiguous xs))) =
    of (_, [(ws, x)]) -> Success ((start, ws, end), x)
       (errors, []) -> Failure (inv (sconcat $ NonEmpty.fromList errors) :| [])
       (_, multi) -> Failure (amb (snd <$> multi) :| [])
+
+instance (Rank2.Functor (g Grammar.NodeWrap), Deep.Functor (Rank2.Map Grammar.NodeWrap NodeWrap) g) =>
+         Full.Functor (Rank2.Map Grammar.NodeWrap NodeWrap) g where
+  (<$>) = Full.mapUpDefault
+
+instance (Rank2.Functor (g Placed), Deep.Functor (Rank2.Map Placed Identity) g) =>
+         Full.Functor (Rank2.Map Placed Identity) g where
+  (<$>) = Full.mapUpDefault
 
 $(Rank2.TH.deriveFunctor ''DeclarationRHS)
 $(Rank2.TH.deriveFoldable ''DeclarationRHS)
