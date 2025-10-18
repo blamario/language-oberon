@@ -228,9 +228,11 @@ instance (Transformation.Transformation t, Functor (Transformation.Domain t), Sh
    foldMap t ~(Modules ms) = getConst (foldMap (t Transformation.$) ms)
 
 instance Rank2.Functor (Modules l f') where
-   f <$> ~(Modules ms) = Modules (f <$> ms)
+   f <$> Modules ms = Modules (f <$> ms)
 instance Rank2.Foldable (Modules l f) where
-   foldMap f ~(Modules ms) = foldMap f ms
+   foldMap f (Modules ms) = foldMap f ms
+instance Rank2.Traversable (Modules l f) where
+   traverse f (Modules ms) = Modules <$> traverse f ms
 instance Rank2.Apply (Modules l f') where
    ~(Modules fs) <*> ~(Modules ms) = Modules (Map.intersectionWith Rank2.apply fs ms)
 
@@ -410,7 +412,7 @@ instance (Abstract.Nameable l, k ~ Abstract.QualIdent l, Ord k, Show k,
 
 newEnv :: (Abstract.Nameable l, Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
            Atts (Synthesized (Auto TypeCheck)) (Abstract.Declaration l l) ~ SynTCMod l) =>
-          ZipList (Synthesized (Auto TypeCheck) (Abstract.Declaration l l Sem Sem)) -> Environment l
+          ZipList (Synthesized (Auto TypeCheck) (Abstract.Declaration l l sem sem)) -> Environment l
 newEnv declarations = Map.unionsWith mergeTypeBoundProcedures (moduleEnv . syn <$> declarations)
    where mergeTypeBoundProcedures (NominalType q (Just t1)) t2
             | Abstract.getNonQualIdentName q == Just "" = mergeTypeBoundProcedures t1 t2

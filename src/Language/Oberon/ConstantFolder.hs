@@ -106,18 +106,24 @@ data SynCFRoot a = SynCFRoot{modulesFolded :: a}
 instance (Transformation.Transformation t, Functor (Transformation.Domain t), Deep.Functor t (AST.Module l l),
           Transformation.At t (AST.Module l l (Transformation.Codomain t) (Transformation.Codomain t))) =>
          Deep.Functor t (Modules l) where
-   t <$> ~(Modules ms) = Modules (mapModule <$> ms)
+   t <$> Modules ms = Modules (mapModule <$> ms)
       where mapModule m = t Transformation.$ ((t Deep.<$>) <$> m)
 
 instance Rank2.Functor (Modules l f') where
-   f <$> ~(Modules ms) = Modules (f <$> ms)
+   f <$> Modules ms = Modules (f <$> ms)
+
+instance Rank2.Foldable (Modules l f') where
+   foldMap f (Modules ms) = foldMap f ms
+
+instance Rank2.Traversable (Modules l f') where
+   traverse f (Modules ms) = Modules <$> traverse f ms
 
 instance Rank2.Apply (Modules l f') where
-   ~(Modules fs) <*> ~(Modules ms) = Modules (Map.intersectionWith Rank2.apply fs ms)
+   Modules fs <*> Modules ms = Modules (Map.intersectionWith Rank2.apply fs ms)
 
 instance (Transformation.Transformation t, Transformation.At t (AST.Module l l f f)) =>
          Shallow.Functor t (Modules l f) where
-   t <$> ~(Modules ms) = Modules ((t Transformation.$) <$> ms)
+   t <$> Modules ms = Modules ((t Transformation.$) <$> ms)
 
 -- * Boring attribute types
 type instance Atts (Synthesized ConstantFold) (Modules l) = SynCFRoot (Modules l Placed Placed)
