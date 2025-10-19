@@ -52,14 +52,12 @@ foldConstants :: (Abstract.Oberon l, Abstract.Nameable l,
                   Atts (Inherited (Auto ConstantFold)) (Abstract.Block l l) ~ InhCF l,
                   Atts (Synthesized (Auto ConstantFold)) (Abstract.Block l l)
                   ~ SynCFMod' l (Abstract.Block l l),
-                  Full.Functor (Auto ConstantFold) (Abstract.Block l l),
-                  Deep.Functor (Auto ConstantFold) (Abstract.Block l l))
+                  Full.Functor (AG.Knit (Auto ConstantFold)) (Abstract.Block l l))
               => Environment l -> Map AST.Ident (Placed (AST.Module l l Placed Placed))
               -> Map AST.Ident (Placed (AST.Module l l Placed Placed))
 foldConstants predef modules =
    getModules (modulesFolded $
-               syn (Transformation.apply (Auto ConstantFold)
-                                         (wrap (Auto ConstantFold Deep.<$> Modules modules))
+               syn ((AG.Knit (Auto ConstantFold) Full.<$> wrap (Modules modules))
                     `Rank2.apply`
                     Inherited (InhCFRoot predef)))
    where wrap = (,) (0, Trailing [], 0)
@@ -72,14 +70,9 @@ newtype Modules l f' f = Modules {getModules :: Map AST.Ident (f (AST.Module l l
 
 data ConstantFold = ConstantFold
 
-type Sem = Semantics (Auto ConstantFold)
-
-instance Transformation.Transformation (Auto ConstantFold) where
-   type Domain (Auto ConstantFold) = Placed
-   type Codomain (Auto ConstantFold) = Semantics (Auto ConstantFold)
-
-instance AG.Revelation (Auto ConstantFold) where
-   reveal (Auto ConstantFold) = snd
+instance Attribution ConstantFold where
+   type Origin ConstantFold = Placed
+   unwrap ConstantFold = snd
 
 data InhCFRoot l = InhCFRoot{rootEnv :: Environment l} deriving Generic
 

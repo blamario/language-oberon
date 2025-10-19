@@ -152,8 +152,6 @@ newtype Modules l f' f = Modules (Map AST.Ident (f (AST.Module l l f' f')))
 
 data TypeCheck = TypeCheck
 
-type Sem = Semantics (Auto TypeCheck)
-
 data InhTCRoot l = InhTCRoot{rootEnv :: Environment l}
 
 data InhTC l = InhTC{env :: Environment l}
@@ -568,7 +566,7 @@ instance {-# overlaps #-} (Abstract.Wirthy l, Abstract.Nameable l, Ord (Abstract
 instance (Abstract.Nameable l, Ord (Abstract.QualIdent l),
           Atts (Inherited (Auto TypeCheck)) (Abstract.StatementSequence l l) ~ InhTC l,
           Atts (Synthesized (Auto TypeCheck)) (Abstract.StatementSequence l l) ~ SynTC l) =>
-         Attribution (Auto TypeCheck) (AST.WithAlternative l l) where
+         AG.At (Auto TypeCheck) (AST.WithAlternative l l) where
    attribution _ (pos, AST.WithAlternative var subtype _body)
                (Inherited InhTC{env},
                 AST.WithAlternative _var _subtype body) =
@@ -960,15 +958,9 @@ t1 `targetExtends` NominalType _ (Just t2) = t1 `targetExtends` t2
 t1 `targetExtends` t2 | t1 == t2 = True
 t1 `targetExtends` t2 = False
 
-instance Transformation.Transformation (Auto TypeCheck) where
-   type Domain (Auto TypeCheck) = Placed
-   type Codomain (Auto TypeCheck) = Semantics (Auto TypeCheck)
-
-instance AG.Revelation (Auto TypeCheck) where
-   reveal (Auto TypeCheck) = snd
-
-instance Ord (Abstract.QualIdent l) => Transformation.At (Auto TypeCheck) (Modules l Sem Sem) where
-   ($) = AG.applyDefault snd
+instance Attribution TypeCheck where
+   type Origin TypeCheck = Placed
+   unwrap TypeCheck = snd
 
 -- * Unsafe Rank2 AST instances
 
@@ -982,12 +974,12 @@ checkModules :: forall l. (Abstract.Oberon l, Abstract.Nameable l,
                            Ord (Abstract.QualIdent l), Show (Abstract.QualIdent l),
                            Atts (Inherited (Auto TypeCheck)) (Abstract.Block l l) ~ InhTC l,
                            Atts (Synthesized (Auto TypeCheck)) (Abstract.Block l l) ~ SynTCMod l,
-                           Full.Functor (Auto TypeCheck) (Abstract.Block l l))
+                           Full.Functor (AG.Knit (Auto TypeCheck)) (Abstract.Block l l))
              => Environment l -> Map AST.Ident (Placed (AST.Module l l Placed Placed)) -> [Error AST.Ident l]
 checkModules predef modules =
-   getFolded ((syn (Transformation.apply (Auto TypeCheck) (wrap $ Auto TypeCheck Deep.<$> Modules modules)
-                           `Rank2.apply`
-                           Inherited (InhTCRoot predef))).errors)
+   getFolded ((syn ((AG.Knit (Auto TypeCheck) Full.<$> wrap (Modules modules))
+                    `Rank2.apply`
+                    Inherited (InhTCRoot predef))).errors)
    where wrap = (,) (0, Trailing [], 0)
 
 predefined, predefined2 :: (Abstract.Wirthy l, Ord (Abstract.QualIdent l)) => Environment l
