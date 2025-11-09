@@ -1,6 +1,6 @@
 # Revision history for language-oberon
 
-## 0.3.4 -- 2025-01-01
+## 0.3.4 -- 2025-11-09
 
 * Adjusted for major changes in `deep-transformations` version 0.4
 
