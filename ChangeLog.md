@@ -1,5 +1,14 @@
 # Revision history for language-oberon
 
+## 0.3.4 -- 2025-01-01
+
+* Adjusted for major changes in `deep-transformations` version 0.4
+
+## 0.3.3.2 -- 2025-01-01
+
+* Fixed a few compiler warnings
+* Bumped the upper bound of `deep-transformations` and `template-haskell`
+
 ## 0.3.3.1 -- 2024-04-27
 
 * Fixed deprecation warnings
